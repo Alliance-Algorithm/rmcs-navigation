@@ -1,0 +1,14 @@
+# - Config file for the rmcs-navigation package
+# It defines the following variables
+#  rmcs-navigation_INCLUDE_DIRS - include directories for FooBar
+#  rmcs-navigation_LIBRARIES    - libraries to link against
+#  rmcs-navigation_EXECUTABLE   - the bar executable
+
+set(rmcs-navigation_INCLUDE_DIRS "@CONF_INCLUDE_DIRS@")
+
+# Our library dependencies (contains definitions for IMPORTED targets)
+include("${rmcs-navigation_DIR}/export_rmcs-navigation.cmake")
+
+# These are IMPORTED targets created by rmcs-navigationTargets.cmake
+
+
