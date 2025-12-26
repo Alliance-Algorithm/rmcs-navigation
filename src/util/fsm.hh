@@ -29,7 +29,9 @@ public:
     explicit Fsm(state_type start_state) noexcept
         : current_state{start_state}
         , current_event{nullptr} {
-        assert(start_state != state_type::END);
+        if (start_state == state_type::END) {
+            throw std::invalid_argument("start_state cannot be END");
+        }
     }
 
     template <typename on_begin_type, typename on_event_type>
