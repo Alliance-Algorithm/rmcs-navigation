@@ -1,6 +1,7 @@
-#include "util/rclcpp/node.hh"
+#include <string_view>
 
 import app.test;
+import util.rclcpp_node;
 
 auto main() -> int {
     using namespace rmcs;

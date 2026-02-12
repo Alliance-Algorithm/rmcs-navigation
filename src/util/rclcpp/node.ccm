@@ -1,0 +1,66 @@
+module;
+
+#include <rclcpp/executors.hpp>
+#include <rclcpp/node.hpp>
+
+export module util.rclcpp_node;
+
+namespace rmcs::util {
+namespace qos {
+
+inline const auto debug = rclcpp::QoS{10}.reliable().keep_last(10);
+inline const auto real_time = rclcpp::QoS{5}.best_effort().keep_last(5);
+
+} // namespace qos
+namespace prefix {
+
+constexpr auto check_naming(std::string_view name) noexcept -> bool {
+    return std::ranges::all_of(
+               name,
+               [](char c) {
+                   return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c == '_')
+                       || (c == '/');
+               })
+        && !std::ranges::empty(name);
+}
+
+constexpr auto naming_standard = "Names must match pattern: ^[a-z0-9_/]+$";
+
+} // namespace prefix
+
+export class RclcppNode : public rclcpp::Node {
+private:
+    struct RclcppGuard {
+        RclcppGuard() {
+            if (rclcpp::ok() == false) {
+                rclcpp::init(0, nullptr);
+            }
+        }
+    } rclcpp_guard;
+
+public:
+    static auto shutdown() { rclcpp::shutdown(); }
+
+public:
+    explicit RclcppNode(const std::string& name) noexcept
+        : rclcpp::Node{
+              name, rclcpp::NodeOptions{}.automatically_declare_parameters_from_overrides(true)} {}
+
+    template <typename... Args>
+    auto info(std::format_string<Args...> fmt, Args&&... args) const {
+        auto string = std::format(fmt, std::forward<Args>(args)...);
+        RCLCPP_INFO(get_logger(), "%s", string.c_str());
+    }
+    template <typename... Args>
+    auto warn(std::format_string<Args...> fmt, Args&&... args) const {
+        auto string = std::format(fmt, std::forward<Args>(args)...);
+        RCLCPP_WARN(get_logger(), "%s", string.c_str());
+    }
+    template <typename... Args>
+    auto error(std::format_string<Args...> fmt, Args&&... args) const {
+        auto string = std::format(fmt, std::forward<Args>(args)...);
+        RCLCPP_ERROR(get_logger(), "%s", string.c_str());
+    }
+};
+
+} // namespace rmcs::util

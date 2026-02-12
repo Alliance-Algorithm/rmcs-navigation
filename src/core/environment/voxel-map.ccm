@@ -1,0 +1,9 @@
+module;
+
+export module core.env.voxel_map;
+
+namespace rmcs {
+
+export struct VoxelMap {};
+
+} // namespace rmcs
