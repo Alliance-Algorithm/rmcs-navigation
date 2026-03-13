@@ -1,7 +1,7 @@
 bt_navigator:
   ros__parameters:
     use_sim_time: true
-    global_frame: world
+    global_frame: odom
     robot_base_frame: base_link
     odom_topic: /aft_mapped_to_init
     bt_loop_duration: 10
@@ -12,9 +12,9 @@ controller_server:
   ros__parameters:
     use_sim_time: true
     controller_frequency: 20.0
-    min_x_velocity_threshold: 0.01
-    min_y_velocity_threshold: 0.01
-    min_theta_velocity_threshold: 0.01
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: progress_checker
     goal_checker_plugins: [general_goal_checker]
@@ -29,27 +29,27 @@ controller_server:
       stateful: true
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      yaw_goal_tolerance: 3.14
 
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
       debug_trajectory_details: false
-      min_vel_x: 0.0
-      min_vel_y: 0.0
-      max_vel_x: 0.8
-      max_vel_y: 0.0
-      max_vel_theta: 1.5
-      min_speed_xy: 0.0
-      max_speed_xy: 0.8
+      min_vel_x: -0.5
+      min_vel_y: -0.5
+      max_vel_x: +0.5
+      max_vel_y: +0.5
+      max_vel_theta: 0.6
+      min_speed_xy: +0.02
+      max_speed_xy: +0.50
       min_speed_theta: 0.0
-      acc_lim_x: 1.5
-      acc_lim_y: 0.0
+      acc_lim_x: +0.2
+      acc_lim_y: +0.2
       acc_lim_theta: 2.5
       decel_lim_x: -1.5
       decel_lim_y: 0.0
       decel_lim_theta: -2.5
       vx_samples: 20
-      vy_samples: 1
+      vy_samples: 20
       vtheta_samples: 20
       sim_time: 1.5
       linear_granularity: 0.05
@@ -61,20 +61,20 @@ controller_server:
       stateful: true
       critics: [RotateToGoal, Oscillation, BaseObstacle, GoalAlign, PathAlign, PathDist, GoalDist]
       BaseObstacle.scale: 0.05
-      PathAlign.scale: 24.0
+      PathAlign.scale: 1.0
       PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 20.0
+      GoalAlign.scale: 1.0
       GoalAlign.forward_point_distance: 0.1
       PathDist.scale: 32.0
       GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
+      RotateToGoal.scale: 0.2
       RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
-
+      RotateToGoal.lookahead_time: -1.03
 local_costmap:
   local_costmap:
     ros__parameters:
       use_sim_time: true
+      robot_radius: 0.3
       global_frame: base_link
       robot_base_frame: base_link
       rolling_window: true
@@ -105,7 +105,7 @@ global_costmap:
   global_costmap:
     ros__parameters:
       use_sim_time: true
-      global_frame: world
+      global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
       width: 20
@@ -158,8 +158,8 @@ behavior_server:
       plugin: nav2_behaviors::DriveOnHeading
     wait:
       plugin: nav2_behaviors::Wait
-    global_frame: world
-    local_frame: world
+    global_frame: odom
+    local_frame: odom
     robot_base_frame: base_link
     transform_tolerance: 0.2
     simulate_ahead_time: 2.0
@@ -170,10 +170,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
-    max_velocity: [0.8, 0.0, 1.5]
-    min_velocity: [0.0, 0.0, -1.5]
-    max_accel: [1.5, 0.0, 2.5]
-    max_decel: [-1.5, 0.0, -2.5]
+    max_velocity: [+0.5, +0.5, +0.6]
+    min_velocity: [-0.5, -0.5, -0.6]
+    max_accel: [+0.8, +0.8, +2.0]
+    max_decel: [-0.8, -0.8, -2.0]
     odom_topic: /aft_mapped_to_init
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

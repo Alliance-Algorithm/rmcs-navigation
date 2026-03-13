@@ -49,6 +49,10 @@ private:
     using GameStage = rmcs_msgs::GameStage;
     InputInterface<GameStage> game_stage;
 
+    std::chrono::steady_clock::time_point command_received_timestamp;
+    std::chrono::milliseconds timeout_interval{100};
+    std::atomic<bool> has_warning_timeout = false;
+
     /// Brain
     ///
     enum class BrainStage {
@@ -99,7 +103,7 @@ public:
         : Node{kRosLabel.data()} {
 
         // RMCS
-        const auto name = std::format("/{}/command_velocity", kAppLabel);
+        const auto name = std::format("/{}/command_velocity", kRosLabel);
         const auto vec_nan = Eigen::Vector3d{kNan, kNan, kNan};
         Component::register_output(name, command_velocity, vec_nan);
 
@@ -107,11 +111,14 @@ public:
 
         // NAV2
         subscription_twist = Node::create_subscription<Twist>(
-            "/cmd_vel_nav", 10, [this](const std::unique_ptr<Twist>& msg) {
+            "/cmd_vel_smoothed", 10, [this](const std::unique_ptr<Twist>& msg) {
                 command_velocity->x() = msg->linear.x;
                 command_velocity->y() = msg->linear.y;
                 command_velocity->z() = msg->angular.z;
+                command_received_timestamp = std::chrono::steady_clock::now();
+                has_warning_timeout = false;
             });
+        command_received_timestamp = std::chrono::steady_clock::now();
 
         // FSM
         generate_brain_fsm();
@@ -142,6 +149,15 @@ public:
 
         if (!is_fsm_stop) {
             is_fsm_stop = brain_fsm.spin_once();
+        }
+
+        using namespace std::chrono_literals;
+        if (std::chrono::steady_clock::now() - command_received_timestamp > timeout_interval) {
+            if (has_warning_timeout == false) {
+                has_warning_timeout = true;
+                warn("Lost navigation control, reset command velocity now");
+            }
+            *command_velocity = Eigen::Vector3d::Zero();
         }
     }
 };

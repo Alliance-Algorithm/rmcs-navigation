@@ -1,5 +1,5 @@
 follow:
-  frame_id: world
+  frame_id: odom
   poses:
     - [0.0, 0.0, 0.0]
     - [1.0, 0.0, 0.0]
