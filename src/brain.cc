@@ -1,9 +1,10 @@
 #include "brain/plan.hh"
 #include "util/fsm.hh"
 
+#include <filesystem>
+
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <eigen3/Eigen/Geometry>
-#include <filesystem>
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
@@ -129,14 +130,6 @@ public:
         const auto config_yaml = YAML::LoadFile(config_file);
 
         plan_box.set_rule(config_yaml);
-
-        auto emitter = YAML::Emitter{};
-        emitter.SetIndent(2);
-        emitter.SetMapFormat(YAML::Block);
-        emitter.SetSeqFormat(YAML::Block);
-
-        emitter << config_yaml;
-        info("Rule Config:\n{}", emitter.c_str());
     }
 
     auto update() -> void override {
