@@ -13,6 +13,7 @@ install(
 install(
     PROGRAMS
         scripts/debug_goal_bridge.py
+        scripts/follow_waypoints_runner.py
         scripts/static_grid_publisher.py
         scripts/goal_topic_bridge.py
     DESTINATION

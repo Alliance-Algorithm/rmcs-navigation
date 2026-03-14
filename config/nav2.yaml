@@ -26,50 +26,88 @@ controller_server:
       movement_time_allowance: 10.0
 
     general_goal_checker:
-      stateful: true
+      stateful: false
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 3.14
+      yaw_goal_tolerance: 6.28
 
     FollowPath:
-      plugin: dwb_core::DWBLocalPlanner
-      debug_trajectory_details: false
-      min_vel_x: -0.5
-      min_vel_y: -0.5
-      max_vel_x: +0.5
-      max_vel_y: +0.5
-      max_vel_theta: 0.6
-      min_speed_xy: +0.02
-      max_speed_xy: +0.50
-      min_speed_theta: 0.0
-      acc_lim_x: +0.2
-      acc_lim_y: +0.2
-      acc_lim_theta: 2.5
-      decel_lim_x: -1.5
-      decel_lim_y: 0.0
-      decel_lim_theta: -2.5
-      vx_samples: 20
-      vy_samples: 20
-      vtheta_samples: 20
-      sim_time: 1.5
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-      transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
-      trans_stopped_velocity: 0.05
-      short_circuit_trajectory_evaluation: true
-      stateful: true
-      critics: [RotateToGoal, Oscillation, BaseObstacle, GoalAlign, PathAlign, PathDist, GoalDist]
-      BaseObstacle.scale: 0.05
-      PathAlign.scale: 1.0
-      PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 1.0
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 0.2
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.03
+      # MPPI 速度调参说明：
+      # - 速度上限：vx_max/vx_min 控制前后速度，vy_max 控制侧向速度，
+      #   wz_max 控制角速度上限。
+      # - 加速度上限：ax_max/ax_min、ay_max/ay_min、az_max 决定机器人多快
+      #   能加到目标速度。
+      # - 采样范围：vx_std、vy_std、wz_std 决定 MPPI 对更快轨迹的探索范围；
+      #   如果只提高速度上限，不提高这些参数，实际行为仍可能偏保守。
+      # - 输出限幅：下方 velocity_smoother 的 max/min velocity 和 accel/decel
+      #   也要同步调整，否则 FollowPath 算出的速度会被平滑器截断。
+      plugin: nav2_mppi_controller::MPPIController
+      time_steps: 48
+      model_dt: 0.05
+      batch_size: 1500
+      iteration_count: 1
+      vx_max: +4.0
+      vx_min: -4.0
+      vy_max: 4.0
+      wz_max: 2.0
+      ax_max: +6.0
+      ax_min: -6.0
+      ay_max: 6.0
+      ay_min: -6.0
+      az_max: 4.0
+      vx_std: 0.8
+      vy_std: 0.35
+      wz_std: 0.08
+      temperature: 0.3
+      gamma: 0.03
+      motion_model: Omni
+      visualize: false
+      publish_optimal_trajectory: false
+      regenerate_noises: false
+      TrajectoryValidator:
+        plugin: mppi::DefaultOptimalTrajectoryValidator
+        collision_lookahead_time: 1.0
+        consider_footprint: false
+      critics: [ConstraintCritic, CostCritic, GoalCritic, PathAlignCritic, PathFollowCritic, TwirlingCritic]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0
+        threshold_to_consider: 10.0
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 1.5
+        near_collision_cost: 253
+        critical_cost: 300.0
+        consider_footprint: false
+        collision_cost: 1000000.0
+        near_goal_distance: 0.3
+        trajectory_point_step: 2
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 6.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 1.0
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 12.0
+        offset_from_furthest: 8
+        threshold_to_consider: 10.0
+      TwirlingCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 10.0
+
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -98,7 +136,7 @@ local_costmap:
 
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.20
+        inflation_radius: 0.35
         cost_scaling_factor: 8.0
 
 global_costmap:
@@ -127,7 +165,7 @@ global_costmap:
 
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.25
+        inflation_radius: 0.35
         cost_scaling_factor: 6.0
 
 planner_server:
@@ -170,10 +208,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
-    max_velocity: [+0.5, +0.5, +0.6]
-    min_velocity: [-0.5, -0.5, -0.6]
-    max_accel: [+0.8, +0.8, +2.0]
-    max_decel: [-0.8, -0.8, -2.0]
+    max_velocity: [+4.0, +4.0, +2.0]
+    min_velocity: [-4.0, -4.0, -2.0]
+    max_accel: [+6.0, +6.0, +4.0]
+    max_decel: [-6.0, -6.0, -4.0]
     odom_topic: /aft_mapped_to_init
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

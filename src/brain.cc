@@ -111,7 +111,7 @@ public:
 
         // NAV2
         subscription_twist = Node::create_subscription<Twist>(
-            "/cmd_vel_smoothed", 10, [this](const std::unique_ptr<Twist>& msg) {
+            "/cmd_vel_smoothed", 10, [&, this](const std::unique_ptr<Twist>& msg) {
                 command_velocity->x() = msg->linear.x;
                 command_velocity->y() = msg->linear.y;
                 command_velocity->z() = msg->angular.z;
