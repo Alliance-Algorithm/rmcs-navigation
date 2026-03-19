@@ -47,8 +47,7 @@ private:
     ///
     OutputInterface<Eigen::Vector3d> command_velocity;
 
-    using GameStage = rmcs_msgs::GameStage;
-    InputInterface<GameStage> game_stage;
+    InputInterface<rmcs_msgs::GameStage> game_stage;
 
     std::chrono::steady_clock::time_point command_received_timestamp;
     std::chrono::milliseconds timeout_interval{100};
@@ -85,7 +84,7 @@ private:
             [this] { info("BrainStage: Running"); },
             [] {
                 // ...
-                return BrainStage::GameOver;
+                return BrainStage::Running;
             });
         brain_fsm.use<BrainStage::GameOver>(
             [this] { info("BrainStage: GameOver"); },
@@ -98,6 +97,8 @@ private:
             throw std::runtime_error{"The fsm of rmcs_navigation was not fully registered"};
         }
     }
+
+    auto update_goal_position() {}
 
 public:
     explicit Brain()
