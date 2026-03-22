@@ -22,6 +22,7 @@ def generate_launch_description():
     local_map_grid_frame = LaunchConfiguration("local_map_grid_frame")
     local_map_publish_cloud = LaunchConfiguration("local_map_publish_cloud")
     use_lifecycle_manager = LaunchConfiguration("use_lifecycle_manager")
+    enable_local_map_node = LaunchConfiguration("enable_local_map_node")
 
     controller_params = RewrittenYaml(
         source_file=params_file,
@@ -53,6 +54,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_sim_time", default_value="true"),
         DeclareLaunchArgument("autostart", default_value="true"),
         DeclareLaunchArgument("use_lifecycle_manager", default_value="true"),
+        DeclareLaunchArgument("enable_local_map_node", default_value="true"),
         DeclareLaunchArgument(
             "params_file",
             default_value=os.path.join(
@@ -87,6 +89,7 @@ def generate_launch_description():
             executable="local_map",
             name="rmcs_map",
             output="screen",
+            condition=IfCondition(enable_local_map_node),
             parameters=[
                 local_map_params_file,
                 {

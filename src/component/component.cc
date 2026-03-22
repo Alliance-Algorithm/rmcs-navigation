@@ -45,6 +45,8 @@ private:
     OutputInterface<Eigen::Vector3d> command_velocity;
 
     InputInterface<rmcs_msgs::GameStage> game_stage;
+    InputInterface<std::uint16_t> robot_health;
+    InputInterface<std::uint16_t> robot_bullet;
 
     std::chrono::steady_clock::time_point command_received_timestamp;
     std::chrono::milliseconds timeout_interval{100};
@@ -59,7 +61,10 @@ public:
         const auto vec_nan = Eigen::Vector3d{kNan, kNan, kNan};
         Component::register_output(name, command_velocity, vec_nan);
 
-        Component::register_input("/referee/game_stage", game_stage, false);
+        Component::register_input("/referee/game/stage", game_stage, true);
+        // TODO:
+        Component::register_input("/referee/health", robot_health, true);
+        Component::register_input("/referee/shooter/bullet_allowance", robot_bullet, true);
 
         // NAV2
         subscription_twist = Node::create_subscription<Twist>(

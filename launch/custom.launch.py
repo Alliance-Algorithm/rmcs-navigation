@@ -10,6 +10,7 @@ from launch.actions import (
     ExecuteProcess,
     IncludeLaunchDescription,
     OpaqueFunction,
+    TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -83,6 +84,9 @@ def _build_mode_actions(
                 "local_map_topic": nav2_local_map_topic,
                 "global_map_topic": global_map_topic,
                 "use_lifecycle_manager": "true",
+                "enable_local_map_node": (
+                    "false" if config["use_local_mock"] else "true"
+                ),
             }.items(),
         ),
         Node(
@@ -92,7 +96,6 @@ def _build_mode_actions(
             output="screen",
         ),
     ]
-    result_actions.extend(nav2_actions)
 
     # Map Source
     map_node_names = ["map_server"]
@@ -129,12 +132,21 @@ def _build_mode_actions(
         executable="lifecycle_manager",
         name="lifecycle_manager_map",
         output="screen",
+        sigterm_timeout="2",
+        sigkill_timeout="4",
         parameters=[
             {"use_sim_time": config["use_sim_time"]},
             {"autostart": True},
             {"node_names": map_node_names},
         ],
     ))
+
+    result_actions.append(
+        TimerAction(
+            period=1.0,
+            actions=nav2_actions,
+        )
+    )
 
     if config["use_livox_driver"]:
         result_actions.append(
@@ -162,17 +174,18 @@ def _build_mode_actions(
         arguments=["0", "0", "0", "0", "0", "0", "world", "odom"],
         output="screen",
     ))
-    result_actions.append(Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        name="world_to_base_link_tf",
-        arguments=[
-            "1.2", "6.3", "0",
-            "0", "0", "0",
-            "world", "base_link"
-        ],
-        output="screen",
-    ))
+    if config["use_initial_pose"]:
+        result_actions.append(Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="world_to_base_link_tf",
+            arguments=[
+                "0.5", "0.5", "0",
+                "0", "0", "0",
+                "world", "base_link"
+            ],
+            output="screen",
+        ))
 
     return result_actions
 
