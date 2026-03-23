@@ -1,5 +1,5 @@
-<library path="rmcs-navigation_brain">
-  <class type="rmcs::Brain" base_class_type="rmcs_executor::Component">
-    <description>Navigation brain component</description>
+<library path="rmcs-navigation">
+  <class type="rmcs_navigation::Navigation" base_class_type="rmcs_executor::Component">
+    <description>Navigation Component For RMCS</description>
   </class>
 </library>

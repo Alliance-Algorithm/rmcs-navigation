@@ -75,6 +75,7 @@ def _build_mode_actions(
     result_actions = []
 
     # Basic Node
+    use_local_mock = str(config["use_local_mock"]).lower()
     nav2_actions = [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(nav2_launch),
@@ -82,11 +83,10 @@ def _build_mode_actions(
                 "use_sim_time": str(config["use_sim_time"]).lower(),
                 "autostart": "true",
                 "local_map_topic": nav2_local_map_topic,
+                "local_map_transient_local": use_local_mock,
                 "global_map_topic": global_map_topic,
                 "use_lifecycle_manager": "true",
-                "enable_local_map_node": (
-                    "false" if config["use_local_mock"] else "true"
-                ),
+                "enable_local_map_node": use_local_mock,
             }.items(),
         ),
         Node(
@@ -142,11 +142,7 @@ def _build_mode_actions(
     ))
 
     result_actions.append(
-        TimerAction(
-            period=1.0,
-            actions=nav2_actions,
-        )
-    )
+        TimerAction(period=1.0, actions=nav2_actions))
 
     if config["use_livox_driver"]:
         result_actions.append(
@@ -167,25 +163,38 @@ def _build_mode_actions(
         result_actions.append(ExecuteProcess(cmd=bag_cmd, output="screen"))
 
     # Transform Initialization
-    result_actions.append(Node(
+    initial_world_link = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
         name="world_to_odom_tf",
         arguments=["0", "0", "0", "0", "0", "0", "world", "odom"],
         output="screen",
-    ))
+    )
+    result_actions.append(
+        TimerAction(
+            period=1.0,
+            actions=[initial_world_link]
+        )
+    )
+
     if config["use_initial_pose"]:
-        result_actions.append(Node(
+        initial_base_link = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
             name="world_to_base_link_tf",
             arguments=[
-                "0.5", "0.5", "0",
+                "1.2", "6.3", "0",
                 "0", "0", "0",
                 "world", "base_link"
             ],
             output="screen",
-        ))
+        )
+        result_actions.append(
+            TimerAction(
+                period=1.5,
+                actions=[initial_base_link]
+            )
+        )
 
     return result_actions
 

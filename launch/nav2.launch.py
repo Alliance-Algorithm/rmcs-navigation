@@ -18,6 +18,7 @@ def generate_launch_description():
     params_file = LaunchConfiguration("params_file")
     local_map_params_file = LaunchConfiguration("local_map_params_file")
     local_map_topic = LaunchConfiguration("local_map_topic")
+    local_map_transient_local = LaunchConfiguration("local_map_transient_local")
     global_map_topic = LaunchConfiguration("global_map_topic")
     local_map_grid_frame = LaunchConfiguration("local_map_grid_frame")
     local_map_publish_cloud = LaunchConfiguration("local_map_publish_cloud")
@@ -28,6 +29,7 @@ def generate_launch_description():
         source_file=params_file,
         param_rewrites={
             "map_topic": local_map_topic,
+            "map_subscribe_transient_local": local_map_transient_local,
         },
         convert_types=True,
     )
@@ -71,6 +73,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "local_map_topic",
             default_value="/local_map",
+        ),
+        DeclareLaunchArgument(
+            "local_map_transient_local",
+            default_value="false",
         ),
         DeclareLaunchArgument(
             "global_map_topic",

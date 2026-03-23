@@ -23,6 +23,7 @@ find_package(rclcpp REQUIRED)
 find_package(PCL REQUIRED)
 
 find_package(geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(rmcs_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 
@@ -42,6 +43,7 @@ target_include_directories(
         ${rmcs_executor_INCLUDE_DIRS}
         ${geometry_msgs_INCLUDE_DIRS}
         ${rmcs_msgs_INCLUDE_DIRS}
+        ${std_srvs_INCLUDE_DIRS}
         ${ament_index_cpp_INCLUDE_DIRS}
 )
 target_link_libraries(
@@ -51,6 +53,7 @@ target_link_libraries(
     yaml-cpp::yaml-cpp
     ${rmcs_executor_LIBRARIES}
     ${geometry_msgs_LIBRARIES}
+    ${std_srvs_LIBRARIES}
     ${rmcs_msgs_LIBRARIES}
 )
 find_package(pluginlib REQUIRED)
