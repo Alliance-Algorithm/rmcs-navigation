@@ -1,7 +1,4 @@
-# https://github.com/Kitware/CMake/blob/master/Help/dev/experimental.rst
-set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
-
-cmake_minimum_required(VERSION 4.0.2)
+cmake_minimum_required(VERSION 3.28)
 project(rmcs-navigation)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -18,5 +15,21 @@ include_directories(${SOURCE_DIR})
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_gtest REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(rmcs_msgs REQUIRED)
 
 ament_add_gtest(fsm_test fsm.cc)
+
+ament_add_gtest(
+    plan_box_test
+    plan_box.cc
+    ${SOURCE_DIR}/component/decision/plan.cc
+)
+target_link_libraries(
+    plan_box_test
+    yaml-cpp::yaml-cpp
+)
+ament_target_dependencies(
+    plan_box_test
+    rmcs_msgs
+)

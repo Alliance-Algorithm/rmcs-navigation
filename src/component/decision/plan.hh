@@ -14,6 +14,7 @@ struct PlanBox final {
 public:
     struct Information {
         rmcs_msgs::GameStage game_stage = rmcs_msgs::GameStage::UNKNOWN;
+
         double current_x = 0;
         double current_y = 0;
 
@@ -24,6 +25,8 @@ public:
     auto configure(const YAML::Node&) -> void;
 
     auto set_printer(std::function<void(const std::string&)>) -> void;
+
+    auto set_config_name(const std::string&) -> void;
 
     template <std::invocable<Information&> F>
     auto update_information(F&& function) noexcept -> void {

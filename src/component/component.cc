@@ -1,28 +1,31 @@
 #include "component/decision/plan.hh"
+#include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <filesystem>
-#include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
-
-#include <geometry_msgs/msg/twist.hpp>
-#include <std_msgs/msg/string.hpp>
-#include <std_srvs/srv/trigger.hpp>
-
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <geometry_msgs/msg/twist.hpp>
+#include <nav2_msgs/action/navigate_to_pose.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <std_srvs/srv/trigger.hpp>
+
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
+#include <rmcs_msgs/robot_id.hpp>
 
 #include <yaml-cpp/yaml.h>
 
 namespace rmcs_navigation {
 
 constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
+static auto kRclcppOption =
+    rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true);
 
 class Navigation
     : public rmcs_executor::Component
@@ -62,8 +65,11 @@ private:
     OutputInterface<bool> start_autoaim;
 
     InputInterface<rmcs_msgs::GameStage> game_stage;
+    InputInterface<rmcs_msgs::RobotId> robot_id;
     InputInterface<std::uint16_t> robot_health;
     InputInterface<std::uint16_t> robot_bullet;
+    InputInterface<uint32_t> red_score;
+    InputInterface<uint32_t> blue_score;
 
     /// DECISION
     PlanBox plan_box;
@@ -145,9 +151,12 @@ private:
         };
 
         text("Referee Status");
+        text("-     id: {}", *robot_id);
         text("-  stage: {}", rmcs_msgs::to_string(*game_stage));
         text("- health: {}", *robot_health);
         text("- bullet: {}", *robot_bullet);
+        // text("- bscore: {}", *blue_score);
+        // text("- rscore: {}", *red_score);
 
         response->success = true;
         response->message = feedback_message.str();
@@ -166,7 +175,7 @@ private:
 
 public:
     explicit Navigation()
-        : rclcpp::Node{get_component_name()} {
+        : rclcpp::Node{get_component_name(), kRclcppOption} {
 
         tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
         tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
@@ -183,8 +192,11 @@ public:
         Component::register_output("/rmcs_navigation/start_autoaim", start_autoaim, false);
 
         Component::register_input("/referee/game/stage", game_stage, true);
+        Component::register_input("/referee/id", robot_id, true);
         Component::register_input("/referee/current_hp", robot_health, true);
         Component::register_input("/referee/shooter/bullet_allowance", robot_bullet, true);
+        Component::register_input("/referee/game/red_score", red_score, true);
+        Component::register_input("/referee/game/blue_score", blue_score, true);
 
         // NAV2
         subscription_twist = Node::create_subscription<Twist>(
@@ -202,11 +214,14 @@ public:
 
         // DECISION
         // 从 config 中获取配置
+        plan_box.set_printer([this](const std::string& msg) { info("PlanBox: {}", msg); });
+
         auto name = get_parameter("config_name").as_string();
         if (name.empty()) {
             error("Parameter 'config_name' is empty, fallback to '{}'", name);
             rclcpp::shutdown();
         }
+        plan_box.set_config_name(name);
 
         auto path = ament_index_cpp::get_package_share_directory("rmcs-navigation");
         auto config_file = std::filesystem::path{path} / "config" / std::format("{}.yaml", name);
@@ -243,8 +258,6 @@ public:
 
             if (plan_box.rotate_chassis()) {}
         });
-
-        plan_box.set_printer([this](const std::string& msg) { info("PlanBox: {}", msg); });
     }
 
     auto update() -> void override {

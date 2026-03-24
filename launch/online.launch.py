@@ -67,7 +67,7 @@ def _build_actions(context):
                 "local_map_transient_local": "false",
                 "global_map_topic": global_map_topic,
                 "use_lifecycle_manager": "true",
-                "enable_local_map_node": "false",
+                "enable_local_map_node": "true",
             }.items(),
         ),
     ]
@@ -112,7 +112,10 @@ def _build_actions(context):
                     package="tf2_ros",
                     executable="static_transform_publisher",
                     name="world_to_odom_tf",
-                    arguments=["0", "0", "0", "0", "0", "0", "world", "odom"],
+                    arguments=[
+                        "1.2", "6.3", "0",
+                        "0", "0", "0", "world", "odom"
+                    ],
                     output="screen",
                 ),
             ],

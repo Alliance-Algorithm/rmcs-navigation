@@ -1,6 +1,6 @@
 #include <print>
 
-#include "../src/util/fsm.hh"
+#include "component/util/fsm.hh"
 
 auto main() -> int {
     std::println("Hello World");

@@ -24,7 +24,7 @@ MODE_MAP = {
         "use_bag": False,
         "use_sim_time": False,
         "use_local_mock": False,
-        "use_initial_pose": False,
+        "use_initial_pose": True,
     },
     "bag": {
         "use_livox_driver": False,
@@ -40,7 +40,7 @@ MODE_MAP = {
         "use_bag": False,
         "use_sim_time": False,
         "use_local_mock": True,
-        "use_initial_pose": True,
+        "use_initial_pose": False,
     },
 }
 
@@ -189,7 +189,7 @@ def _build_mode_actions(
             arguments=[
                 "1.2", "6.3", "0",
                 "0", "0", "0",
-                "world", "base_link"
+                "world", "odom"
             ],
             output="screen",
         )
