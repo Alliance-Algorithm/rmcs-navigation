@@ -34,23 +34,31 @@ controller_server:
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: False
-      max_vel_x: +3.5
-      min_vel_x: -1.5
-      max_vel_y: +2.5
-      min_vel_y: -2.5
-      max_vel_theta: 2.0
-      min_speed_xy: 0.15
-      max_speed_xy: 3.2
+
+      max_vel_x: +4.0
+      min_vel_x: -0.0
+      max_vel_y: +1.2
+      min_vel_y: -1.2
+
+      max_vel_theta: +5.0
+      min_vel_theta: -5.0
+
+      min_speed_xy: 0.5
+      max_speed_xy: 4.0
       min_speed_theta: 0.0
+      max_speed_theta: 6.0
+
       acc_lim_x: +16.0
       decel_lim_x: -16.0
       acc_lim_y: +16.0
       decel_lim_y: -16.0
-      acc_lim_theta: +3.2
-      decel_lim_theta: -3.2
-      vx_samples: 14
-      vy_samples: 8
-      vtheta_samples: 10
+      acc_lim_theta: +6.0
+      decel_lim_theta: -6.0
+
+      vx_samples: 12
+      vy_samples: 4
+      vtheta_samples: 12
+
       sim_time: 1.2
       linear_granularity: 0.05
       angular_granularity: 0.025
@@ -63,13 +71,13 @@ controller_server:
       critics: ["Oscillation", "BaseObstacle", "ObstacleFootprint", "GoalAlign", "PathAlign", "PathDist", "GoalDist", "Twirling"]
       BaseObstacle.scale: 1.2
       ObstacleFootprint.scale: 1.0
-      GoalAlign.scale: 8.0
+      GoalAlign.scale: 20.0
       GoalAlign.forward_point_distance: 0.1
       PathAlign.scale: 12.0
       PathAlign.forward_point_distance: 0.1
       PathDist.scale: 12.0
       GoalDist.scale: 10.0
-      Twirling.scale: 12.0
+      Twirling.scale: 2.0
 
 local_costmap:
   local_costmap:
