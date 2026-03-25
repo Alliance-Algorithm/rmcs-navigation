@@ -5,3 +5,10 @@ CompileFlags:
     - -fmodule-mapper=*
     - -fdeps-format=*
     - -fprebuilt-module-path=*
+
+---
+If:
+  PathMatch: src/component/component.cc
+Diagnostics:
+  Suppress:
+    - missing-includes

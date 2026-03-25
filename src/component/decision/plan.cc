@@ -50,7 +50,7 @@ struct PlanBox::Impl {
 
     bool cruise_point_reached = false;
     bool has_cruise_point_reached = false;
-    std::chrono::steady_clock::time_point cruise_reached_timestamp{};
+    std::chrono::steady_clock::time_point cruise_reached_timestamp;
 
     auto configure(const YAML::Node& _config) -> std::expected<void, std::string> {
         config = std::make_unique<Config>(_config);

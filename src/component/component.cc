@@ -1,11 +1,25 @@
 #include "component/decision/plan.hh"
 #include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 
+#include <rmcs_executor/component.hpp>
+#include <rmcs_msgs/game_stage.hpp>
+#include <rmcs_msgs/robot_id.hpp>
+#include <rmcs_msgs/switch.hpp>
+
+#include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <memory>
+#include <string>
+
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
-#include <filesystem>
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
+#include <rclcpp/utilities.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -15,17 +29,12 @@
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
-#include <rmcs_executor/component.hpp>
-#include <rmcs_msgs/game_stage.hpp>
-#include <rmcs_msgs/robot_id.hpp>
-
 #include <yaml-cpp/yaml.h>
 
+// NOLINTBEGIN(readability-identifier-naming,misc-include-cleaner)
 namespace rmcs_navigation {
 
 constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
-static auto kRclcppOption =
-    rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true);
 
 class Navigation
     : public rmcs_executor::Component
@@ -61,9 +70,9 @@ private:
     Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
     OutputInterface<Eigen::Vector2d> command_chassis_velocity;
     OutputInterface<Eigen::Vector2d> command_gimbal_velocity;
-    OutputInterface<bool> rotate_chassis;
-    OutputInterface<bool> gimbal_scanning;
-    OutputInterface<bool> start_autoaim;
+    OutputInterface<bool> command_rotate_chassis;
+    OutputInterface<bool> command_gimbal_scanning;
+    OutputInterface<bool> command_enable_autoaim;
 
     InputInterface<rmcs_msgs::GameStage> game_stage;
     InputInterface<rmcs_msgs::RobotId> robot_id;
@@ -71,11 +80,16 @@ private:
     InputInterface<std::uint16_t> robot_bullet;
     InputInterface<uint32_t> red_score;
     InputInterface<uint32_t> blue_score;
+    InputInterface<rmcs_msgs::Switch> switch_right;
+    InputInterface<rmcs_msgs::Switch> switch_left;
 
     /// DECISION
     PlanBox plan_box;
 
     Eigen::Vector2d last_goal_position = Eigen::Vector2d::Zero();
+    rmcs_msgs::GameStage last_game_stage = rmcs_msgs::GameStage::UNKNOWN;
+
+    bool enable_fallback_mode = false;
 
 private:
     template <typename... Args>
@@ -166,9 +180,58 @@ private:
         has_warning_timeout = false;
     }
 
+    auto spin_plan_box() {
+        // 此为安全模式，不进行导航，原地旋转加扫描
+        if (enable_fallback_mode) {
+            *command_gimbal_scanning = true;
+            *command_rotate_chassis = true;
+            *command_enable_autoaim = true;
+            return;
+        }
+
+        auto position = check_current_position();
+
+        using Information = PlanBox::Information;
+        plan_box.update_information([position, this](Information& information) {
+            information.game_stage = *game_stage;
+
+            auto [x, y] = position;
+            information.current_x = x;
+            information.current_y = y;
+
+            information.health = *robot_health;
+            information.bullet = *robot_bullet;
+        });
+
+        do {
+            auto [goal_x, goal_y] = plan_box.goal_position();
+            // 非法目标点，跳过
+            if (std::isnan(goal_x) || std::isnan(goal_y)) {
+                break;
+            }
+            // 目标点相同且间隔在一定秒数内，跳过
+            constexpr auto k_tolerance = 1e-2;
+            constexpr auto k_interval = std::chrono::seconds{5};
+            if (std::abs(last_goal_position.x() - goal_x) < k_tolerance
+                && std::abs(last_goal_position.y() - goal_y) < k_tolerance) {
+                if (std::chrono::steady_clock::now() - last_navigate_timestamp < k_interval)
+                    break;
+            }
+            set_goal_position(goal_x, goal_y);
+
+            last_navigate_timestamp = std::chrono::steady_clock::now();
+            last_goal_position = Eigen::Vector2d{goal_x, goal_y};
+        } while (false);
+
+        *command_gimbal_scanning = plan_box.gimbal_scanning();
+        *command_rotate_chassis = plan_box.rotate_chassis();
+    }
+
 public:
     explicit Navigation()
-        : rclcpp::Node{get_component_name(), kRclcppOption} {
+        : rclcpp::Node{
+              get_component_name(),
+              rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)} {
 
         tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
         tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
@@ -180,9 +243,11 @@ public:
             "/rmcs_navigation/chassis_velocity", command_chassis_velocity, vec_nan);
         Component::register_output(
             "/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, vec_nan);
-        Component::register_output("/rmcs_navigation/rotate_chassis", rotate_chassis, false);
-        Component::register_output("/rmcs_navigation/gimbal_scanning", gimbal_scanning, false);
-        Component::register_output("/rmcs_navigation/start_autoaim", start_autoaim, false);
+        Component::register_output(
+            "/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);
+        Component::register_output(
+            "/rmcs_navigation/gimbal_scanning", command_gimbal_scanning, false);
+        Component::register_output("/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
 
         Component::register_input("/referee/game/stage", game_stage, true);
         Component::register_input("/referee/id", robot_id, true);
@@ -190,6 +255,8 @@ public:
         Component::register_input("/referee/shooter/bullet_allowance", robot_bullet, true);
         Component::register_input("/referee/game/red_score", red_score, true);
         Component::register_input("/referee/game/blue_score", blue_score, true);
+        Component::register_input("/remote/switch/right", switch_right, true);
+        Component::register_input("/remote/switch/left", switch_left, true);
 
         // NAV2
         subscription_twist = Node::create_subscription<Twist>(
@@ -209,7 +276,8 @@ public:
         // 从 config 中获取配置
         plan_box.set_printer([this](const std::string& msg) { info("PlanBox: {}", msg); });
 
-        auto name = get_parameter("config_name").as_string();
+        // auto name = get_parameter("config_name").as_string();
+        auto name = std::string{"rmul"};
         if (name.empty()) {
             error("Parameter 'config_name' is empty, fallback to '{}'", name);
             rclcpp::shutdown();
@@ -233,42 +301,7 @@ public:
         }
 
         using namespace std::chrono_literals;
-        plan_scheduler = Node::create_wall_timer(100ms, [this] {
-            auto [x, y] = check_current_position();
-
-            plan_box.update_information([=, this](PlanBox::Information& information) {
-                information.game_stage = *game_stage;
-
-                information.current_x = x;
-                information.current_y = y;
-
-                information.health = *robot_health;
-                information.bullet = *robot_bullet;
-            });
-
-            do {
-                auto [goal_x, goal_y] = plan_box.goal_position();
-                // 非法目标点，跳过
-                if (std::isnan(goal_x) || std::isnan(goal_y)) {
-                    break;
-                }
-                // 目标点相同且间隔在一定秒数内，跳过
-                constexpr auto kTolerance = 1e-2;
-                constexpr auto kInterval = std::chrono::seconds{5};
-                if (std::abs(last_goal_position.x() - goal_x) < kTolerance
-                    && std::abs(last_goal_position.y() - goal_y) < kTolerance) {
-                    if (std::chrono::steady_clock::now() - last_navigate_timestamp < kInterval)
-                        break;
-                }
-                set_goal_position(goal_x, goal_y);
-
-                last_navigate_timestamp = std::chrono::steady_clock::now();
-                last_goal_position = Eigen::Vector2d{goal_x, goal_y};
-            } while (false);
-
-            *gimbal_scanning = plan_box.gimbal_scanning();
-            *rotate_chassis = plan_box.rotate_chassis();
-        });
+        plan_scheduler = Node::create_wall_timer(100ms, [this] { spin_plan_box(); });
     }
 
     auto update() -> void override {
@@ -282,10 +315,23 @@ public:
             *command_chassis_velocity = Eigen::Vector2d::Zero();
             *command_gimbal_velocity = Eigen::Vector2d::Zero();
         }
+
+        using rmcs_msgs::GameStage;
+        using rmcs_msgs::Switch;
+        if ((last_game_stage != GameStage::STARTED) //
+            && (*game_stage == GameStage::STARTED)) {
+            if (*switch_right != Switch::UP) {
+                enable_fallback_mode = true;
+                warn("Fallback mode detected, runing without navigation");
+            }
+        }
+
+        // .....
     }
 };
 
 } // namespace rmcs_navigation
+// NOLINTEND(readability-identifier-naming,misc-include-cleaner)
 
 #include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(rmcs_navigation::Navigation, rmcs_executor::Component)
