@@ -220,15 +220,16 @@ public:
         auto config_file = std::filesystem::path{path} / "config" / std::format("{}.yaml", name);
         try {
             auto config = YAML::LoadFile(config_file.string());
-            if (config["decision"]) {
-                plan_box.configure(config["decision"]);
-            } else {
-                plan_box.configure(config);
+            auto result = plan_box.configure(config["decision"]);
+            if (!result) {
+                error("Configure error: {}", result.error());
+                rclcpp::shutdown();
             }
             info("Loaded decision config: {}", config_file.string());
         } catch (const std::exception& exception) {
             error(
                 "Failed to load decision config '{}' : {}", config_file.string(), exception.what());
+            rclcpp::shutdown();
         }
 
         using namespace std::chrono_literals;
@@ -251,18 +252,18 @@ public:
                 if (std::isnan(goal_x) || std::isnan(goal_y)) {
                     break;
                 }
-                // 目标点相同且间隔在 2s 以下，跳过
-                if (std::abs(last_goal_position.x() - x) < 1e-2
-                    && std::abs(last_goal_position.y() - y) < 1e-2) {
-                    auto interval = std::chrono::seconds{2};
-                    auto diff = std::chrono::steady_clock::now() - last_navigate_timestamp;
-                    if (diff < interval)
+                // 目标点相同且间隔在一定秒数内，跳过
+                constexpr auto kTolerance = 1e-2;
+                constexpr auto kInterval = std::chrono::seconds{5};
+                if (std::abs(last_goal_position.x() - goal_x) < kTolerance
+                    && std::abs(last_goal_position.y() - goal_y) < kTolerance) {
+                    if (std::chrono::steady_clock::now() - last_navigate_timestamp < kInterval)
                         break;
                 }
                 set_goal_position(goal_x, goal_y);
 
                 last_navigate_timestamp = std::chrono::steady_clock::now();
-                last_goal_position = Eigen::Vector2d{x, y};
+                last_goal_position = Eigen::Vector2d{goal_x, goal_y};
             } while (false);
 
             *gimbal_scanning = plan_box.gimbal_scanning();

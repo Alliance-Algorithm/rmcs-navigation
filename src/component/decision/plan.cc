@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <expected>
 #include <experimental/scope>
 #include <format>
 #include <functional>
@@ -50,6 +51,26 @@ struct PlanBox::Impl {
     bool cruise_point_reached = false;
     bool has_cruise_point_reached = false;
     std::chrono::steady_clock::time_point cruise_reached_timestamp{};
+
+    auto configure(const YAML::Node& _config) -> std::expected<void, std::string> {
+        config = std::make_unique<Config>(_config);
+        fsm.start_on(Mode::Waiting);
+
+        auto& methods = config->cruise_methods;
+        if (methods.empty()) {
+            return std::unexpected{"Cruise is empty"};
+        }
+        if (!methods.contains(occupation_label)) {
+            return std::unexpected{"Occupation method is not found"};
+        }
+        for (auto& [key, method] : methods) {
+            if (method.empty()) {
+                auto error = std::format("Empty method found: {}", key);
+                return std::unexpected{error};
+            }
+        }
+        return {};
+    }
 
     // 首先确认 screen_label 对应的 screen 是否存在
     // 如果存在，则关闭该 screen，再重新拉起，运行的指令为下述的导航启动命令
@@ -174,11 +195,12 @@ struct PlanBox::Impl {
                 cruise_reached_timestamp = std::chrono::steady_clock::now();
                 rotate_chassis = false;
                 gimbal_scanning = false;
+                cruise_point_reached = false;
 
                 printer("Start Cruise Mode");
             },
             [this] {
-                auto& positions = config->cruise_methods.at(occupation_label);
+                auto& positions = config->cruise_methods[occupation_label];
 
                 if (cruise_index >= positions.size()) {
                     cruise_index = 0;
@@ -220,6 +242,7 @@ struct PlanBox::Impl {
                         cruise_point_reached = false;
                         gimbal_scanning = false;
                         update_goal();
+                        printer(std::format("Cruise point changed: ({}, {})", goal_x, goal_y));
                     }
                 }
 
@@ -245,9 +268,8 @@ PlanBox::PlanBox() noexcept
 
 PlanBox::~PlanBox() noexcept = default;
 
-auto PlanBox::configure(const YAML::Node& config) -> void {
-    pimpl->config = std::make_unique<Config>(config);
-    pimpl->fsm.start_on(Impl::Mode::Waiting);
+auto PlanBox::configure(const YAML::Node& config) -> std::expected<void, std::string> {
+    return pimpl->configure(config);
 }
 
 auto PlanBox::set_printer(std::function<void(const std::string&)> printer) -> void {

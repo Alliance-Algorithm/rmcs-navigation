@@ -2,6 +2,7 @@
 
 #include "component/util/pimpl.hh"
 
+#include <expected>
 #include <functional>
 #include <rmcs_msgs/game_stage.hpp>
 #include <yaml-cpp/yaml.h>
@@ -22,7 +23,7 @@ public:
         std::uint16_t bullet = 0;
     };
 
-    auto configure(const YAML::Node&) -> void;
+    auto configure(const YAML::Node&) -> std::expected<void, std::string>;
 
     auto set_printer(std::function<void(const std::string&)>) -> void;
 
