@@ -8,7 +8,7 @@ CompileFlags:
 
 ---
 If:
-  PathMatch: src/component/component.cc
+  PathMatch: .*
 Diagnostics:
   Suppress:
     - missing-includes

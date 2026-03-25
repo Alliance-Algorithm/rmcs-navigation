@@ -72,65 +72,10 @@ struct PlanBox::Impl {
         return {};
     }
 
-    // 首先确认 screen_label 对应的 screen 是否存在
-    // 如果存在，则关闭该 screen，再重新拉起，运行的指令为下述的导航启动命令
-    // 启动后，检查对应的 screen 容器是否存在，输出相应的 logging
-    auto restart_navigation() const -> void {
-        using namespace std::chrono_literals;
-
-        auto source_command = std::string{"source /root/env_setup.bash"};
-        auto launch_command = std::format(
-            "ros2 launch rmcs-navigation online.launch.py config_name:={}", config_name);
-
-        auto screen_label = std::string{"rmcs-navigation"};
-
-        // 预定义指令
-        auto check_cmd = std::format("screen -S {} -Q select . >/dev/null 2>&1", screen_label);
-        auto stop_cmd = std::format("screen -S {} -X quit", screen_label);
-        auto start_cmd = std::format(
-            "screen -dmS {} bash -lc \"{} && {}\"", screen_label, source_command, launch_command);
-
-        printer(std::format("[Navigation] Target: {}", screen_label));
-
-        // 检查并清理旧进程
-        if (std::system(check_cmd.c_str()) == 0) {
-            printer("  -> Found existing session, terminating...");
-            std::ignore = std::system(stop_cmd.c_str());
-            std::this_thread::sleep_for(500ms);
-        }
-
-        // 执行启动
-        printer("  -> Starting new navigation instance...");
-        if (std::system(start_cmd.c_str()) != 0) {
-            printer("  [!] Error: Failed to execute screen start command.");
-            return;
-        }
-
-        // 验证启动结果
-        std::this_thread::sleep_for(800ms);
-        if (std::system(check_cmd.c_str()) == 0) {
-            printer("  [✓] Navigation is now running in background.");
-        } else {
-            printer("  [✗] Critical: Screen died immediately after start.");
-            printer(std::format("      Command tried: {}", launch_command));
-        }
-    }
-
     auto select_mode() const noexcept -> Mode {
-        using namespace rmcs_msgs;
+        using rmcs_msgs::GameStage;
         auto game_stage = information.game_stage;
 
-        if (game_stage == GameStage::UNKNOWN)
-            return Mode::Waiting;
-
-        // 进入倒计时时重启导航
-        if (last_game_stage != GameStage::COUNTDOWN && game_stage == GameStage::COUNTDOWN) {
-            std::ignore = std::async(std::launch::async, [this] {
-                printer("Countdown, navigation restarting");
-                restart_navigation();
-            });
-            return Mode::Waiting;
-        }
         if (game_stage != GameStage::STARTED) {
             return Mode::Waiting;
         }

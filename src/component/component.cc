@@ -1,5 +1,9 @@
 #include "component/decision/plan.hh"
+#include "component/util/logger_mixin.hh"
+#include "component/util/navigation_restarter.hh"
+#include "component/util/nod_task_queue.hh"
 #include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
+#include "component/util/switch_event_detector.hh"
 
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
@@ -24,13 +28,12 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <yaml-cpp/yaml.h>
 
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
-
-#include <yaml-cpp/yaml.h>
 
 // NOLINTBEGIN(readability-identifier-naming,misc-include-cleaner)
 namespace rmcs_navigation {
@@ -39,7 +42,8 @@ constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
 
 class Navigation
     : public rmcs_executor::Component
-    , public rclcpp::Node {
+    , public rclcpp::Node
+    , public rmcs::LoggerMixin {
 private:
     /// RCLCPP
     using Twist = geometry_msgs::msg::Twist;
@@ -69,8 +73,11 @@ private:
     std::atomic<bool> has_warning_timeout = false;
 
     Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
+
+    // tx, ty, rx 用于导航，ry 用于点头事件
     OutputInterface<Eigen::Vector2d> command_chassis_velocity;
     OutputInterface<Eigen::Vector2d> command_gimbal_velocity;
+
     OutputInterface<bool> command_rotate_chassis;
     OutputInterface<bool> command_gimbal_scanning;
     OutputInterface<bool> command_enable_autoaim;
@@ -84,6 +91,17 @@ private:
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
 
+    std::string navigation_config_name = "rmul";
+
+    rmcs::NavigationRestarter navigation_restarter{
+        [this](const std::string& msg) { this->info("{}", msg); }};
+    rmcs::NodTaskQueue nod_task_queue{[this](double pitch_velocity) {
+        if (command_gimbal_velocity.active()) {
+            command_gimbal_velocity->y() = pitch_velocity;
+        }
+    }};
+    rmcs::SwitchEventDetector right_switch_detector{switch_right};
+
     std::chrono::steady_clock::time_point last_twist_timestamp;
     bool has_last_twist_timestamp = false;
 
@@ -96,22 +114,6 @@ private:
     bool enable_fallback_mode = false;
 
 private:
-    template <typename... Args>
-    auto info(std::format_string<Args...> fmt, Args&&... args) const {
-        auto string = std::format(fmt, std::forward<Args>(args)...);
-        RCLCPP_INFO(get_logger(), "%s", string.c_str());
-    }
-    template <typename... Args>
-    auto warn(std::format_string<Args...> fmt, Args&&... args) const {
-        auto string = std::format(fmt, std::forward<Args>(args)...);
-        RCLCPP_WARN(get_logger(), "%s", string.c_str());
-    }
-    template <typename... Args>
-    auto error(std::format_string<Args...> fmt, Args&&... args) const {
-        auto string = std::format(fmt, std::forward<Args>(args)...);
-        RCLCPP_ERROR(get_logger(), "%s", string.c_str());
-    }
-
     auto set_gimbal_scanning_area(double begin, double final) {
         // TODO:
         // 扫描模式下，云台不跟随前进方向，上下扫描，Yaw 按照给定角度扫描
@@ -196,7 +198,6 @@ private:
         command_chassis_velocity->y() = compensated_y;
 
         command_gimbal_velocity->x() = msg->angular.z;
-        command_gimbal_velocity->y() = 0;
 
         command_received_timestamp = std::chrono::steady_clock::now();
         has_warning_timeout = false;
@@ -249,6 +250,20 @@ private:
         *command_rotate_chassis = plan_box.rotate_chassis();
     }
 
+    auto enqueue_nod_sequence() -> void {
+        using namespace std::chrono_literals;
+
+        nod_task_queue.push_delay(300ms);
+        for (auto i = 0; i < 2; ++i) {
+            nod_task_queue.nod_once(0.8, 220ms);
+        }
+        nod_task_queue.push_delay(1s);
+        nod_task_queue.push_task(1ms, {}, [this] {
+            info("Nod sequence finished, restart navigation now");
+            navigation_restarter.start_async(navigation_config_name);
+        });
+    }
+
 public:
     explicit Navigation()
         : rclcpp::Node{
@@ -260,16 +275,17 @@ public:
         client = rclcpp_action::create_client<NavigateToPose>(this, "/navigate_to_pose");
 
         // RMCS
-        const auto vec_nan = Eigen::Vector2d{kNan, kNan};
+        const auto kNanVec = Eigen::Vector2d{kNan, kNan};
         Component::register_output(
-            "/rmcs_navigation/chassis_velocity", command_chassis_velocity, vec_nan);
+            "/rmcs_navigation/chassis_velocity", command_chassis_velocity, kNanVec);
         Component::register_output(
-            "/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, vec_nan);
+            "/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, kNanVec);
         Component::register_output(
             "/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);
         Component::register_output(
             "/rmcs_navigation/gimbal_scanning", command_gimbal_scanning, false);
-        Component::register_output("/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
+        Component::register_output(//
+            "/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
 
         Component::register_input("/referee/game/stage", game_stage, true);
         Component::register_input("/referee/id", robot_id, true);
@@ -298,16 +314,15 @@ public:
         // 从 config 中获取配置
         plan_box.set_printer([this](const std::string& msg) { info("PlanBox: {}", msg); });
 
-        // auto name = get_parameter("config_name").as_string();
-        auto name = std::string{"rmul"};
-        if (name.empty()) {
-            error("Parameter 'config_name' is empty, fallback to '{}'", name);
+        navigation_config_name = get_parameter_or<std::string>("config_name", "rmul");
+        if (navigation_config_name.empty()) {
+            error("Parameter 'config_name' is empty, fallback to 'rmul'");
             rclcpp::shutdown();
         }
-        plan_box.set_config_name(name);
 
         auto path = ament_index_cpp::get_package_share_directory("rmcs-navigation");
-        auto config_file = std::filesystem::path{path} / "config" / std::format("{}.yaml", name);
+        auto config_file =
+            std::filesystem::path{path} / "config" / std::format("{}.yaml", navigation_config_name);
         try {
             auto config = YAML::LoadFile(config_file.string());
             auto result = plan_box.configure(config["decision"]);
@@ -328,7 +343,8 @@ public:
 
     auto update() -> void override {
         using namespace std::chrono_literals;
-        const auto interval = std::chrono::steady_clock::now() - command_received_timestamp;
+        const auto now = std::chrono::steady_clock::now();
+        const auto interval = now - command_received_timestamp;
         if (interval > timeout_interval) {
             if (has_warning_timeout == false) {
                 has_warning_timeout = true;
@@ -347,6 +363,13 @@ public:
                 warn("Fallback mode detected, runing without navigation");
             }
         }
+
+        if (right_switch_detector.spin(now)) {
+            info("Right switch trigger detected, enqueue nod sequence");
+            enqueue_nod_sequence();
+        }
+
+        nod_task_queue.spin(now);
 
         // .....
     }
