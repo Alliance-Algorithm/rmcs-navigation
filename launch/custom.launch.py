@@ -24,7 +24,7 @@ MODE_MAP = {
         "use_bag": False,
         "use_sim_time": False,
         "use_local_mock": False,
-        "use_initial_pose": True,
+        "use_initial_pose": False,
     },
     "bag": {
         "use_livox_driver": False,
@@ -40,7 +40,7 @@ MODE_MAP = {
         "use_bag": False,
         "use_sim_time": False,
         "use_local_mock": True,
-        "use_initial_pose": False,
+        "use_initial_pose": True,
     },
 }
 
@@ -171,7 +171,7 @@ def _build_mode_actions(
         package="tf2_ros",
         executable="static_transform_publisher",
         name="world_to_odom_tf",
-        arguments=["0", "0", "0", "0", "0", "0", "world", "odom"],
+        arguments=["1.2", "6.3", "0", "0", "0", "0", "world", "odom"],
         output="screen",
     )
     result_actions.append(
@@ -187,9 +187,9 @@ def _build_mode_actions(
             executable="static_transform_publisher",
             name="world_to_base_link_tf",
             arguments=[
-                "1.2", "6.3", "0",
                 "0", "0", "0",
-                "world", "odom"
+                "0", "0", "0",
+                "odom", "base_link"
             ],
             output="screen",
         )

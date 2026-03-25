@@ -30,7 +30,7 @@ controller_server:
       stateful: true
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 3.14
+      yaw_goal_tolerance: 6.28
 
     FollowPath:
       # MPPI 速度调参说明：

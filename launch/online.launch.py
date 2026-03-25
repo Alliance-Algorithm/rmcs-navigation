@@ -105,6 +105,7 @@ def _build_actions(context):
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(point_lio_launch),
         ),
+        # 联盟赛初始坐标，以地图右下角 ROS 系为原点
         TimerAction(
             period=1.0,
             actions=[

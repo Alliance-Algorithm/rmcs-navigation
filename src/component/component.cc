@@ -46,6 +46,7 @@ private:
     using NavigateToPose = nav2_msgs::action::NavigateToPose;
     using NavigateToPoseClient = rclcpp_action::Client<NavigateToPose>;
     std::shared_ptr<NavigateToPoseClient> client;
+    std::chrono::steady_clock::time_point last_navigate_timestamp;
 
     std::unique_ptr<tf2_ros::Buffer> tf_buffer;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
@@ -116,15 +117,6 @@ private:
     }
 
     auto set_goal_position(double x, double y) {
-        if (std::isnan(x) || std::isnan(y)) {
-            return;
-        }
-        if (std::abs(last_goal_position.x() - x) < 1e-2
-            && std::abs(last_goal_position.y() - y) < 1e-2) {
-            return;
-        }
-        last_goal_position = Eigen::Vector2d{x, y};
-
         client->async_cancel_all_goals();
 
         auto goal = NavigateToPose::Goal{};
@@ -139,6 +131,7 @@ private:
         goal.pose.pose.orientation.w = 1.0;
 
         client->async_send_goal(goal);
+        info("Goal position updated: ({}, {})", x, y);
     }
 
     auto referee_status_service_callback(
@@ -240,10 +233,11 @@ public:
 
         using namespace std::chrono_literals;
         plan_scheduler = Node::create_wall_timer(100ms, [this] {
-            plan_box.update_information([this](PlanBox::Information& information) {
+            auto [x, y] = check_current_position();
+
+            plan_box.update_information([=, this](PlanBox::Information& information) {
                 information.game_stage = *game_stage;
 
-                auto [x, y] = check_current_position();
                 information.current_x = x;
                 information.current_y = y;
 
@@ -251,12 +245,28 @@ public:
                 information.bullet = *robot_bullet;
             });
 
-            auto [x, y] = plan_box.goal_position();
-            set_goal_position(x, y);
+            do {
+                auto [goal_x, goal_y] = plan_box.goal_position();
+                // 非法目标点，跳过
+                if (std::isnan(goal_x) || std::isnan(goal_y)) {
+                    break;
+                }
+                // 目标点相同且间隔在 2s 以下，跳过
+                if (std::abs(last_goal_position.x() - x) < 1e-2
+                    && std::abs(last_goal_position.y() - y) < 1e-2) {
+                    auto interval = std::chrono::seconds{2};
+                    auto diff = std::chrono::steady_clock::now() - last_navigate_timestamp;
+                    if (diff < interval)
+                        break;
+                }
+                set_goal_position(goal_x, goal_y);
 
-            if (plan_box.gimbal_scanning()) {}
+                last_navigate_timestamp = std::chrono::steady_clock::now();
+                last_goal_position = Eigen::Vector2d{x, y};
+            } while (false);
 
-            if (plan_box.rotate_chassis()) {}
+            *gimbal_scanning = plan_box.gimbal_scanning();
+            *rotate_chassis = plan_box.rotate_chassis();
         });
     }
 
