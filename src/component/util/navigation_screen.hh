@@ -8,11 +8,11 @@
 
 namespace rmcs::navigation {
 
-class NavigationRestarter {
+class NavigationScreen {
 public:
     using Logger = std::function<void(const std::string&)>;
 
-    explicit NavigationRestarter(Logger logger)
+    explicit NavigationScreen(Logger logger)
         : logger_{std::move(logger)} {}
 
     auto set_config_name(std::string config_name) -> void { config_name_ = std::move(config_name); }

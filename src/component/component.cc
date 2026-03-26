@@ -1,6 +1,6 @@
 #include "component/decision/plan.hh"
 #include "component/util/logger_mixin.hh"
-#include "component/util/navigation_restarter.hh"
+#include "component/util/navigation_screen.hh"
 #include "component/util/nod_task_queue.hh"
 #include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 #include "component/util/switch_event_detector.hh"
@@ -13,14 +13,19 @@
 #include <rmcs_msgs/switch.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <memory>
+#include <mutex>
+#include <sstream>
 #include <string>
+#include <tuple>
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -46,6 +51,9 @@ class Navigation
     , public rclcpp::Node
     , public rmcs::navigation::LoggerMixin {
 private:
+    mutable std::mutex io_mutex;
+    bool use_mock_interface = false;
+
     /// RCLCPP
     using Twist = geometry_msgs::msg::Twist;
     using String = std_msgs::msg::String;
@@ -83,25 +91,63 @@ private:
     OutputInterface<bool> command_detect_targets;
     OutputInterface<bool> command_enable_autoaim;
 
-    InputInterface<rmcs_msgs::GameStage> game_stage;
-    InputInterface<rmcs_msgs::RobotId> robot_id;
-    InputInterface<std::uint16_t> robot_health;
-    InputInterface<std::uint16_t> robot_bullet;
-    InputInterface<uint32_t> red_score;
-    InputInterface<uint32_t> blue_score;
-    InputInterface<rmcs_msgs::Switch> switch_right;
-    InputInterface<rmcs_msgs::Switch> switch_left;
+    struct Context {
+        InputInterface<rmcs_msgs::GameStage> game_stage;
+        InputInterface<rmcs_msgs::RobotId> robot_id;
+        InputInterface<std::uint16_t> robot_health;
+        InputInterface<std::uint16_t> robot_bullet;
+        InputInterface<std::uint32_t> red_score;
+        InputInterface<std::uint32_t> blue_score;
+        InputInterface<rmcs_msgs::Switch> switch_right;
+        InputInterface<rmcs_msgs::Switch> switch_left;
+
+        auto init(rmcs_executor::Component& component, bool mock = false) -> void {
+            if (!mock) {
+                component.register_input("/referee/game/stage", game_stage, true);
+                component.register_input("/referee/current_hp", robot_health, true);
+                component.register_input("/referee/shooter/bullet_allowance", robot_bullet, true);
+                component.register_input("/referee/game/red_score", red_score, true);
+                component.register_input("/referee/game/blue_score", blue_score, true);
+            } else {
+                game_stage.make_and_bind_directly();
+                robot_health.make_and_bind_directly();
+                robot_bullet.make_and_bind_directly();
+                red_score.make_and_bind_directly();
+                blue_score.make_and_bind_directly();
+            }
+
+            component.register_input("/referee/id", robot_id, true);
+            component.register_input("/remote/switch/right", switch_right, true);
+            component.register_input("/remote/switch/left", switch_left, true);
+        }
+        auto update(const std::string& raw_data) -> void {
+            // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
+            auto data = YAML::Load(raw_data);
+            if (auto node = data["game_stage"]; node && game_stage.ready())
+                const_cast<rmcs_msgs::GameStage&>(*game_stage) =
+                    static_cast<rmcs_msgs::GameStage>(node.as<int>());
+            if (auto node = data["robot_health"]; node && robot_health.ready())
+                const_cast<std::uint16_t&>(*robot_health) = node.as<std::uint16_t>();
+            if (auto node = data["robot_bullet"]; node && robot_bullet.ready())
+                const_cast<std::uint16_t&>(*robot_bullet) = node.as<std::uint16_t>();
+            if (auto node = data["red_score"]; node && red_score.ready())
+                const_cast<std::uint32_t&>(*red_score) = node.as<std::uint32_t>();
+            if (auto node = data["blue_score"]; node && blue_score.ready())
+                const_cast<std::uint32_t&>(*blue_score) = node.as<std::uint32_t>();
+            // NOLINTEND(cppcoreguidelines-pro-type-const-cast)
+        }
+    } context;
 
     std::string navigation_config_name = "rmul";
 
-    NavigationRestarter navigation_restarter{
-        [this](const std::string& msg) { this->info("{}", msg); }};
+    NavigationScreen screen{[this](const std::string& msg) { this->info("{}", msg); }};
+
     NodTaskQueue nod_task_queue{[this](double pitch_velocity) {
         if (command_gimbal_velocity.active()) {
             command_gimbal_velocity->y() = pitch_velocity;
         }
     }};
-    SwitchEventDetector right_switch_detector{switch_right};
+    SwitchEventDetector right_switch_detector{context.switch_right};
 
     std::chrono::steady_clock::time_point last_twist_timestamp;
     bool has_last_twist_timestamp = false;
@@ -115,15 +161,6 @@ private:
     bool enable_fallback_mode = false;
 
 private:
-    auto set_detect_targets_area(double begin, double final) {
-        // TODO:
-        // 扫描模式下，云台不跟随前进方向，上下扫描，Yaw 按照给定角度扫描
-        // Begin -> Final -> Begin -> ...
-        std::ignore = this;
-        std::ignore = begin;
-        std::ignore = final;
-    }
-
     auto check_current_position() const noexcept -> std::tuple<double, double> {
         try {
             const auto transform =
@@ -154,6 +191,7 @@ private:
     auto referee_status_service_callback(
         const std::shared_ptr<Trigger::Request>&,
         const std::shared_ptr<Trigger::Response>& response) const {
+        auto lock = std::scoped_lock{io_mutex};
 
         auto feedback_message = std::ostringstream{};
         auto text = [&]<typename... Args>(std::format_string<Args...> format, Args&&... args) {
@@ -161,10 +199,10 @@ private:
         };
 
         text("Referee Status");
-        text("-     id: {}", *robot_id);
-        text("-  stage: {}", rmcs_msgs::to_string(*game_stage));
-        text("- health: {}", *robot_health);
-        text("- bullet: {}", *robot_bullet);
+        text("-     id: {}", *context.robot_id);
+        text("-  stage: {}", rmcs_msgs::to_string(*context.game_stage));
+        text("- health: {}", *context.robot_health);
+        text("- bullet: {}", *context.robot_bullet);
         // text("- bscore: {}", *blue_score);
         // text("- rscore: {}", *red_score);
 
@@ -173,6 +211,8 @@ private:
     }
 
     auto subscription_twist_callback(const std::unique_ptr<Twist>& msg) {
+        auto lock = std::scoped_lock{io_mutex};
+
         auto compensated_x = msg->linear.x;
         auto compensated_y = msg->linear.y;
 
@@ -201,6 +241,8 @@ private:
     }
 
     auto spin_plan_box() {
+        auto lock = std::scoped_lock{io_mutex};
+
         // 此为安全模式，不进行导航，原地旋转加扫描
         if (enable_fallback_mode) {
             *command_detect_targets = true;
@@ -213,17 +255,17 @@ private:
 
         using Information = PlanBox::Information;
         plan_box.update_information([position, this](Information& info) {
-            info.game_stage = *game_stage;
+            info.game_stage = *context.game_stage;
 
             auto [x, y] = position;
             info.current_x = x;
             info.current_y = y;
 
-            info.enemy_x = kNan;
-            info.enemy_y = kNan;
+            info.enemy_x = kNanLocal;
+            info.enemy_y = kNanLocal;
 
-            info.health = *robot_health;
-            info.bullet = *robot_bullet;
+            info.health = *context.robot_health;
+            info.bullet = *context.robot_bullet;
         });
         plan_box.fetch_command([this](const PlanBox::Command& command) {
             auto [goal_x, goal_y] = std::tuple{command.goal_x, command.goal_y};
@@ -252,6 +294,9 @@ private:
     auto enqueue_nod_sequence() -> void {
         using namespace std::chrono_literals;
 
+        if (!nod_task_queue.empty())
+            return;
+
         nod_task_queue.push_delay(300ms);
         for (auto i = 0; i < 2; ++i) {
             nod_task_queue.nod_once(0.8, 220ms);
@@ -259,7 +304,7 @@ private:
         nod_task_queue.push_delay(1s);
         nod_task_queue.push_task(1ms, {}, [this] {
             info("Nod sequence finished, restart navigation now");
-            navigation_restarter.restart_async();
+            screen.restart_async();
         });
     }
 
@@ -275,25 +320,14 @@ public:
 
         // RMCS
         const auto kNanVec = Eigen::Vector2d{kNanLocal, kNanLocal};
-        Component::register_output(
-            "/rmcs_navigation/chassis_velocity", command_chassis_velocity, kNanVec);
-        Component::register_output(
-            "/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, kNanVec);
-        Component::register_output(
-            "/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);
-        Component::register_output(
-            "/rmcs_navigation/detect_targets", command_detect_targets, false);
-        Component::register_output(//
-            "/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
+        register_output("/rmcs_navigation/chassis_velocity", command_chassis_velocity, kNanVec);
+        register_output("/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, kNanVec);
+        register_output("/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);
+        register_output("/rmcs_navigation/detect_targets", command_detect_targets, false);
+        register_output("/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
 
-        Component::register_input("/referee/game/stage", game_stage, true);
-        Component::register_input("/referee/id", robot_id, true);
-        Component::register_input("/referee/current_hp", robot_health, true);
-        Component::register_input("/referee/shooter/bullet_allowance", robot_bullet, true);
-        Component::register_input("/referee/game/red_score", red_score, true);
-        Component::register_input("/referee/game/blue_score", blue_score, true);
-        Component::register_input("/remote/switch/right", switch_right, true);
-        Component::register_input("/remote/switch/left", switch_left, true);
+        use_mock_interface = get_parameter_or("use_mock_interface", false);
+        context.init(*this, use_mock_interface);
 
         // NAV2
         subscription_twist = Node::create_subscription<Twist>(
@@ -307,6 +341,22 @@ public:
                 const std::shared_ptr<Trigger::Response>& response) {
                 referee_status_service_callback(request, response);
             });
+
+        if (use_mock_interface) {
+            auto mock_context_topic = get_parameter_or<std::string>(
+                "mock_context_topic", "/rmcs_navigation/mock_context");
+            subscription_command = Node::create_subscription<String>(
+                mock_context_topic, 10, [this](const std::unique_ptr<String>& msg) {
+                    auto lock = std::scoped_lock{io_mutex};
+                    try {
+                        context.update(msg->data);
+                    } catch (const std::exception& exception) {
+                        warn("Failed to update mock context: {}", exception.what());
+                    }
+                });
+            info("Mock context subscriber enabled on '{}'", mock_context_topic);
+        }
+
         command_received_timestamp = std::chrono::steady_clock::now();
 
         // DECISION
@@ -318,7 +368,7 @@ public:
             error("Parameter 'config_name' is empty, fallback to 'rmul'");
             rclcpp::shutdown();
         }
-        navigation_restarter.set_config_name(navigation_config_name);
+        screen.set_config_name(navigation_config_name);
 
         auto path = ament_index_cpp::get_package_share_directory("rmcs-navigation");
         auto config_file =
@@ -342,6 +392,8 @@ public:
     }
 
     auto update() -> void override {
+        auto lock = std::scoped_lock{io_mutex};
+
         using namespace std::chrono_literals;
         const auto now = std::chrono::steady_clock::now();
         const auto interval = now - command_received_timestamp;
@@ -354,8 +406,8 @@ public:
             *command_gimbal_velocity = Eigen::Vector2d::Zero();
         }
 
-        if (started_detector.spin(*game_stage)) {
-            if (*switch_right != rmcs_msgs::Switch::UP) {
+        if (started_detector.spin(*context.game_stage)) {
+            if (*context.switch_right != rmcs_msgs::Switch::UP) {
                 enable_fallback_mode = true;
                 warn("Fallback mode detected, runing without navigation");
             }
