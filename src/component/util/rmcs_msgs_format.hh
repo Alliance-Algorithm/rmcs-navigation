@@ -13,7 +13,7 @@
 #include <rmcs_msgs/robot_id.hpp>
 
 #if defined(RMCS_NAVIGATION_HAS_STD_FORMAT)
-namespace rmcs_navigation::detail {
+namespace rmcs::navigation::detail {
 
 constexpr auto to_string(rmcs_msgs::ArmorID id) noexcept -> const char* {
     switch (id) {
@@ -62,7 +62,7 @@ constexpr auto to_string(rmcs_msgs::RobotId id) noexcept -> const char* {
     return "UNREACHABLE";
 }
 
-} // namespace rmcs_navigation::detail
+} // namespace rmcs::navigation::detail
 
 template <>
 struct std::formatter<rmcs_msgs::GameStage> : std::formatter<const char*> {
@@ -74,14 +74,14 @@ struct std::formatter<rmcs_msgs::GameStage> : std::formatter<const char*> {
 template <>
 struct std::formatter<rmcs_msgs::ArmorID> : std::formatter<const char*> {
     auto format(rmcs_msgs::ArmorID id, std::format_context& ctx) const {
-        return std::formatter<const char*>::format(rmcs_navigation::detail::to_string(id), ctx);
+        return std::formatter<const char*>::format(rmcs::navigation::detail::to_string(id), ctx);
     }
 };
 
 template <>
 struct std::formatter<rmcs_msgs::RobotId> : std::formatter<const char*> {
     auto format(rmcs_msgs::RobotId id, std::format_context& ctx) const {
-        return std::formatter<const char*>::format(rmcs_navigation::detail::to_string(id), ctx);
+        return std::formatter<const char*>::format(rmcs::navigation::detail::to_string(id), ctx);
     }
 };
 #endif

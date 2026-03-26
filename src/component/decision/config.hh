@@ -8,7 +8,7 @@
 
 #include <yaml-cpp/yaml.h>
 
-namespace rmcs_navigation {
+namespace rmcs::navigation {
 
 struct Config {
     using Point = std::pair<double, double>;
@@ -28,13 +28,13 @@ struct Config {
         : Config{config.as<Config>()} {}
 };
 
-} // namespace rmcs_navigation
+} // namespace rmcs::navigation
 
 namespace YAML {
 
 template <>
-struct convert<rmcs_navigation::Config> {
-    static auto encode(const rmcs_navigation::Config& rhs) -> Node {
+struct convert<rmcs::navigation::Config> {
+    static auto encode(const rmcs::navigation::Config& rhs) -> Node {
         auto node = Node{NodeType::Map};
         node["health_limit"] = rhs.health_limit;
         node["health_ready"] = rhs.health_ready;
@@ -51,7 +51,7 @@ struct convert<rmcs_navigation::Config> {
         return node;
     }
 
-    static auto decode(const Node& node, rmcs_navigation::Config& rhs) -> bool {
+    static auto decode(const Node& node, rmcs::navigation::Config& rhs) -> bool {
         const auto decision = node["decision"] ? node["decision"] : node;
         if (decision.IsMap() == false) {
             return false;
@@ -79,7 +79,7 @@ struct convert<rmcs_navigation::Config> {
         rhs.cruise_methods.clear();
         if (const auto methods = decision["cruise_methods"]; methods && methods.IsMap()) {
             for (const auto& it : methods) {
-                using namespace rmcs_navigation;
+                using namespace rmcs::navigation;
                 rhs.cruise_methods.emplace(
                     it.first.as<std::string>(), it.second.as<std::vector<Config::Point>>());
             }

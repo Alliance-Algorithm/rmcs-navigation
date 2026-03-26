@@ -6,7 +6,7 @@
 #include <string>
 #include <thread>
 
-namespace rmcs {
+namespace rmcs::navigation {
 
 class NavigationRestarter {
 public:
@@ -69,4 +69,4 @@ private:
     Logger logger_;
 };
 
-} // namespace rmcs
+} // namespace rmcs::navigation

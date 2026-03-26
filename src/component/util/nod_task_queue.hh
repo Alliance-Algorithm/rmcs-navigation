@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace rmcs {
+namespace rmcs::navigation {
 
 class NodTaskQueue {
 public:
@@ -108,4 +108,4 @@ private:
     bool current_started_ = false;
 };
 
-} // namespace rmcs
+} // namespace rmcs::navigation

@@ -14,7 +14,7 @@
 #include <future>
 #include <utility>
 
-namespace rmcs_navigation {
+namespace rmcs::navigation {
 
 constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
 
@@ -33,7 +33,7 @@ struct PlanBox::Impl {
 
     std::unique_ptr<Config> config;
 
-    rmcs::Fsm<Mode> fsm{Mode::Waiting};
+    rmcs::navigation::Fsm<Mode> fsm{Mode::Waiting};
 
     double goal_x = kNan;
     double goal_y = kNan;
@@ -235,4 +235,4 @@ auto PlanBox::do_plan_() noexcept -> void { pimpl->do_plan(); }
 
 auto PlanBox::information_() noexcept -> Information& { return pimpl->information; }
 
-} // namespace rmcs_navigation
+} // namespace rmcs::navigation

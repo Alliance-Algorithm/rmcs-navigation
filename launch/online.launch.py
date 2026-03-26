@@ -70,6 +70,12 @@ def _build_actions(context):
                 "enable_local_map_node": "true",
             }.items(),
         ),
+        Node(
+            package="rmcs-navigation",
+            executable="goal_topic_bridge.py",
+            name="goal_topic_bridge",
+            output="screen",
+        ),
     ]
 
     actions = [

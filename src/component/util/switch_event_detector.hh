@@ -5,7 +5,7 @@
 
 #include <chrono>
 
-namespace rmcs {
+namespace rmcs::navigation {
 
 class SwitchEventDetector {
 public:
@@ -72,4 +72,4 @@ private:
     TimePoint seen_middle_to_up_at_{};
 };
 
-} // namespace rmcs
+} // namespace rmcs::navigation

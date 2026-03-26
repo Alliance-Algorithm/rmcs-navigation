@@ -12,3 +12,5 @@ If:
 Diagnostics:
   Suppress:
     - missing-includes
+    - readability-identifier-naming
+    - misc-include-cleaner

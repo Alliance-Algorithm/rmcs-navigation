@@ -4,7 +4,7 @@
 #include <functional>
 #include <utility>
 
-namespace rmcs {
+namespace rmcs::navigation {
 
 class TimedTask {
 public:
@@ -84,4 +84,4 @@ private:
     TimePoint end_time_;
 };
 
-} // namespace rmcs
+} // namespace rmcs::navigation

@@ -35,15 +35,14 @@
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
-// NOLINTBEGIN(readability-identifier-naming,misc-include-cleaner)
-namespace rmcs_navigation {
+namespace rmcs::navigation {
 
 constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
 
 class Navigation
     : public rmcs_executor::Component
     , public rclcpp::Node
-    , public rmcs::LoggerMixin {
+    , public rmcs::navigation::LoggerMixin {
 private:
     /// RCLCPP
     using Twist = geometry_msgs::msg::Twist;
@@ -93,14 +92,14 @@ private:
 
     std::string navigation_config_name = "rmul";
 
-    rmcs::NavigationRestarter navigation_restarter{
+    NavigationRestarter navigation_restarter{
         [this](const std::string& msg) { this->info("{}", msg); }};
-    rmcs::NodTaskQueue nod_task_queue{[this](double pitch_velocity) {
+    NodTaskQueue nod_task_queue{[this](double pitch_velocity) {
         if (command_gimbal_velocity.active()) {
             command_gimbal_velocity->y() = pitch_velocity;
         }
     }};
-    rmcs::SwitchEventDetector right_switch_detector{switch_right};
+    SwitchEventDetector right_switch_detector{switch_right};
 
     std::chrono::steady_clock::time_point last_twist_timestamp;
     bool has_last_twist_timestamp = false;
@@ -375,8 +374,7 @@ public:
     }
 };
 
-} // namespace rmcs_navigation
-// NOLINTEND(readability-identifier-naming,misc-include-cleaner)
+} // namespace rmcs::navigation
 
 #include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(rmcs_navigation::Navigation, rmcs_executor::Component)
+PLUGINLIB_EXPORT_CLASS(rmcs::navigation::Navigation, rmcs_executor::Component)

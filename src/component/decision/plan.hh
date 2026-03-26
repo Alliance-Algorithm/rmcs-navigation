@@ -7,7 +7,7 @@
 #include <rmcs_msgs/game_stage.hpp>
 #include <yaml-cpp/yaml.h>
 
-namespace rmcs_navigation {
+namespace rmcs::navigation {
 
 struct PlanBox final {
     RMCS_PIMPL_DEFINITION(PlanBox)
@@ -46,4 +46,4 @@ private:
     auto information_() noexcept -> Information&;
 };
 
-} // namespace rmcs_navigation
+} // namespace rmcs::navigation

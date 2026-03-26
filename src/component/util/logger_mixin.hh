@@ -5,7 +5,7 @@
 
 #include <rclcpp/logging.hpp>
 
-namespace rmcs {
+namespace rmcs::navigation {
 
 struct LoggerMixin {
     template <typename Self, typename... Args>
@@ -27,4 +27,4 @@ struct LoggerMixin {
     }
 };
 
-} // namespace rmcs
+} // namespace rmcs::navigation

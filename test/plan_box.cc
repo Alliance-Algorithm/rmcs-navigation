@@ -8,7 +8,7 @@
 
 namespace {
 
-auto setup_plan_box(rmcs_navigation::PlanBox& plan_box, double cruise_interval = 9999.0) -> void {
+auto setup_plan_box(rmcs::navigation::PlanBox& plan_box, double cruise_interval = 9999.0) -> void {
     auto config = YAML::Node{YAML::NodeType::Map};
     config["health_limit"] = 100;
     config["health_ready"] = 300;
@@ -24,9 +24,9 @@ auto setup_plan_box(rmcs_navigation::PlanBox& plan_box, double cruise_interval =
 }
 
 auto update(
-    rmcs_navigation::PlanBox& plan_box, rmcs_msgs::GameStage stage, double x, double y,
+    rmcs::navigation::PlanBox& plan_box, rmcs_msgs::GameStage stage, double x, double y,
     std::uint16_t health, std::uint16_t bullet) {
-    plan_box.update_information([&](rmcs_navigation::PlanBox::Information& info) {
+    plan_box.update_information([&](rmcs::navigation::PlanBox::Information& info) {
         info.game_stage = stage;
         info.current_x = x;
         info.current_y = y;
@@ -35,7 +35,7 @@ auto update(
     });
 }
 
-auto enter_started_stage(rmcs_navigation::PlanBox& plan_box) -> void {
+auto enter_started_stage(rmcs::navigation::PlanBox& plan_box) -> void {
     constexpr auto kNeutralHealth = std::uint16_t{200};
     constexpr auto kNeutralBullet = std::uint16_t{20};
 
@@ -45,7 +45,7 @@ auto enter_started_stage(rmcs_navigation::PlanBox& plan_box) -> void {
 }
 
 TEST(PlanBox, KeepWaitingWhenResourcesAreBetweenThresholds) {
-    auto plan_box = rmcs_navigation::PlanBox{};
+    auto plan_box = rmcs::navigation::PlanBox{};
     setup_plan_box(plan_box);
     enter_started_stage(plan_box);
 
@@ -60,7 +60,7 @@ TEST(PlanBox, KeepWaitingWhenResourcesAreBetweenThresholds) {
 }
 
 TEST(PlanBox, GoHomeWhenResourcesAreLow) {
-    auto plan_box = rmcs_navigation::PlanBox{};
+    auto plan_box = rmcs::navigation::PlanBox{};
     setup_plan_box(plan_box);
     enter_started_stage(plan_box);
 
@@ -75,7 +75,7 @@ TEST(PlanBox, GoHomeWhenResourcesAreLow) {
 }
 
 TEST(PlanBox, CruiseEnablesScanningThenRotationAfterFirstPointReached) {
-    auto plan_box = rmcs_navigation::PlanBox{};
+    auto plan_box = rmcs::navigation::PlanBox{};
     setup_plan_box(plan_box);
     enter_started_stage(plan_box);
 
@@ -100,7 +100,7 @@ TEST(PlanBox, CruiseEnablesScanningThenRotationAfterFirstPointReached) {
 TEST(PlanBox, CruiseSwitchesToNextPointAfterOneSecondInterval) {
     using namespace std::chrono_literals;
 
-    auto plan_box = rmcs_navigation::PlanBox{};
+    auto plan_box = rmcs::navigation::PlanBox{};
     setup_plan_box(plan_box, 1.0);
     enter_started_stage(plan_box);
 

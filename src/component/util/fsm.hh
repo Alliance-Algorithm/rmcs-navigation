@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace rmcs {
+namespace rmcs::navigation {
 
 template <typename state_type>
 class Fsm {
@@ -102,4 +102,4 @@ public:
     }
 };
 
-} // namespace rmcs
+} // namespace rmcs::navigation
