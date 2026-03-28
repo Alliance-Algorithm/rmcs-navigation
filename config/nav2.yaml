@@ -5,7 +5,7 @@ bt_navigator:
     robot_base_frame: base_link
     odom_topic: /aft_mapped_to_init
     bt_loop_duration: 10
-    default_server_timeout: 20
+    default_server_timeout: 120
     enable_groot_monitoring: false
 
 controller_server:
@@ -29,7 +29,7 @@ controller_server:
     position_goal_checker:
       stateful: true
       plugin: nav2_controller::PositionGoalChecker
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.10
 
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"

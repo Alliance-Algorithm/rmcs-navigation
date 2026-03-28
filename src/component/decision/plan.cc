@@ -97,14 +97,14 @@ struct PlanBox::Impl {
         // 优势不在我，回家补给
         {
             auto situations = std::array{
-                info.health < config->health_limit,
-                info.bullet < config->bullet_limit,
+                info.health <= config->health_limit,
+                info.bullet <= config->bullet_limit,
             };
             if (std::ranges::any_of(situations, std::identity{})) {
                 return need_recovery ? Mode::TO_HOME : Mode::RECOVERY;
             }
         }
-        // 已确认打击目标，站桩输出
+        // 已确认打击目标，进入攻击姿态
         {
             if (std::isfinite(info.enemy_x) && std::isfinite(info.enemy_y)) {
                 return Mode::ATTACK;
@@ -150,7 +150,7 @@ struct PlanBox::Impl {
 
                 command.rotate_chassis = true;
                 command.enable_autoaim = true;
-                command.detect_targets = false;
+                command.detect_targets = true;
 
                 logging("Start ToTheHome Mode");
             },
@@ -163,9 +163,9 @@ struct PlanBox::Impl {
                 cruise_task_queue.clear();
                 cruise_reached_edge.reset_edge_only(false);
 
-                command.rotate_chassis = false;
+                command.rotate_chassis = true;
                 command.enable_autoaim = true;
-                command.detect_targets = false;
+                command.detect_targets = true;
 
                 update_next_cruise_goal();
                 logging("Start Cruise Mode");
@@ -227,12 +227,7 @@ struct PlanBox::Impl {
                 command.detect_targets = false;
                 command.rotate_chassis = false;
             },
-            [this] {
-                if (new_info.health > config->health_limit) {
-                    need_recovery = false;
-                }
-                return select_mode();
-            });
+            [this] { return select_mode(); });
 
         if (!fsm.fully_registered()) {
             logging("Fsm is not fully registerd");
@@ -242,14 +237,17 @@ struct PlanBox::Impl {
 
     auto do_plan() noexcept {
         // 一些状态的切换沿检测
-        auto new_one = new_info.game_stage;
-        auto old_one = old_info.game_stage;
-        if (new_one != old_one) {
-            logging(std::format("Stage: {} -> {}", old_one, new_one));
+        auto new_stage = new_info.game_stage;
+        auto old_stage = old_info.game_stage;
+        if (new_stage != old_stage) {
+            logging(std::format("Stage: {} -> {}", old_stage, new_stage));
         }
 
-        if (old_info.health == 0 && new_info.health != 0)
+        // 血量变为 0 时，触发恢复模式
+        if (old_info.health != 0 && new_info.health == 0)
             need_recovery = true;
+        if (new_info.health >= config->health_limit)
+            need_recovery = false;
 
         fsm.spin_once();
 

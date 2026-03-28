@@ -1,3 +1,6 @@
+#
+# 超级对抗赛决策配置文件
+#
 navigation:
   map_yaml: maps/rmuc.yaml
 
