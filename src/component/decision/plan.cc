@@ -141,7 +141,7 @@ struct PlanBox::Impl {
             },
             [this] { return select_mode(); });
 
-        // 回家
+        // 回家，你该补给了
         fsm.use<Mode::TO_HOME>(
             [this] {
                 auto [x, y] = config->home;
@@ -164,8 +164,8 @@ struct PlanBox::Impl {
                 cruise_reached_edge.reset_edge_only(false);
 
                 command.rotate_chassis = true;
-                command.enable_autoaim = true;
-                command.detect_targets = true;
+                command.enable_autoaim = false;
+                command.detect_targets = false;
 
                 update_next_cruise_goal();
                 logging("Start Cruise Mode");
@@ -178,6 +178,7 @@ struct PlanBox::Impl {
                 auto now = std::chrono::steady_clock::now();
                 cruise_reached_edge.spin(reached, now);
 
+                // 抵达巡航点时发布下一个延迟切换巡航点的任务
                 if (cruise_reached_edge.consume_trigger()) {
                     const auto interval = std::chrono::duration_cast<DelayedTaskQueue::Duration>(
                         std::chrono::duration<double>{config->cruise_interval});
@@ -193,12 +194,11 @@ struct PlanBox::Impl {
                         logging(std::format("Cruise point changed: ({}, {})", x, y));
                     });
                 }
-
                 cruise_task_queue.spin(now);
 
-                const auto is_waiting = !cruise_task_queue.empty();
-                command.detect_targets = is_waiting;
-                command.enable_autoaim = is_waiting;
+                // 只有在点内才开始扫描，切换巡航点不扫描
+                const auto is_detecting = !cruise_task_queue.empty();
+                command.detect_targets = is_detecting;
 
                 // 自第一个巡航点开始到程序结束，小陀螺不止
                 command.rotate_chassis = cruise_reached_edge.ever_triggered();
@@ -206,7 +206,7 @@ struct PlanBox::Impl {
                 return select_mode();
             });
 
-        // 小陀螺站桩输出
+        // 小陀螺站桩输出，拥有自瞄则拥有一千个人的力量
         fsm.use<Mode::ATTACK>(
             [this] {
                 command.goal_x = kNan;
@@ -217,7 +217,7 @@ struct PlanBox::Impl {
             },
             [this] { return select_mode(); });
 
-        // 回家，但是只回家
+        // 回家，但是只回家，这个时候你什么也做不到
         fsm.use<Mode::RECOVERY>(
             [this] {
                 const auto [x, y] = config->home;

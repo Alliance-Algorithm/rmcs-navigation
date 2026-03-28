@@ -404,7 +404,7 @@ public:
         }
 
         if (started_detector.spin(*context.game_stage)) {
-            if (*context.switch_right != rmcs_msgs::Switch::UP) {
+            if (*context.switch_right == rmcs_msgs::Switch::MIDDLE) {
                 enable_fallback_mode = true;
                 warn("Fallback mode detected, runing without navigation");
             }
