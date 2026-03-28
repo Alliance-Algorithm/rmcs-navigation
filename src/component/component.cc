@@ -20,7 +20,6 @@
 #include <exception>
 #include <filesystem>
 #include <format>
-#include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -43,8 +42,6 @@
 #include <std_srvs/srv/trigger.hpp>
 
 namespace rmcs::navigation {
-
-constexpr auto kNanLocal = std::numeric_limits<double>::quiet_NaN();
 
 class Navigation
     : public rmcs_executor::Component
@@ -79,7 +76,7 @@ private:
     std::chrono::milliseconds timeout_interval{100};
     std::atomic<bool> has_warning_timeout = false;
 
-    Eigen::Vector2d scanning_angle_speed = {kNanLocal, kNanLocal};
+    Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
 
     // tx, ty, rx 用于导航，ry 用于点头事件
     OutputInterface<Eigen::Vector2d> command_chassis_velocity;
@@ -168,7 +165,7 @@ private:
                 transform.transform.translation.y,
             };
         } catch (const std::exception&) {
-            return std::tuple{kNanLocal, kNanLocal};
+            return std::tuple{kNan, kNan};
         }
     }
 
@@ -208,6 +205,13 @@ private:
 
     auto subscription_twist_callback(const std::unique_ptr<Twist>& msg) {
         auto lock = std::scoped_lock{io_mutex};
+
+        if (*context.switch_right != rmcs_msgs::Switch::UP) {
+            command_chassis_velocity->x() = 0;
+            command_chassis_velocity->y() = 0;
+            command_gimbal_velocity->x() = 0;
+            return;
+        }
 
         auto compensated_x = msg->linear.x;
         auto compensated_y = msg->linear.y;
@@ -257,8 +261,8 @@ private:
             info.current_x = x;
             info.current_y = y;
 
-            info.enemy_x = kNanLocal;
-            info.enemy_y = kNanLocal;
+            info.enemy_x = kNan;
+            info.enemy_y = kNan;
 
             info.health = *context.robot_health;
             info.bullet = *context.robot_bullet;
@@ -316,7 +320,7 @@ public:
             Node::create_publisher<geometry_msgs::msg::PoseStamped>("/move_base_simple/goal", 10);
 
         // RMCS
-        const auto kNanVec = Eigen::Vector2d{kNanLocal, kNanLocal};
+        const auto kNanVec = Eigen::Vector2d{kNan, kNan};
         register_output("/rmcs_navigation/chassis_velocity", command_chassis_velocity, kNanVec);
         register_output("/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, kNanVec);
         register_output("/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);

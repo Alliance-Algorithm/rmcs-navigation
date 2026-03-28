@@ -101,7 +101,7 @@ struct PlanBox::Impl {
                 info.bullet <= config->bullet_limit,
             };
             if (std::ranges::any_of(situations, std::identity{})) {
-                return need_recovery ? Mode::TO_HOME : Mode::RECOVERY;
+                return need_recovery ? Mode::RECOVERY : Mode::TO_HOME;
             }
         }
         // 已确认打击目标，进入攻击姿态
@@ -246,7 +246,7 @@ struct PlanBox::Impl {
         // 血量变为 0 时，触发恢复模式
         if (old_info.health != 0 && new_info.health == 0)
             need_recovery = true;
-        if (new_info.health >= config->health_limit)
+        if (new_info.health >= config->health_ready)
             need_recovery = false;
 
         fsm.spin_once();
