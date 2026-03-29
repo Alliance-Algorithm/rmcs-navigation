@@ -113,15 +113,15 @@ struct PlanBox::Impl {
         // 优势在我，进行巡航进攻
         {
             auto situations = std::array{
-                info.health >= config->health_ready,
-                info.bullet >= config->bullet_ready,
+                info.health >= config->health_limit,
+                info.bullet >= config->bullet_limit,
             };
             if (std::ranges::all_of(situations, std::identity{})) {
                 return Mode::CRUISE;
             }
         }
 
-        return Mode::WAITING;
+        return Mode::CRUISE;
     }
 
     Impl() noexcept {
@@ -129,7 +129,7 @@ struct PlanBox::Impl {
         // 等待模式，啥也不做
         fsm.use<Mode::WAITING>(
             [this] {
-                cruise_reached_edge.reset();
+                cruise_reached_edge.reset_edge_only();
 
                 command.goal_x = kNan;
                 command.goal_y = kNan;
@@ -161,7 +161,7 @@ struct PlanBox::Impl {
             [this] {
                 cruise_index = 0;
                 cruise_task_queue.clear();
-                cruise_reached_edge.reset_edge_only(false);
+                cruise_reached_edge.reset_edge_only();
 
                 command.rotate_chassis = true;
                 command.enable_autoaim = false;
@@ -196,13 +196,12 @@ struct PlanBox::Impl {
                 }
                 cruise_task_queue.spin(now);
 
-                // (Removed) 只有在点内才开始扫描，切换巡航点不扫描
-                // const auto is_detecting = !cruise_task_queue.empty();
-                // command.detect_targets = is_detecting;
+                // 只有在点内才开始扫描，切换巡航点不扫描
+                const auto is_detecting = !cruise_task_queue.empty();
+                command.detect_targets = is_detecting;
 
                 // 自第一个巡航点开始到程序结束，小陀螺和扫描不止
                 command.rotate_chassis = cruise_reached_edge.ever_triggered();
-                command.detect_targets = cruise_reached_edge.ever_triggered();
 
                 return select_mode();
             });
