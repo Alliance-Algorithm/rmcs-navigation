@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.30)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_POLICY_DEFAULT_CMP0167 OLD)
 set(CMAKE_POLICY_DEFAULT_CMP0144 NEW)
@@ -29,11 +27,25 @@ find_package(std_srvs REQUIRED)
 find_package(rmcs_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(Lua 5.4 REQUIRED)
 
 find_package(rmcs_executor REQUIRED)
 
+include(FetchContent)
+FetchContent_Declare(
+    sol2
+    GIT_REPOSITORY https://github.com/ThePhD/sol2.git
+    GIT_TAG v3.5.0
+)
+FetchContent_MakeAvailable(sol2)
+
 # RMCS Component
 add_library(${PROJECT_NAME} SHARED)
+target_compile_features(
+    ${PROJECT_NAME}
+    PUBLIC
+        cxx_std_23
+)
 target_sources(
     ${PROJECT_NAME}
     PRIVATE
@@ -52,6 +64,7 @@ target_include_directories(
         ${tf2_ros_INCLUDE_DIRS}
         ${rclcpp_action_INCLUDE_DIRS}
         ${nav2_msgs_INCLUDE_DIRS}
+        ${LUA_INCLUDE_DIR}
 )
 target_link_libraries(
     ${PROJECT_NAME}
@@ -66,7 +79,10 @@ target_link_libraries(
     ${tf2_ros_LIBRARIES}
     ${rclcpp_action_LIBRARIES}
     ${nav2_msgs_LIBRARIES}
+    ${LUA_LIBRARIES}
+    sol2::sol2
 )
+
 find_package(pluginlib REQUIRED)
 pluginlib_export_plugin_description_file(
     rmcs_executor plugins.xml

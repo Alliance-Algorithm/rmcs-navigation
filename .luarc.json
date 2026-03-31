@@ -1,0 +1,6 @@
+{
+    "workspace.library": [
+        "src/lua-decision"
+    ],
+    "runtime.version": "Lua 5.4"
+}

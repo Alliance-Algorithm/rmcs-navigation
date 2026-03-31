@@ -20,6 +20,10 @@ install(
     DIRECTORY maps/
     DESTINATION share/${PROJECT_NAME}/maps/
 )
+install(
+    DIRECTORY src/lua-decision/
+    DESTINATION share/${PROJECT_NAME}/lua/
+)
 
 find_package(ament_cmake REQUIRED)
 ament_package()
