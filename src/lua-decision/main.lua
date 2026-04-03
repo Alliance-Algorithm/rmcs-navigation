@@ -1,8 +1,8 @@
 local api = require("api")
 local option = require("option")
 
-local Bt = require("lib.behavior")
-local Interrupt = require("lib.interrupt")
+local Bt = require("util.behavior")
+local Interrupt = require("util.interrupt")
 local blackboard = require("blackboard").singleton()
 
 local decision_name = blackboard.rule.decision
@@ -11,8 +11,8 @@ if not decision then
 	error("unknown decision: " .. tostring(decision_name))
 end
 
-local edges = require("lib.edge").edges()
-local context = require("lib.io_context").new()
+local edges = require("util.edge").edges()
+local context = require("util.io_context").new()
 local behavior = Bt.new(decision)
 local interrupt = Interrupt.new(behavior)
 

@@ -1,4 +1,4 @@
-local bt = require("lib.behavior")
+local bt = require("util.behavior")
 local bb = require("blackboard").singleton()
 local api = require("api")
 

@@ -1,4 +1,4 @@
-local util = require("lib.native")
+local util = require("util.native")
 
 ---@class Api
 ---@field update_goal fun(position: table)
