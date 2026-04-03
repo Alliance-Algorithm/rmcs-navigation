@@ -1,11 +1,20 @@
+local util = require("lib.native")
+
 ---@class Api
----@field update_goal fun(x: number, y: number)
+---@field update_goal fun(position: table)
 ---@field update_gimbal_direction fun(angle: number)
 ---@field update_chassis_mode fun(mode: string)
----@field restart_navigation fun(config: string): boolean, string
-
-local util = require("util")
-local api = {}
+local api = setmetatable({}, {
+	__index = function(_, name)
+		return function(...)
+			local args = {}
+			for i = 1, select("#", ...) do
+				args[i] = tostring(select(i, ...))
+			end
+			print(string.format("[api stub] %s(%s)", name, table.concat(args, ", ")))
+		end
+	end,
+})
 
 ---@param config string
 ---@return boolean, string
