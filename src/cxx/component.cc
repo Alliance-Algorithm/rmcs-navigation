@@ -1,5 +1,5 @@
-#include "component/util/logger_mixin.hh"
-#include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
+#include "cxx/util/logger_mixin.hh"
+#include "cxx/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>

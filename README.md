@@ -13,11 +13,11 @@
 
 ## 目录结构
 
-- `src/component/component.cc`：`rmcs_executor` 组件主实现。
-- `src/component/util/logger_mixin.hh`：组件日志封装。
-- `src/lua-decision/main.lua`：Lua 决策入口，要求定义 `on_init()` 和 `on_tick()`。
-- `src/lua-decision/blackboard.lua`：Lua 黑板单例与默认字段。
-- `src/lua-decision/api.lua`：Lua 侧可调用的原生接口表。
+- `src/cxx/component.cc`：`rmcs_executor` 组件主实现。
+- `src/cxx/util/logger_mixin.hh`：组件日志封装。
+- `src/lua/main.lua`：Lua 决策入口，要求定义 `on_init()` 和 `on_tick()`。
+- `src/lua/blackboard.lua`：Lua 黑板单例与默认字段。
+- `src/lua/api.lua`：Lua 侧可调用的原生接口表。
 - `config/rmul.yaml`、`config/rmuc.yaml`：决策配置。
 - `launch/*.launch.py`：Nav2/在线导航/自定义模式等启动入口。
 
@@ -81,7 +81,7 @@
 
 ### 必要入口
 
-`src/lua-decision/main.lua` 必须定义：
+`src/lua/main.lua` 必须定义：
 
 - `on_init()`
 - `on_tick()`

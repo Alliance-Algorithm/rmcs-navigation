@@ -21,7 +21,7 @@ install(
     DESTINATION share/${PROJECT_NAME}/maps/
 )
 install(
-    DIRECTORY src/lua-decision/
+    DIRECTORY src/lua/
     DESTINATION share/${PROJECT_NAME}/lua/
 )
 

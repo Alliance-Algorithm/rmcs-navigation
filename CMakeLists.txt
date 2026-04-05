@@ -49,8 +49,7 @@ target_compile_features(
 target_sources(
     ${PROJECT_NAME}
     PRIVATE
-        src/component/component.cc
-        src/component/decision/plan.cc
+        src/cxx/component.cc
 )
 target_include_directories(
     ${PROJECT_NAME}

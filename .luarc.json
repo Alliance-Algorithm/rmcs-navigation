@@ -1,7 +1,7 @@
 {
     "workspace.library": [
-        "src/lua-decision",
-        "src/lua-decision/lib"
+        "src/lua",
+        "src/lua/lib"
     ],
     "runtime.version": "Lua 5.4",
     "diagnostics.globals": [

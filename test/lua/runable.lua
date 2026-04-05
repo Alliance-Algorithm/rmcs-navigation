@@ -3,9 +3,9 @@ local script_path = info.source:sub(2)
 local script_dir = script_path:match("(.*/)") or "./"
 local root = script_dir .. "../.."
 package.path = table.concat({
-	root .. "/src/lua-decision/?.lua",
-	root .. "/src/lua-decision/?/init.lua",
-	root .. "/src/lua-decision/?/?.lua",
+	root .. "/src/lua/?.lua",
+	root .. "/src/lua/?/init.lua",
+	root .. "/src/lua/?/?.lua",
 	package.path,
 }, ";")
 
