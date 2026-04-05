@@ -1,11 +1,14 @@
 local util = require("util.native")
 
----@class Api
----@field update_goal fun(position: table)
----@field update_gimbal_direction fun(angle: number)
----@field update_chassis_mode fun(mode: string)
----@field info fun(message: string)
----@field warn fun(message: string)
+--- @class Api
+---
+--- @field info fun(message: string)
+--- @field warn fun(message: string)
+---
+--- @field update_goal fun(position: table)
+--- @field update_gimbal_direction fun(angle: number)
+--- @field update_chassis_mode fun(mode: string)
+---
 local api = setmetatable({}, {
 	__index = function(_, name)
 		return function(...)

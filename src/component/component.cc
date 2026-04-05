@@ -156,6 +156,18 @@ private:
         command.chassis_velocity->y() = msg->linear.y;
     }
 
+    auto make_api_injection() {
+        auto api_result = lua->safe_script("return require('api')", sol::script_pass_on_error);
+        if (!api_result.valid()) {
+            auto error = api_result.get<sol::error>();
+            throw std::runtime_error(std::string{"failed to get lua api: "} + error.what());
+        }
+
+        auto api = api_result.get<sol::table>();
+        api.set_function("info", [this](const std::string& text) { info("Lua: {}", text); });
+        api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
+    }
+
     auto lua_sync() -> void {
         auto user = lua_blackboard["user"].get<sol::table>();
         user["health"] = *context.robot_health;
@@ -188,15 +200,7 @@ private:
             "{};{}/?.lua;{}/?/init.lua", package_path, lua_root.string(), lua_root.string());
 
         // Api Injection
-        auto api_result = lua->safe_script("return require('api')", sol::script_pass_on_error);
-        if (!api_result.valid()) {
-            auto error = api_result.get<sol::error>();
-            throw std::runtime_error(std::string{"failed to get lua api: "} + error.what());
-        }
-
-        auto api = api_result.get<sol::table>();
-        api.set_function("info", [this](const std::string& text) { info("Lua: {}", text); });
-        api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
+        make_api_injection();
 
         // Load Function Binding
         auto load_result = lua->safe_script("require('main')", sol::script_pass_on_error);
