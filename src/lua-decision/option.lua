@@ -21,7 +21,10 @@ local sequences = {
 	}),
 }
 
+local kSelectedDecision = "auxiliary"
+
 return {
+	decision = kSelectedDecision,
 	decisions = {
 		auxiliary = bt.selector({
 			sequences.low_health,

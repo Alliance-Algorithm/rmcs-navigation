@@ -4,6 +4,8 @@ local util = require("util.native")
 ---@field update_goal fun(position: table)
 ---@field update_gimbal_direction fun(angle: number)
 ---@field update_chassis_mode fun(mode: string)
+---@field info fun(message: string)
+---@field warn fun(message: string)
 local api = setmetatable({}, {
 	__index = function(_, name)
 		return function(...)
@@ -16,8 +18,6 @@ local api = setmetatable({}, {
 	end,
 })
 
----@param config string
----@return boolean, string
 function api.restart_navigation(config)
 	local screen_label = "rmcs-navigation"
 	if config == nil or config == "" then

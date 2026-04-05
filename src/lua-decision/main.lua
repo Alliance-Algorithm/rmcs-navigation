@@ -3,7 +3,8 @@ local option = require("option")
 
 local Bt = require("util.behavior")
 local Interrupt = require("util.interrupt")
-local blackboard = require("blackboard").singleton()
+local Blackboard = require("blackboard")
+local blackboard = Blackboard.singleton()
 
 local decision_name = blackboard.rule.decision
 local decision = option.decisions[decision_name]
@@ -16,7 +17,6 @@ local context = require("util.io_context").new()
 local behavior = Bt.new(decision)
 local interrupt = Interrupt.new(behavior)
 
----@export
 function on_init()
 	behavior:bind(context)
 
@@ -28,9 +28,8 @@ function on_init()
 	end)
 end
 
----@export
 function on_tick()
 	edges:spin()
-	context:spin(blackboard.meta.timestamp)
 	interrupt:spin()
+	context:spin(blackboard.meta.timestamp)
 end

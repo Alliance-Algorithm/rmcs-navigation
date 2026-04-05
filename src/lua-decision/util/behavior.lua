@@ -32,7 +32,7 @@ function M.sequence(childrens)
 	return {
 		label = "sequence",
 		exec = function(ctx)
-			for child in childrens do
+			for _, child in ipairs(childrens) do
 				local status = child.exec(ctx)
 				if status ~= SUCCESS then
 					return status
@@ -47,7 +47,7 @@ function M.selector(childrens)
 	return {
 		label = "selector",
 		exec = function(ctx)
-			for child in childrens do
+			for _, child in ipairs(childrens) do
 				local status = child.exec(ctx)
 				if status ~= FAILURE then
 					return status

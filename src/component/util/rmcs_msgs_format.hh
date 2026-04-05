@@ -11,10 +11,32 @@
 
 #include <rmcs_msgs/game_stage.hpp>
 #include <rmcs_msgs/robot_id.hpp>
+#include <rmcs_msgs/switch.hpp>
 
 #if defined(RMCS_NAVIGATION_HAS_STD_FORMAT)
 namespace rmcs::navigation::detail {
 
+constexpr auto to_string(rmcs_msgs::GameStage stage) noexcept {
+    switch (stage) {
+    case rmcs_msgs::GameStage::NOT_START: return "NOT_START";
+    case rmcs_msgs::GameStage::PREPARATION: return "PREPARATION";
+    case rmcs_msgs::GameStage::REFEREE_CHECK: return "REFEREE_CHECK";
+    case rmcs_msgs::GameStage::COUNTDOWN: return "COUNTDOWN";
+    case rmcs_msgs::GameStage::STARTED: return "STARTED";
+    case rmcs_msgs::GameStage::SETTLING: return "SETTLING";
+    case rmcs_msgs::GameStage::UNKNOWN: return "UNKNOWN";
+    }
+    return "UNREACHABLE";
+}
+constexpr auto to_string(rmcs_msgs::Switch value) noexcept -> const char* {
+    switch (value) {
+    case rmcs_msgs::Switch::UNKNOWN: return "UNKNOWN";
+    case rmcs_msgs::Switch::UP: return "UP";
+    case rmcs_msgs::Switch::DOWN: return "DOWN";
+    case rmcs_msgs::Switch::MIDDLE: return "MIDDLE";
+    }
+    return "UNREACHABLE";
+}
 constexpr auto to_string(rmcs_msgs::ArmorID id) noexcept -> const char* {
     switch (id) {
     case rmcs_msgs::ArmorID::Unknown: return "Unknown";
@@ -32,7 +54,6 @@ constexpr auto to_string(rmcs_msgs::ArmorID id) noexcept -> const char* {
     }
     return "UNREACHABLE";
 }
-
 constexpr auto to_string(rmcs_msgs::RobotId id) noexcept -> const char* {
     switch (static_cast<rmcs_msgs::RobotId::Value>(id)) {
     case rmcs_msgs::RobotId::UNKNOWN: return "UNKNOWN";

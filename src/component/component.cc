@@ -1,43 +1,27 @@
-#include "component/decision/plan.hh"
 #include "component/util/logger_mixin.hh"
-#include "component/util/navigation_screen.hh"
 #include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
-#include "component/util/switch_event_detector.hh"
-#include "component/util/tie.hh"
-#include "component/util/value_enter_detector.hh"
 
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
 #include <rmcs_msgs/robot_id.hpp>
 #include <rmcs_msgs/switch.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <cmath>
-#include <cstdlib>
+#include <cstdint>
 #include <exception>
+#include <expected>
 #include <filesystem>
-#include <format>
 #include <memory>
 #include <mutex>
-#include <sstream>
 #include <string>
-#include <tuple>
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
-#include <rclcpp/node.hpp>
-#include <rclcpp/publisher.hpp>
-#include <rclcpp/subscription.hpp>
-#include <rclcpp/utilities.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-#include <yaml-cpp/yaml.h>
-
-#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <rclcpp/node.hpp>
+#include <rclcpp/subscription.hpp>
+#include <sol/sol.hpp>
 #include <std_msgs/msg/string.hpp>
-#include <std_srvs/srv/trigger.hpp>
+#include <yaml-cpp/yaml.h>
 
 namespace rmcs::navigation {
 
@@ -47,41 +31,16 @@ class Navigation
     , public rmcs::navigation::LoggerMixin {
 private:
     mutable std::mutex io_mutex;
-    bool use_mock_interface = false;
 
-    /// RCLCPP
     using Twist = geometry_msgs::msg::Twist;
-    using String = std_msgs::msg::String;
-
     std::shared_ptr<rclcpp::Subscription<Twist>> subscription_twist;
-    std::shared_ptr<rclcpp::Subscription<String>> subscription_command;
 
-    std::shared_ptr<rclcpp::Publisher<String>> publisher_status;
-    std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>> publisher_goal;
+    bool mock_context = false;
 
-    using Trigger = std_srvs::srv::Trigger;
-    std::shared_ptr<rclcpp::Service<Trigger>> referee_status_service;
-
-    std::chrono::steady_clock::time_point last_navigate_timestamp;
-
-    std::unique_ptr<tf2_ros::Buffer> tf_buffer;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener;
-
-    std::shared_ptr<rclcpp::TimerBase> plan_scheduler;
-
-    /// RMCS
-
-    std::chrono::steady_clock::time_point command_received_timestamp;
-    std::chrono::seconds timeout_interval{2};
-    std::atomic<bool> has_warning_timeout = false;
-
-    // tx, ty, rx 用于导航，ry 用于点头事件
-    OutputInterface<Eigen::Vector2d> command_chassis_velocity;
-    OutputInterface<std::size_t> command_nod_count;
-
-    OutputInterface<bool> command_rotate_chassis;
-    OutputInterface<bool> command_detect_targets;
-    OutputInterface<bool> command_enable_autoaim;
+    std::unique_ptr<sol::state> lua;
+    sol::table lua_blackboard;
+    sol::protected_function lua_on_init;
+    sol::protected_function lua_on_tick;
 
     struct Context {
         InputInterface<rmcs_msgs::GameStage> game_stage;
@@ -93,290 +52,212 @@ private:
         InputInterface<rmcs_msgs::Switch> switch_right;
         InputInterface<rmcs_msgs::Switch> switch_left;
 
-        auto init(rmcs_executor::Component& component, bool mock = false) -> void {
-            if (!mock) {
-                component.register_input("/referee/game/stage", game_stage, true);
-                component.register_input("/referee/current_hp", robot_health, true);
-                component.register_input("/referee/shooter/bullet_allowance", robot_bullet, true);
-                component.register_input("/referee/game/red_score", red_score, true);
-                component.register_input("/referee/game/blue_score", blue_score, true);
-            } else {
-                game_stage.make_and_bind_directly();
-                robot_health.make_and_bind_directly();
-                robot_bullet.make_and_bind_directly();
-                red_score.make_and_bind_directly();
-                blue_score.make_and_bind_directly();
-            }
+        explicit Context(Navigation& self) noexcept
+            : self(self) {}
 
-            component.register_input("/referee/id", robot_id, true);
-            component.register_input("/remote/switch/right", switch_right, true);
-            component.register_input("/remote/switch/left", switch_left, true);
+        auto init(bool mock = false) -> void {
+            make("/referee/id", robot_id, mock);
+            make("/remote/switch/right", switch_right, mock);
+            make("/remote/switch/left", switch_left, mock);
+            make("/referee/game/stage", game_stage, mock);
+            make("/referee/current_hp", robot_health, mock);
+            make("/referee/shooter/bullet_allowance", robot_bullet, mock);
+            make("/referee/game/red_score", red_score, mock);
+            make("/referee/game/blue_score", blue_score, mock);
+
+            if (mock) {
+                constexpr auto topic = "/rmcs_navigation/context/mock";
+                subscription = self.create_subscription<std_msgs::msg::String>(
+                    topic, 10, [this](const std::unique_ptr<std_msgs::msg::String>& msg) {
+                        auto lock = std::scoped_lock{self.io_mutex};
+                        if (auto result = from(msg->data); !result)
+                            self.error("Context mock failed: {}", result.error());
+                    });
+            }
         }
-        auto update(const std::string& raw_data) -> void {
-            // NOLINTBEGIN(cppcoreguidelines-pro-type-const-cast)
-            auto data = YAML::Load(raw_data);
-            if (auto node = data["game_stage"]; node && game_stage.ready())
-                const_cast<rmcs_msgs::GameStage&>(*game_stage) =
-                    static_cast<rmcs_msgs::GameStage>(node.as<int>());
-            if (auto node = data["robot_health"]; node && robot_health.ready())
-                const_cast<std::uint16_t&>(*robot_health) = node.as<std::uint16_t>();
-            if (auto node = data["robot_bullet"]; node && robot_bullet.ready())
-                const_cast<std::uint16_t&>(*robot_bullet) = node.as<std::uint16_t>();
-            if (auto node = data["red_score"]; node && red_score.ready())
-                const_cast<std::uint32_t&>(*red_score) = node.as<std::uint32_t>();
-            if (auto node = data["blue_score"]; node && blue_score.ready())
-                const_cast<std::uint32_t&>(*blue_score) = node.as<std::uint32_t>();
-            // NOLINTEND(cppcoreguidelines-pro-type-const-cast)
+        auto from(const std::string& raw) noexcept -> std::expected<void, std::string> {
+            try {
+                auto data = DataHelper{raw};
+                if (!data.root.IsMap())
+                    return std::unexpected{"context yaml root must be a map"};
+
+                data.try_sync(game_stage, "game_stage");
+                data.try_sync(robot_health, "robot_health");
+                data.try_sync(robot_bullet, "robot_bullet");
+                data.try_sync(red_score, "red_score");
+                data.try_sync(blue_score, "blue_score");
+
+                return {};
+            } catch (const std::exception& exception) {
+                return std::unexpected{exception.what()};
+            }
+        }
+
+    private:
+        struct DataHelper final {
+            YAML::Node root;
+            explicit DataHelper(const std::string& raw)
+                : root{YAML::Load(raw)} {}
+
+            template <typename T>
+            auto try_sync(InputInterface<T>& input, const std::string& name) -> void {
+                if (const auto data = root[name]) {
+                    auto& to_sync = const_cast<T&>(*input);
+                    /*^^*/ if constexpr (std::is_enum_v<T>) {
+                        using U = std::underlying_type_t<T>;
+                        to_sync = static_cast<T>(data.as<U>());
+                    } else if constexpr (std::is_constructible_v<T, std::uint8_t>) {
+                        to_sync = T{data.as<std::uint8_t>()};
+                    } else {
+                        to_sync = data.as<T>();
+                    }
+                }
+            }
+        };
+
+        Navigation& self;
+        std::shared_ptr<rclcpp::Subscription<std_msgs::msg::String>> subscription;
+
+        template <typename T>
+        auto make(const std::string& name, InputInterface<T>& input, bool mock = false) -> void {
+            if (mock)
+                input.make_and_bind_directly();
+            else
+                self.register_input(name, input, true);
         }
     } context;
 
-    std::string navigation_config_name = "rmul";
+    struct Command {
+        OutputInterface<Eigen::Vector2d> chassis_velocity;
+        OutputInterface<std::size_t> nod_count;
+        OutputInterface<bool> rotate_chassis;
+        OutputInterface<bool> detect_targets;
+        OutputInterface<bool> enable_autoaim;
 
-    NavigationScreen screen{[this](const std::string& msg) { this->info("{}", msg); }};
-    SwitchEventDetector right_switch_detector{context.switch_right};
-
-    /// DECISION
-    PlanBox plan_box;
-
-    Eigen::Vector2d last_goal_position = Eigen::Vector2d::Zero();
-    ValueEnterDetector<rmcs_msgs::GameStage> started_detector{rmcs_msgs::GameStage::STARTED};
-
-    bool enable_fallback_mode = false;
+        auto init(Navigation& component) -> void {
+            component.register_output(
+                "/rmcs_navigation/chassis_velocity", chassis_velocity, Eigen::Vector2d::Zero());
+            component.register_output("/rmcs_navigation/nod_count", nod_count, 0);
+            component.register_output("/rmcs_navigation/rotate_chassis", rotate_chassis, false);
+            component.register_output("/rmcs_navigation/detect_targets", detect_targets, false);
+            component.register_output("/rmcs_navigation/start_autoaim", enable_autoaim, false);
+        }
+    } command;
 
 private:
-    auto check_current_position() const noexcept -> std::tuple<double, double> {
-        try {
-            const auto transform =
-                tf_buffer->lookupTransform("world", "base_link", rclcpp::Time{0});
-            return std::tuple{
-                transform.transform.translation.x,
-                transform.transform.translation.y,
-            };
-        } catch (const std::exception&) {
-            return std::tuple{kNan, kNan};
-        }
-    }
-
-    auto update_goal_position(double x, double y) {
-        auto goal = geometry_msgs::msg::PoseStamped{};
-        goal.header.stamp = now();
-        goal.header.frame_id = "world";
-
-        util::tie(goal.pose.position) = std::tuple{x, y, 0.0};
-        util::tie(goal.pose.orientation) = std::tuple{0.0, 0.0, 0.0, 1.0};
-
-        publisher_goal->publish(goal);
-        info("Goal position updated: ({}, {})", x, y);
-    }
-
-    auto referee_status_service_callback(
-        const std::shared_ptr<Trigger::Request>&,
-        const std::shared_ptr<Trigger::Response>& response) const {
-        auto lock = std::scoped_lock{io_mutex};
-
-        auto feedback_message = std::ostringstream{};
-        auto text = [&]<typename... Args>(std::format_string<Args...> format, Args&&... args) {
-            std::println(feedback_message, format, std::forward<Args>(args)...);
-        };
-
-        text("Referee Status");
-        text("-     id: {}", *context.robot_id);
-        text("-  stage: {}", *context.game_stage);
-        text("- health: {}", *context.robot_health);
-        text("- bullet: {}", *context.robot_bullet);
-        // text("- bscore: {}", *blue_score);
-        // text("- rscore: {}", *red_score);
-
-        response->success = true;
-        response->message = feedback_message.str();
+    static auto rclcpp_option() noexcept {
+        return rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true);
     }
 
     auto subscription_twist_callback(const std::unique_ptr<Twist>& msg) {
         auto lock = std::scoped_lock{io_mutex};
 
-        command_received_timestamp = std::chrono::steady_clock::now();
-        has_warning_timeout = false;
-
-        if (*context.switch_right != rmcs_msgs::Switch::UP) {
-            command_chassis_velocity->x() = 0;
-            command_chassis_velocity->y() = 0;
-            return;
-        }
-
-        command_chassis_velocity->x() = msg->linear.x;
-        command_chassis_velocity->y() = msg->linear.y;
+        command.chassis_velocity->x() = msg->linear.x;
+        command.chassis_velocity->y() = msg->linear.y;
     }
 
-    auto spin_plan_box() {
-        auto lock = std::scoped_lock{io_mutex};
+    auto lua_sync() -> void {
+        auto user = lua_blackboard["user"].get<sol::table>();
+        user["health"] = *context.robot_health;
+        user["bullet"] = *context.robot_bullet;
 
-        // 此为安全模式，不进行导航，原地旋转加扫描
-        if (enable_fallback_mode) {
-            *command_detect_targets = true;
-            *command_rotate_chassis = true;
-            *command_enable_autoaim = true;
-            return;
+        auto game = lua_blackboard["game"].get<sol::table>();
+        game["stage"] = detail::to_string(*context.game_stage);
+
+        auto play = lua_blackboard["play"].get<sol::table>();
+        play["rswitch"] = detail::to_string(*context.switch_right);
+        play["lswitch"] = detail::to_string(*context.switch_left);
+
+        auto meta = lua_blackboard["meta"].get<sol::table>();
+        meta["timestamp"] = this->now().seconds();
+    }
+
+    auto lua_init() -> void {
+        lua = std::make_unique<sol::state>();
+        lua->open_libraries(
+            sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::package,
+            sol::lib::string, sol::lib::table);
+
+        // Load Lua Env Path
+        auto package_root =
+            std::filesystem::path{ament_index_cpp::get_package_share_directory("rmcs-navigation")};
+        auto lua_root = package_root / "lua";
+        auto package = (*lua)["package"].get<sol::table>();
+        auto package_path = package["path"].get_or(std::string{});
+        package["path"] = std::format(
+            "{};{}/?.lua;{}/?/init.lua", package_path, lua_root.string(), lua_root.string());
+
+        // Api Injection
+        auto api_result = lua->safe_script("return require('api')", sol::script_pass_on_error);
+        if (!api_result.valid()) {
+            auto error = api_result.get<sol::error>();
+            throw std::runtime_error(std::string{"failed to get lua api: "} + error.what());
         }
 
-        auto position = check_current_position();
+        auto api = api_result.get<sol::table>();
+        api.set_function("info", [this](const std::string& text) { info("Lua: {}", text); });
+        api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
 
-        using Information = PlanBox::Information;
-        plan_box.update_information([position, this](Information& info) {
-            info.game_stage = *context.game_stage;
+        // Load Function Binding
+        auto load_result = lua->safe_script("require('main')", sol::script_pass_on_error);
+        if (!load_result.valid()) {
+            auto error = load_result.get<sol::error>();
+            throw std::runtime_error(std::string{"failed to load lua main: "} + error.what());
+        }
 
-            auto [x, y] = position;
-            info.current_x = x;
-            info.current_y = y;
+        auto blackboard_result =
+            lua->safe_script("return require('blackboard').singleton()", sol::script_pass_on_error);
+        if (!blackboard_result.valid()) {
+            auto error = blackboard_result.get<sol::error>();
+            throw std::runtime_error(std::string{"failed to get lua blackboard: "} + error.what());
+        }
 
-            info.enemy_x = kNan;
-            info.enemy_y = kNan;
+        lua_blackboard = blackboard_result.get<sol::table>();
+        lua_on_init = (*lua)["on_init"];
+        lua_on_tick = (*lua)["on_tick"];
 
-            info.health = *context.robot_health;
+        if (!lua_on_init.valid() || !lua_on_tick.valid()) {
+            throw std::runtime_error("lua main must define on_init() and on_tick()");
+        }
 
-            // @FIXME:
-            //  联盟赛不考虑弹药
-            info.bullet = 1'000;
-            // info.bullet = *context.robot_bullet;
-        });
-        plan_box.fetch_command([this](const PlanBox::Command& command) {
-            auto [goal_x, goal_y] = std::tuple{command.goal_x, command.goal_y};
-            // 非法目标点，跳过
-            if (!std::isnan(goal_x) && !std::isnan(goal_y)) {
-                // 目标点相同且间隔在一定秒数内，跳过
-                constexpr auto kTolerance = 1e-2;
-                constexpr auto kInterval = std::chrono::seconds{5};
-                auto duplicated_goal = std::abs(last_goal_position.x() - goal_x) < kTolerance
-                                    && std::abs(last_goal_position.y() - goal_y) < kTolerance;
-                auto still_in_interval =
-                    std::chrono::steady_clock::now() - last_navigate_timestamp < kInterval;
-                if (!duplicated_goal || !still_in_interval) {
-                    update_goal_position(goal_x, goal_y);
-                    last_navigate_timestamp = std::chrono::steady_clock::now();
-                    last_goal_position = Eigen::Vector2d{goal_x, goal_y};
-                }
-            }
+        // Init Lua First
+        auto init_result = lua_on_init.call();
+        if (!init_result.valid()) {
+            auto error = init_result.get<sol::error>();
+            throw std::runtime_error(std::string{"lua on_init failed: "} + error.what());
+        }
+    }
 
-            *command_detect_targets = command.detect_targets;
-            *command_rotate_chassis = command.rotate_chassis;
-            *command_enable_autoaim = command.enable_autoaim;
-        });
+    auto lua_tick() -> void {
+        auto result = lua_on_tick.call();
+        if (!result.valid()) {
+            auto error = result.get<sol::error>();
+            throw std::runtime_error(std::string{"lua on_tick failed: "} + error.what());
+        }
     }
 
 public:
     explicit Navigation()
-        : rclcpp::Node{
-              get_component_name(),
-              rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)} {
+        : rclcpp::Node{get_component_name(), rclcpp_option()}
+        , context{*this} {
 
-        tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
-        tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
-        publisher_goal =
-            Node::create_publisher<geometry_msgs::msg::PoseStamped>("/move_base_simple/goal", 10);
+        mock_context = get_parameter_or("mock_context", false);
 
-        // RMCS
-        const auto kNanVec = Eigen::Vector2d{kNan, kNan};
-        register_output("/rmcs_navigation/chassis_velocity", command_chassis_velocity, kNanVec);
-        register_output("/rmcs_navigation/nod_count", command_nod_count, 0);
-        register_output("/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);
-        register_output("/rmcs_navigation/detect_targets", command_detect_targets, false);
-        register_output("/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
+        context.init(mock_context);
+        command.init(*this);
 
-        use_mock_interface = get_parameter_or("use_mock_interface", false);
-        context.init(*this, use_mock_interface);
+        lua_init();
 
-        // NAV2
+        const auto command_vel_name = get_parameter("command_vel_name").as_string();
         subscription_twist = Node::create_subscription<Twist>(
-            "/cmd_vel_smoothed", 0,
+            command_vel_name, 10,
             [this](const std::unique_ptr<Twist>& msg) { subscription_twist_callback(msg); });
-
-        referee_status_service = Node::create_service<Trigger>(
-            std::format("/{}/service/referee_status", get_component_name()),
-            [this](
-                const std::shared_ptr<Trigger::Request>& request,
-                const std::shared_ptr<Trigger::Response>& response) {
-                referee_status_service_callback(request, response);
-            });
-
-        if (use_mock_interface) {
-            auto mock_context_topic = get_parameter_or<std::string>(
-                "mock_context_topic", "/rmcs_navigation/mock_context");
-            subscription_command = Node::create_subscription<String>(
-                mock_context_topic, 10, [this](const std::unique_ptr<String>& msg) {
-                    auto lock = std::scoped_lock{io_mutex};
-                    try {
-                        context.update(msg->data);
-                    } catch (const std::exception& exception) {
-                        warn("Failed to update mock context: {}", exception.what());
-                    }
-                });
-            info("Mock context subscriber enabled on '{}'", mock_context_topic);
-        }
-
-        command_received_timestamp = std::chrono::steady_clock::now();
-
-        // DECISION
-        // 从 config 中获取配置
-        plan_box.set_logging([this](const std::string& msg) { info("PlanBox: {}", msg); });
-
-        navigation_config_name = get_parameter_or<std::string>("config_name", "rmul");
-        if (navigation_config_name.empty()) {
-            error("Parameter 'config_name' is empty, fallback to 'rmul'");
-            rclcpp::shutdown();
-        }
-        screen.set_config_name(navigation_config_name);
-
-        auto path = ament_index_cpp::get_package_share_directory("rmcs-navigation");
-        auto config_file =
-            std::filesystem::path{path} / "config" / std::format("{}.yaml", navigation_config_name);
-        try {
-            auto config = YAML::LoadFile(config_file.string());
-            auto result = plan_box.configure(config["decision"]);
-            if (!result) {
-                error("Configure error: {}", result.error());
-                rclcpp::shutdown();
-            }
-            info("Loaded decision config: {}", config_file.string());
-        } catch (const std::exception& exception) {
-            error(
-                "Failed to load decision config '{}' : {}", config_file.string(), exception.what());
-            rclcpp::shutdown();
-        }
-
-        using namespace std::chrono_literals;
-        plan_scheduler = Node::create_wall_timer(100ms, [this] { spin_plan_box(); });
     }
 
     auto update() -> void override {
         auto lock = std::scoped_lock{io_mutex};
-
-        using namespace std::chrono_literals;
-        const auto now = std::chrono::steady_clock::now();
-        const auto interval = now - command_received_timestamp;
-        if (interval > timeout_interval) {
-            if (has_warning_timeout == false) {
-                has_warning_timeout = true;
-                warn("Lost navigation control, reset command velocity now");
-            }
-            *command_chassis_velocity = Eigen::Vector2d::Zero();
-        }
-
-        if (started_detector.spin(*context.game_stage)) {
-            if (*context.switch_right == rmcs_msgs::Switch::MIDDLE) {
-                enable_fallback_mode = true;
-                warn("Fallback mode detected, runing without navigation");
-            } else {
-                enable_fallback_mode = false;
-                info("Game start, runing with navigation");
-            }
-        }
-
-        if (right_switch_detector.spin(now)) {
-            info("Right switch trigger detected, enqueue nod sequence");
-            *command_nod_count += 2;
-            screen.restart_async();
-        }
-
-        // .....
+        lua_sync();
+        lua_tick();
     }
 };
 
