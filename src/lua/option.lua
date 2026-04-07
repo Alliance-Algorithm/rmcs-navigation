@@ -30,7 +30,8 @@ return {
 			sequences.low_health,
 			sequences.low_bullet,
 
-			bt.action(function(_)
+			bt.action(function(context)
+				local _ = context
 				return bt.RUNNING
 			end),
 		}),

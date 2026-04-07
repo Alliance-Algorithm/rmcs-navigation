@@ -5,9 +5,10 @@ local util = require("util.native")
 --- @field info fun(message: string)
 --- @field warn fun(message: string)
 ---
---- @field update_goal fun(position: table)
+--- @field apply_navigation_goal fun(x: number, y: number)
 --- @field update_gimbal_direction fun(angle: number)
 --- @field update_chassis_mode fun(mode: string)
+--- @field update_chassis_vel fun(x: number, y: number)
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)
@@ -39,17 +40,15 @@ function api.restart_navigation(config)
 		target_label
 	)
 
-	local restart_script = string.format(
-		"if screen -S %q -Q select . >/dev/null 2>&1; then screen -S %q -X quit >/dev/null 2>&1; fi; sleep 0.5; screen -dmS %q bash -lc %q",
-		screen_label,
-		screen_label,
-		screen_label,
-		launch_command
+	return util.run_command(
+		string.format(
+			"if screen -S %q -Q select . >/dev/null 2>&1; then screen -S %q -X quit >/dev/null 2>&1; fi; sleep 0.5; screen -dmS %q bash -lc %q",
+			screen_label,
+			screen_label,
+			screen_label,
+			launch_command
+		)
 	)
-
-	local dispatch_command = string.format("bash -lc %q >/tmp/rmcs-navigation-restart.log 2>&1 &", restart_script)
-
-	return util.run_command(dispatch_command)
 end
 
 return api

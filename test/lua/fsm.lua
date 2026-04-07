@@ -1,28 +1,12 @@
 local info = debug.getinfo(1, "S")
 local script_path = info.source:sub(2)
 local script_dir = script_path:match("(.*/)") or "./"
-local root = script_dir .. "../.."
+local test_util = dofile(script_dir .. "util.lua")
+test_util.setup_package_path()
 
-package.path = table.concat({
-	root .. "/src/lua/?.lua",
-	root .. "/src/lua/?/init.lua",
-	root .. "/src/lua/?/?.lua",
-	package.path,
-}, ";")
-
-local function assert_eq(actual, expected, message)
-	if actual ~= expected then
-		error(string.format("%s: expected %s, got %s", message, tostring(expected), tostring(actual)))
-	end
-end
-
-local function assert_true(value, message)
-	assert_eq(value, true, message)
-end
-
-local function assert_false(value, message)
-	assert_eq(value, false, message)
-end
+local assert_eq = test_util.assert_eq
+local assert_true = test_util.assert_true
+local assert_false = test_util.assert_false
 
 local Fsm = require("util.fsm")
 

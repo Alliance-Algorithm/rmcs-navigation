@@ -1,18 +1,18 @@
---- @class Handle
+--- @class IoHandle
 --- @field private _context IoContext
-local RuntimeHandle = {}
-RuntimeHandle.__index = RuntimeHandle
+local IoHandle = {}
+IoHandle.__index = IoHandle
 
-function RuntimeHandle:sleep(seconds)
+function IoHandle:sleep(seconds)
 	coroutine.yield("sleep", seconds)
 end
 
-function RuntimeHandle:yield()
+function IoHandle:yield()
 	coroutine.yield("yield")
 end
 
 --- @param opts fun(): boolean | { pred: fun(): boolean, timeout: number|nil, interval: number|nil }
-function RuntimeHandle:wait_until(opts)
+function IoHandle:wait_until(opts)
 	if type(opts) == "function" then
 		return coroutine.yield("wait_until", {
 			pred = opts,
@@ -43,7 +43,7 @@ function RuntimeHandle:wait_until(opts)
 	})
 end
 
-function RuntimeHandle:now()
+function IoHandle:now()
 	return self._context._now
 end
 
@@ -86,10 +86,10 @@ local function new_io_context()
 	}, IoContext)
 end
 
---- @param fn fun(handle: Handle)
+--- @param fn fun(handle: IoHandle)
 --- @return SpawnHandle
 function IoContext:spawn(fn)
-	local handle = setmetatable({ _context = self }, RuntimeHandle)
+	local handle = setmetatable({ _context = self }, IoHandle)
 	local co = coroutine.create(function()
 		fn(handle)
 	end)

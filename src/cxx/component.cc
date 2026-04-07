@@ -13,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -41,6 +42,7 @@ private:
     sol::table lua_blackboard;
     sol::protected_function lua_on_init;
     sol::protected_function lua_on_tick;
+    sol::protected_function lua_control_speed_callback;
 
     struct Context {
         InputInterface<rmcs_msgs::GameStage> game_stage;
@@ -91,6 +93,9 @@ private:
             } catch (const std::exception& exception) {
                 return std::unexpected{exception.what()};
             }
+
+            auto vector = std::vector<int>{};
+            vector.emplace_back(1);
         }
 
     private:
@@ -145,30 +150,43 @@ private:
     } command;
 
 private:
-    static auto rclcpp_option() noexcept {
+    static auto option() noexcept {
         return rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true);
     }
 
-    auto subscription_twist_callback(const std::unique_ptr<Twist>& msg) {
-        auto lock = std::scoped_lock{io_mutex};
-
-        command.chassis_velocity->x() = msg->linear.x;
-        command.chassis_velocity->y() = msg->linear.y;
+    template <typename T>
+    static auto unwrap_sol(T result, std::string_view message) -> T {
+        if (!result.valid()) {
+            auto error = result.template get<sol::error>();
+            throw std::runtime_error(std::string{message} + ": " + error.what());
+        }
+        return result;
     }
 
     auto make_api_injection() {
-        auto api_result = lua->safe_script("return require('api')", sol::script_pass_on_error);
-        if (!api_result.valid()) {
-            auto error = api_result.get<sol::error>();
-            throw std::runtime_error(std::string{"failed to get lua api: "} + error.what());
-        }
+        auto api_result = unwrap_sol(
+            lua->safe_script("return require('api')", sol::script_pass_on_error),
+            "failed to get lua api");
 
         auto api = api_result.get<sol::table>();
         api.set_function("info", [this](const std::string& text) { info("Lua: {}", text); });
         api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
+
+        api.set_function("apply_navigation_goal", [this](double x, double y) {
+            warn("unimplement: apply_navigation_goal({}, {})", x, y);
+        });
+        api.set_function("update_gimbal_direction", [this](double angle) {
+            warn("unimplement: update_gimbal_direction({})", angle);
+        });
+        api.set_function("update_chassis_mode", [this](const std::string& mode) {
+            warn("unimplement: update_chassis_mode(\"{}\")", mode);
+        });
+        api.set_function("update_chassis_vel", [this](double x, double y) {
+            warn("unimplement: update_chassis_vel({}, {})", x, y);
+        });
     }
 
-    auto lua_sync() -> void {
+    auto lua_sync() {
         auto user = lua_blackboard["user"].get<sol::table>();
         user["health"] = *context.robot_health;
         user["bullet"] = *context.robot_bullet;
@@ -184,7 +202,7 @@ private:
         meta["timestamp"] = this->now().seconds();
     }
 
-    auto lua_init() -> void {
+    auto lua_init() {
         lua = std::make_unique<sol::state>();
         lua->open_libraries(
             sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::package,
@@ -203,46 +221,32 @@ private:
         make_api_injection();
 
         // Load Function Binding
-        auto load_result = lua->safe_script("require('main')", sol::script_pass_on_error);
-        if (!load_result.valid()) {
-            auto error = load_result.get<sol::error>();
-            throw std::runtime_error(std::string{"failed to load lua main: "} + error.what());
-        }
+        auto load_result = unwrap_sol(
+            lua->safe_script("require('main')", sol::script_pass_on_error),
+            "failed to load lua main");
 
-        auto blackboard_result =
-            lua->safe_script("return require('blackboard').singleton()", sol::script_pass_on_error);
-        if (!blackboard_result.valid()) {
-            auto error = blackboard_result.get<sol::error>();
-            throw std::runtime_error(std::string{"failed to get lua blackboard: "} + error.what());
-        }
+        auto blackboard_result = unwrap_sol(
+            lua->safe_script("return require('blackboard').singleton()", sol::script_pass_on_error),
+            "failed to get lua blackboard");
 
         lua_blackboard = blackboard_result.get<sol::table>();
         lua_on_init = (*lua)["on_init"];
         lua_on_tick = (*lua)["on_tick"];
+        lua_control_speed_callback = (*lua)["control_speed_callback"];
 
         if (!lua_on_init.valid() || !lua_on_tick.valid()) {
             throw std::runtime_error("lua main must define on_init() and on_tick()");
         }
 
         // Init Lua First
-        auto init_result = lua_on_init.call();
-        if (!init_result.valid()) {
-            auto error = init_result.get<sol::error>();
-            throw std::runtime_error(std::string{"lua on_init failed: "} + error.what());
-        }
+        auto init_result = unwrap_sol(lua_on_init(), "lua on_init failed");
     }
 
-    auto lua_tick() -> void {
-        auto result = lua_on_tick.call();
-        if (!result.valid()) {
-            auto error = result.get<sol::error>();
-            throw std::runtime_error(std::string{"lua on_tick failed: "} + error.what());
-        }
-    }
+    auto lua_tick() { auto result = unwrap_sol(lua_on_tick(), "lua on_tick failed"); }
 
 public:
     explicit Navigation()
-        : rclcpp::Node{get_component_name(), rclcpp_option()}
+        : rclcpp::Node{get_component_name(), option()}
         , context{*this} {
 
         mock_context = get_parameter_or("mock_context", false);
@@ -254,8 +258,15 @@ public:
 
         const auto command_vel_name = get_parameter("command_vel_name").as_string();
         subscription_twist = Node::create_subscription<Twist>(
-            command_vel_name, 10,
-            [this](const std::unique_ptr<Twist>& msg) { subscription_twist_callback(msg); });
+            command_vel_name, 10, [this](const std::unique_ptr<Twist>& msg) {
+                auto lock = std::scoped_lock{io_mutex};
+
+                auto vx = msg->linear.x;
+                auto vy = msg->linear.y;
+                auto qx = msg->angular.x;
+                unwrap_sol(
+                    lua_control_speed_callback(vx, vy, qx), "lua control_speed_callback failed");
+            });
     }
 
     auto update() -> void override {

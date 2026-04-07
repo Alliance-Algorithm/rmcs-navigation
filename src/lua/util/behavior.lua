@@ -61,7 +61,7 @@ end
 ---@class Behavior
 ---@field private _root table
 ---@field private _io_context IoContext|nil
----@field private _handle Handle|nil
+---@field private _handle IoHandle|nil
 local Behavior = {}
 Behavior.__index = Behavior
 

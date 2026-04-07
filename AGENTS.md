@@ -31,7 +31,14 @@ cmake -B build
 cmake --build build -j
 ```
 
-### 2) C++ 语言风格
+### 2) 通用实现原则
+
+- 实现新需求时，先反思并收敛抽象模型，不要直接在现有实现上堆条件分支、特判、补丁式接口和临时状态。
+- 核心层只保留稳定且最小的职责；具体 feature 应尽量通过组合、封装和上层策略自然派生。
+- 如果为了支持一个新需求而不得不持续修改核心运行时、扩展底层协议、增加跨层语义耦合，说明模型边界大概率已经错了，应先重构抽象，再实现需求。
+- 不要为了短期可用，把一次性需求沉淀为长期复杂度；宁可先把模型做对，也不要继续在屎山上叠屎山。
+
+### 3) C++ 语言风格
 
 - 构造和声明变量
 
@@ -39,6 +46,28 @@ cmake --build build -j
 # 使用大括号构造和类型后置
 auto var = T { };
 ```
+
+### 4) Lua 运行时上下文（rmcs-navigation）
+
+- Lua 入口位于 `rmcs_ws/src/skills/rmcs-navigation/src/lua/main.lua`。
+  - `on_init()` 负责初始化行为树、interrupt、周期任务。
+  - `on_tick()` 是唯一稳定的逐帧入口，先更新时钟，再驱动边沿检测 / interrupt / 调度器。
+- 统一时间源位于 `src/lua/util/clock.lua`。
+  - 时间由 `blackboard.meta.timestamp` 提供。
+  - 只允许在 `on_init()` / `on_tick()` 中通过 `clock:reset(...)` / `clock:update(...)` 更新。
+  - 业务逻辑、协程原语、调度器内部不要直接使用 `os.clock()`。
+- 现有 Lua 行为层主要由以下模块组成：
+  - `blackboard.lua`：共享状态与条件函数。
+  - `option.lua`：决策树拼装。
+  - `util/behavior.lua`：行为树叶子执行模型。
+  - `util/interrupt.lua` / `util/edge.lua`：中断与边沿检测。
+  - `util/io_context.lua`：旧协程运行时，历史包袱较重。
+  - `util/scheduler.lua`：新的简化调度模型试验场。
+- Lua 测试位于 `test/lua/*.lua`，约定：
+  - 通过 `test/lua/util.lua` 设置 `package.path`。
+  - 单文件直接运行：`lua test/lua/xxx.lua`。
+  - 若修改了 Lua 运行时、行为树或入口逻辑，优先补充/更新对应 Lua 测试。
+
 
 ## Debugging SOP
 
