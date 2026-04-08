@@ -2,27 +2,34 @@
 --- FsmHandle
 ---
 
+--- @class FsmHandleDetails
+--- @field fsm Fsm
+
 --- @class FsmHandle
---- @field private _fsm Fsm
-local Handle = {}
-Handle.__index = Handle
+--- @field details FsmHandleDetails
+local handle = {}
+handle.__index = handle
 
 --- @param fsm Fsm
 --- @return FsmHandle
-function Handle:new(fsm)
+function handle:new(fsm)
 	return setmetatable({
-		_fsm = fsm,
+		details = {
+			fsm = fsm,
+		},
 	}, self)
 end
 
 --- @param status string
-function Handle:set_next(status)
-	self._fsm._pending_next = status
+function handle:set_next(status)
+	local fsm = self.details.fsm
+	fsm.details.pending_next = status
 end
 
 --- @return string|nil
-function Handle:last_state()
-	return self._fsm._last_state
+function handle:last_state()
+	local fsm = self.details.fsm
+	return fsm.details.last_state
 end
 
 ---
@@ -38,69 +45,77 @@ end
 --- @field enter? fun()
 --- @field event fun(handle: FsmHandle)
 
+--- @class FsmDetails
+--- @field state_mapping table<string, FsmStateEntry>
+--- @field current_event FsmStateEntry|nil
+--- @field current_state string
+--- @field last_state string|nil
+--- @field pending_next string|nil
+--- @field handle FsmHandle
+
 --- @class Fsm
---- @field _state_mapping table<string, FsmStateEntry>
---- @field _current_event FsmStateEntry|nil
---- @field _current_state string
---- @field _last_state string|nil
---- @field _pending_next string|nil
---- @field _handle FsmHandle
+--- @field details FsmDetails
 local Fsm = {}
 Fsm.__index = Fsm
 
 --- @param start_state string
 --- @return Fsm
 function Fsm:new(start_state)
-	local fsm = setmetatable({
-		_state_mapping = {},
-		_current_event = nil,
-		_current_state = start_state,
-		_last_state = nil,
-		_pending_next = nil,
-		_handle = nil,
-	}, self)
+	local fsm = setmetatable({}, self)
 
-	fsm._handle = Handle:new(fsm)
-
+	fsm.details = {
+		state_mapping = {},
+		current_event = nil,
+		current_state = start_state,
+		last_state = nil,
+		pending_next = nil,
+		handle = handle:new(fsm),
+	}
 	return fsm
 end
 
 function Fsm:spin_once()
-	if self._current_event == nil then
-		self._current_event = self._state_mapping[self._current_state]
-		assert(self._current_event ~= nil, "state is not registered")
-		self._current_event.enter()
+	local details = self.details
+
+	if details.current_event == nil then
+		details.current_event = details.state_mapping[details.current_state]
+		assert(details.current_event ~= nil, "state is not registered")
+		details.current_event.enter()
 	end
 
-	self._pending_next = nil
+	details.pending_next = nil
 
-	self._current_event.event(self._handle)
+	details.current_event.event(details.handle)
 
-	if self._pending_next ~= nil and self._pending_next ~= self._current_state then
-		self._last_state = self._current_state
-		self._current_state = self._pending_next
-		self._current_event = nil
+	if details.pending_next ~= nil and details.pending_next ~= details.current_state then
+		details.last_state = details.current_state
+		details.current_state = details.pending_next
+		details.current_event = nil
 	end
 end
 
 --- @param state string
 function Fsm:start_on(state)
-	assert(state ~= nil, "state is required")
-	assert(self._state_mapping[state] ~= nil, "state is not registered")
+	local details = self.details
 
-	self._current_state = state
-	self._current_event = nil
-	self._last_state = nil
-	self._pending_next = nil
+	assert(state ~= nil, "state is required")
+	assert(details.state_mapping[state] ~= nil, "state is not registered")
+
+	details.current_state = state
+	details.current_event = nil
+	details.last_state = nil
+	details.pending_next = nil
 end
 
 --- @param config FsmStateConfig
 function Fsm:use(config)
+	local details = self.details
+
 	local state = config.state
 	assert(state ~= nil, "state is required")
 	assert(config.event ~= nil, "event is required")
 
-	self._state_mapping[state] = {
+	details.state_mapping[state] = {
 		enter = config.enter or function() end,
 		event = config.event,
 	}
@@ -109,18 +124,20 @@ end
 --- @param states table<string, string>
 --- @return boolean
 function Fsm:init_ready(states)
-	if states == nil or self._current_state == nil then
+	local details = self.details
+
+	if states == nil or details.current_state == nil then
 		return false
 	end
 
 	local has_current = false
 
 	for _, state in pairs(states) do
-		if state == self._current_state then
+		if state == details.current_state then
 			has_current = true
 		end
 
-		local config = self._state_mapping[state]
+		local config = details.state_mapping[state]
 		if config == nil or config.event == nil then
 			return false
 		end

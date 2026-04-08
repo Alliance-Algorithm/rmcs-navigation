@@ -1,34 +1,24 @@
 ---
---- Context
+--- Local Context
 ---
 
 local api = require("api")
-local option = require("option")
-
-local Bt = require("util.behavior")
 local clock = require("util.clock")
-local Interrupt = require("util.interrupt")
-local Blackboard = require("blackboard")
-local blackboard = Blackboard.singleton()
+local fsm = require("util.fsm")
 
-local decision_name = blackboard.rule.decision
-local decision = option.decisions[decision_name]
-if not decision then
-	error("unknown decision: " .. tostring(decision_name))
-end
+local Scheduler = require("util.scheduler")
+local scheduler = Scheduler.new()
+local request = Scheduler.request
 
-local edges = require("util.edge").edges()
-local context = require("util.io_context").new()
-local behavior = Bt.new(decision)
-local interrupt = Interrupt.new(behavior)
+local edges = require("util.edge").new()
 
 local NaN = 0 / 0
 local cache = {
 	goal = { x = NaN, y = NaN },
 }
-local function apply_navigation_goal()
-	local x = cache.goal.x
-	local y = cache.goal.y
+function cache:send_goal()
+	local x = self.goal.x
+	local y = self.goal.y
 	if x ~= x or y ~= y then
 		return
 	end
@@ -36,47 +26,67 @@ local function apply_navigation_goal()
 end
 
 ---
---- Export Function
+--- Export Context
 ---
 
---- @export
---- 由 NAV2 发布的目标速度值，在此处理回调
-function control_speed_callback(vx, vy, qx)
-	local _ = qx
-	api.update_chassis_vel(vx, vy)
-end
+blackboard = require("blackboard").singleton()
 
---- @export
-function on_init()
+on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
-	behavior:bind(context)
-
-	interrupt:on(blackboard.condition.low_health)
-	interrupt:on(blackboard.condition.low_bullet)
-
 	-- 定期更新导航的目标，防止规划失败后停滞
-	context:spawn(function(handle)
+	scheduler:append_task(function()
 		while true do
-			handle:sleep(2.0)
-			apply_navigation_goal()
+			request:sleep(2.0)
+			cache:send_goal()
 		end
 	end)
 
 	-- 立即响应导航点的切换
-	context:spawn(function(handle)
+	scheduler:append_task(function()
 		local last = { x = cache.goal.x, y = cache.goal.y }
 		while true do
 			local x = cache.goal.x
 			local y = cache.goal.y
 
 			if x ~= last.x or y ~= last.y then
-				apply_navigation_goal()
+				cache:send_goal()
 			end
 
-			last.x = x
-			last.y = y
-			handle:yield()
+			last = { x = x, y = y }
+			request:yield()
+		end
+	end)
+
+	scheduler:append_task(function()
+		--- @enum Motion
+		local Motion = {
+			IDLE = "IDLE",
+			FREE = "FREE",
+			SPIN = "SPIN",
+		}
+		local motion = fsm:new(Motion.FREE)
+
+		motion:use {
+			state = Motion.FREE,
+			enter = function()
+				api.info("Enter Motion::FREE")
+			end,
+			event = function(handle)
+				handle:set_next(Motion.IDLE)
+			end,
+		}
+
+		-- @TODO:
+		--  继续开发运动状态机
+
+		if not motion:init_ready(Motion) then
+			error("Failed to init Motion Fsm, need all state be used")
+		end
+
+		while true do
+			motion:spin_once()
+			request:yield()
 		end
 	end)
 
@@ -85,11 +95,15 @@ function on_init()
 	end)
 end
 
---- @export
-function on_tick()
+on_tick = function()
 	clock:update(blackboard.meta.timestamp)
 
 	edges:spin()
-	interrupt:spin()
-	context:spin(blackboard.meta.timestamp)
+	scheduler:spin_once()
+end
+
+--- 由 NAV2 发布的目标速度值，在此处理回调
+control_speed_callback = function(vx, vy, qx)
+	local _ = qx
+	api.update_chassis_vel(vx, vy)
 end

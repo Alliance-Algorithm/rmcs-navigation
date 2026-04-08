@@ -28,11 +28,6 @@ end
 local Edges = {}
 Edges.__index = Edges
 
----@return Edges
-local function new_edges()
-	return setmetatable({ _entries = {} }, Edges)
-end
-
 ---@param getter fun(): any
 ---@param signal any
 ---@param callback fun()
@@ -61,5 +56,8 @@ function Edges:reset()
 end
 
 return {
-	edges = new_edges,
+	--- @return Edges
+	new = function()
+		return setmetatable({ _entries = {} }, Edges)
+	end,
 }

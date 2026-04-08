@@ -4,6 +4,7 @@ local util = require("util.native")
 ---
 --- @field info fun(message: string)
 --- @field warn fun(message: string)
+--- @field fuck fun(message: string)
 ---
 --- @field apply_navigation_goal fun(x: number, y: number)
 --- @field update_gimbal_direction fun(angle: number)

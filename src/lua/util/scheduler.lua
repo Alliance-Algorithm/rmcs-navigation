@@ -1,33 +1,75 @@
 local clock = require("util.clock")
 
+--- @class SchedulerTask
+--- @field thread thread
+--- @field resume_request function
+--- @field cancel_request function
+
+--- @class SchedulerDetails
+--- @field tasks SchedulerTask[]
+
+--- @class SchedulerRequestArgs
+--- @field resume_request function
+
 --- @class Scheduler
---- @field details table
+--- @field details SchedulerDetails
 local scheduler = {}
 scheduler.__index = scheduler
 
-local function new_scheduler()
-	return setmetatable({
-		details = {
-			tasks = {},
-		},
-	}, scheduler)
-end
+--- @param fn function
+--- @return { cancel: function } task
+function scheduler:append_task(fn)
+	local cancel_status = false
 
-function scheduler:append_task()
+	--- @type SchedulerTask
 	local task = {
-		thread = nil,
-		resume_ready = function()
+		thread = coroutine.create(fn),
+		resume_request = function()
 			return true
 		end,
-		remove_ready = function()
-			return false
+		cancel_request = function()
+			return cancel_status
 		end,
 	}
 	table.insert(self.details.tasks, task)
+
+	return {
+		cancel = function()
+			cancel_status = true
+		end,
+	}
 end
 
 function scheduler:spin_once()
-	--
+	--- @type SchedulerDetails
+	local details = self.details
+
+	--- @type SchedulerTask[]
+	local saved_tasks = {}
+	for _, task in ipairs(details.tasks) do
+		-- 应该被移除的任务
+		local status = coroutine.status(task.thread)
+		local cancel = task.cancel_request()
+		if status == "dead" or cancel then
+			goto continue
+		end
+
+		if task.resume_request() then
+			local result, request = coroutine.resume(task.thread)
+			if result ~= true then
+				error(debug.traceback(task.thread, tostring(request)), 0)
+			end
+
+			--- @cast request SchedulerRequestArgs
+			if request ~= nil then
+				task.resume_request = request.resume_request
+			end
+		end
+		table.insert(saved_tasks, task)
+
+		::continue::
+	end
+	details.tasks = saved_tasks
 end
 
 --- @class SchedulerRequest
@@ -36,18 +78,19 @@ scheduler_request.__index = scheduler_request
 
 function scheduler_request:yield()
 	coroutine.yield {
-		resume_ready = function()
+		resume_request = function()
 			return true
 		end,
 	}
 end
 
+--- @param seconds number
 function scheduler_request:sleep(seconds)
 	assert(type(seconds) == "number" and seconds >= 0)
 
 	local deadline = clock:now() + seconds
 	coroutine.yield {
-		resume_ready = function()
+		resume_request = function()
 			return clock:now() >= deadline
 		end,
 	}
@@ -60,9 +103,9 @@ function scheduler_request:wait_until(args)
 
 	local deadline = clock:now() + (args.timeout or math.huge)
 	coroutine.yield {
-		resume_ready = function()
+		resume_request = function()
 			local success = args.monitor()
-			local timeout = clock:now() > deadline
+			local timeout = clock:now() >= deadline
 			return success or timeout
 		end,
 	}
@@ -70,6 +113,13 @@ function scheduler_request:wait_until(args)
 end
 
 return {
-	new = new_scheduler,
+	--- @return Scheduler
+	new = function()
+		return setmetatable({
+			details = {
+				tasks = {},
+			},
+		}, scheduler)
+	end,
 	request = scheduler_request,
 }

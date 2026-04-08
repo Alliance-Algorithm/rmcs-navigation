@@ -73,7 +73,7 @@ private:
                     topic, 10, [this](const std::unique_ptr<std_msgs::msg::String>& msg) {
                         auto lock = std::scoped_lock{self.io_mutex};
                         if (auto result = from(msg->data); !result)
-                            self.error("Context mock failed: {}", result.error());
+                            self.fuck("Context mock failed: {}", result.error());
                     });
             }
         }
@@ -155,10 +155,11 @@ private:
     }
 
     template <typename T>
-    static auto unwrap_sol(T result, std::string_view message) -> T {
+    auto unwrap_sol(T result, std::string_view message) -> T {
         if (!result.valid()) {
             auto error = result.template get<sol::error>();
-            throw std::runtime_error(std::string{message} + ": " + error.what());
+            fuck("\n{}", error.what());
+            throw std::runtime_error(std::string{message});
         }
         return result;
     }
@@ -171,6 +172,7 @@ private:
         auto api = api_result.get<sol::table>();
         api.set_function("info", [this](const std::string& text) { info("Lua: {}", text); });
         api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
+        api.set_function("fuck", [this](const std::string& text) { fuck("Lua: {}", text); });
 
         api.set_function("apply_navigation_goal", [this](double x, double y) {
             warn("unimplement: apply_navigation_goal({}, {})", x, y);
@@ -206,7 +208,7 @@ private:
         lua = std::make_unique<sol::state>();
         lua->open_libraries(
             sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::package,
-            sol::lib::string, sol::lib::table);
+            sol::lib::string, sol::lib::table, sol::lib::debug);
 
         // Load Lua Env Path
         auto package_root =
@@ -225,11 +227,7 @@ private:
             lua->safe_script("require('main')", sol::script_pass_on_error),
             "failed to load lua main");
 
-        auto blackboard_result = unwrap_sol(
-            lua->safe_script("return require('blackboard').singleton()", sol::script_pass_on_error),
-            "failed to get lua blackboard");
-
-        lua_blackboard = blackboard_result.get<sol::table>();
+        lua_blackboard = (*lua)["blackboard"];
         lua_on_init = (*lua)["on_init"];
         lua_on_tick = (*lua)["on_tick"];
         lua_control_speed_callback = (*lua)["control_speed_callback"];
@@ -240,6 +238,8 @@ private:
 
         // Init Lua First
         auto init_result = unwrap_sol(lua_on_init(), "lua on_init failed");
+
+        info("Lua resource is loaded successfully");
     }
 
     auto lua_tick() { auto result = unwrap_sol(lua_on_tick(), "lua on_tick failed"); }
@@ -248,6 +248,7 @@ public:
     explicit Navigation()
         : rclcpp::Node{get_component_name(), option()}
         , context{*this} {
+        print_icon();
 
         mock_context = get_parameter_or("mock_context", false);
 
@@ -267,6 +268,8 @@ public:
                 unwrap_sol(
                     lua_control_speed_callback(vx, vy, qx), "lua control_speed_callback failed");
             });
+
+        info("Navigation is initialized");
     }
 
     auto update() -> void override {
