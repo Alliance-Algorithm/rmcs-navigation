@@ -19,15 +19,15 @@ from launch_ros.actions import Node
 
 MODE_MAP = {
     "online": {
-        "use_livox_driver": True,
-        "use_point_lio": True,
+        "use_odin_driver": True,
+        "use_point_lio": False,
         "use_bag": False,
         "use_sim_time": False,
         "use_local_mock": False,
         "use_initial_pose": False,
     },
     "bag": {
-        "use_livox_driver": False,
+        "use_odin_driver": False,
         "use_point_lio": True,
         "use_bag": True,
         "use_sim_time": True,
@@ -35,7 +35,7 @@ MODE_MAP = {
         "use_initial_pose": False,
     },
     "static": {
-        "use_livox_driver": False,
+        "use_odin_driver": False,
         "use_point_lio": False,
         "use_bag": False,
         "use_sim_time": False,
@@ -47,8 +47,9 @@ MODE_MAP = {
 
 def _build_mode_actions(
     context,
-    livox_launch,
+    odin_launch,
     point_lio_launch,
+    point_lio_odin_cfg,
     nav2_launch,
     map_yaml,
     local_map_yaml,
@@ -59,6 +60,7 @@ def _build_mode_actions(
     bag_use_clock = LaunchConfiguration("bag_use_clock").perform(context)
     local_map_topic = LaunchConfiguration("local_map_topic")
     global_map_topic = LaunchConfiguration("global_map_topic")
+    odin_config_file = LaunchConfiguration("odin_config_file").perform(context)
 
     if mode not in MODE_MAP:
         raise RuntimeError(
@@ -91,6 +93,7 @@ def _build_mode_actions(
                 "global_map_topic": global_map_topic,
                 "use_lifecycle_manager": "true",
                 "enable_local_map_node": use_local_mode,
+                "local_map_grid_frame": "odin1_chassis_link",
             }.items(),
         ),
         Node(
@@ -101,24 +104,9 @@ def _build_mode_actions(
         ),
     ]
 
-    # Map Source
-    map_node_names = ["map_server"]
+    # Map Source（online 模式不需要 map_server，全部用 odin 实时扫描）
     if config["use_local_mock"]:
-        map_node_names.append("local_map_server")
-
-    result_actions.append(Node(
-        package="nav2_map_server",
-        executable="map_server",
-        name="map_server",
-        output="screen",
-        parameters=[{
-            "use_sim_time": config["use_sim_time"],
-            "yaml_filename": map_yaml,
-            "topic_name": global_map_topic,
-            "frame_id": "world",
-        }],
-    ))
-    if config["use_local_mock"]:
+        map_node_names = ["local_map_server"]
         result_actions.append(Node(
             package="nav2_map_server",
             executable="map_server",
@@ -128,36 +116,41 @@ def _build_mode_actions(
                 "use_sim_time": config["use_sim_time"],
                 "yaml_filename": local_map_yaml,
                 "topic_name": local_map_mock_topic,
-                "frame_id": "base_link",
+                "frame_id": "odin1_chassis_link",
             }],
         ))
-    result_actions.append(Node(
-        package="nav2_lifecycle_manager",
-        executable="lifecycle_manager",
-        name="lifecycle_manager_map",
-        output="screen",
-        sigterm_timeout="2",
-        sigkill_timeout="4",
-        parameters=[
-            {"use_sim_time": config["use_sim_time"]},
-            {"autostart": True},
-            {"node_names": map_node_names},
-        ],
-    ))
+        result_actions.append(Node(
+            package="nav2_lifecycle_manager",
+            executable="lifecycle_manager",
+            name="lifecycle_manager_map",
+            output="screen",
+            sigterm_timeout="2",
+            sigkill_timeout="4",
+            parameters=[
+                {"use_sim_time": config["use_sim_time"]},
+                {"autostart": True},
+                {"node_names": map_node_names},
+            ],
+        ))
 
     result_actions.append(
         TimerAction(period=1.0, actions=nav2_actions))
 
-    if config["use_livox_driver"]:
+    if config["use_odin_driver"]:
+        odin_launch_arguments = {}
+        if odin_config_file != "":
+            odin_launch_arguments["config_file"] = odin_config_file
         result_actions.append(
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(livox_launch),
+                PythonLaunchDescriptionSource(odin_launch),
+                launch_arguments=odin_launch_arguments.items(),
             )
         )
     if config["use_point_lio"]:
         result_actions.append(
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(point_lio_launch),
+                launch_arguments={"point_lio_cfg_dir": point_lio_odin_cfg}.items(),
             )
         )
     if config["use_bag"]:
@@ -167,11 +160,12 @@ def _build_mode_actions(
         result_actions.append(ExecuteProcess(cmd=bag_cmd, output="screen"))
 
     # Transform Initialization
+    # odin 自己发布 odom -> odin1_base_link，只需补 world -> odom
     initial_world_link = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
         name="world_to_odom_tf",
-        arguments=["1.2", "6.3", "0", "0", "0", "0", "world", "odom"],
+        arguments=["1.2", "6.3", "0.25", "0", "0", "0", "world", "odom"],
         output="screen",
     )
     result_actions.append(
@@ -181,22 +175,36 @@ def _build_mode_actions(
         )
     )
 
+    # odin1_base_link（传感器）→ odin1_chassis_link（底盘中心）
+    # 底盘中心在传感器后方 0.18m、下方 0.25m
+    chassis_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="sensor_to_chassis_tf",
+        arguments=["-0.18", "0", "-0.25", "0", "0", "0",
+                   "odin1_base_link", "odin1_chassis_link"],
+        output="screen",
+    )
+    result_actions.append(
+        TimerAction(period=0.5, actions=[chassis_tf])
+    )
+
     if config["use_initial_pose"]:
-        initial_base_link = Node(
+        initial_sensor_link = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="world_to_base_link_tf",
+            name="odom_to_sensor_tf",
             arguments=[
                 "0", "0", "0",
                 "0", "0", "0",
-                "odom", "base_link"
+                "odom", "odin1_base_link"
             ],
             output="screen",
         )
         result_actions.append(
             TimerAction(
                 period=1.5,
-                actions=[initial_base_link]
+                actions=[initial_sensor_link]
             )
         )
 
@@ -205,19 +213,21 @@ def _build_mode_actions(
 
 def generate_launch_description():
     navigation_share = get_package_share_directory("rmcs-navigation")
-    livox_share = get_package_share_directory("livox_ros_driver2")
-    point_lio_share = get_package_share_directory("point_lio")
+    odin_share = get_package_share_directory("odin_ros_driver")
 
-    livox_launch = os.path.join(
-        livox_share,
+    odin_launch = os.path.join(
+        odin_share,
         "launch",
-        "msg_MID360_launch.py",
+        "odin1_ros2.launch.py",
     )
-    point_lio_launch = os.path.join(
-        point_lio_share,
-        "launch",
-        "point_lio.launch.py",
-    )
+
+    try:
+        point_lio_share = get_package_share_directory("point_lio")
+        point_lio_launch = os.path.join(point_lio_share, "launch", "point_lio.launch.py")
+        point_lio_odin_cfg = os.path.join(point_lio_share, "config", "odin.yaml")
+    except Exception:
+        point_lio_launch = ""
+        point_lio_odin_cfg = ""
     nav2_launch = os.path.join(navigation_share, "launch", "nav2.launch.py")
     custom_config = _load_custom_config(
         os.path.join(navigation_share, "config", "custom.yaml")
@@ -247,14 +257,16 @@ def generate_launch_description():
         DeclareLaunchArgument("mode", default_value="online"),
         DeclareLaunchArgument("bag_path", default_value=bag_path_default),
         DeclareLaunchArgument("local_map_topic", default_value="/local_map"),
-        DeclareLaunchArgument("global_map_topic", default_value="/map"),
+        DeclareLaunchArgument("global_map_topic", default_value="/local_map"),
+        DeclareLaunchArgument("odin_config_file", default_value=""),
         DeclareLaunchArgument(
             "bag_use_clock", default_value=bag_use_clock_default),
         OpaqueFunction(
             function=_build_mode_actions,
             kwargs={
-                "livox_launch": livox_launch,
+                "odin_launch": odin_launch,
                 "point_lio_launch": point_lio_launch,
+                "point_lio_odin_cfg": point_lio_odin_cfg,
                 "nav2_launch": nav2_launch,
                 "map_yaml": map_yaml,
                 "local_map_yaml": local_map_yaml,

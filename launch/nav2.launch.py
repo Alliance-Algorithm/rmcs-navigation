@@ -11,7 +11,7 @@ from nav2_common.launch import RewrittenYaml
 
 def generate_launch_description():
     navigation_share = get_package_share_directory("rmcs-navigation")
-    local_map_share = get_package_share_directory("rmcs_local_map")
+    local_map_share = get_package_share_directory("odin_local_map")
 
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
@@ -85,14 +85,14 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "local_map_grid_frame",
-            default_value="base_link",
+            default_value="odin1_chassis_link",
         ),
         DeclareLaunchArgument(
             "local_map_publish_cloud",
             default_value="false",
         ),
         Node(
-            package="rmcs_local_map",
+            package="odin_local_map",
             executable="local_map",
             name="rmcs_map",
             output="screen",

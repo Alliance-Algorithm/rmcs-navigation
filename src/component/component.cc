@@ -147,7 +147,7 @@ private:
     auto check_current_position() const noexcept -> std::tuple<double, double> {
         try {
             const auto transform =
-                tf_buffer->lookupTransform("world", "base_link", rclcpp::Time{0});
+                tf_buffer->lookupTransform("world", "odin1_chassis_link", rclcpp::Time{0});
             return std::tuple{
                 transform.transform.translation.x,
                 transform.transform.translation.y,
