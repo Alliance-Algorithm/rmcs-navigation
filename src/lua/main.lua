@@ -31,6 +31,16 @@ end
 
 blackboard = require("blackboard").singleton()
 
+-- @TODO: (creeper5820)
+--  框架搭建完成，准备开始填充业务
+--  规划如下：
+--    使用分层状态机，运动和决策分开，同时引入外部监管，负责
+--    监控中断情况，比如血量低，没有弹药等
+--  待完成接口（在外部中断中使用）：
+--    - fsm:force_switch(state) 不暴露给 handle
+--    - fsm:history() 负责中断恢复
+--    - handle:history() 规范暴露接口
+--    - task:force_resume() 用于跳出等待的挂起状态
 on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
@@ -58,12 +68,12 @@ on_init = function()
 		end
 	end)
 
+	-- 运动状态机
 	scheduler:append_task(function()
 		--- @enum Motion
 		local Motion = {
 			IDLE = "IDLE",
 			FREE = "FREE",
-			SPIN = "SPIN",
 		}
 		local motion = fsm:new(Motion.FREE)
 
@@ -73,20 +83,35 @@ on_init = function()
 				api.info("Enter Motion::FREE")
 			end,
 			event = function(handle)
+				request:sleep(1)
 				handle:set_next(Motion.IDLE)
 			end,
 		}
-
-		-- @TODO:
-		--  继续开发运动状态机
+		motion:use {
+			state = Motion.IDLE,
+			enter = function()
+				api.info("Enter Motion::IDLE")
+			end,
+			event = function(handle)
+				request:sleep(1)
+				handle:set_next(Motion.FREE)
+			end,
+		}
 
 		if not motion:init_ready(Motion) then
-			error("Failed to init Motion Fsm, need all state be used")
+			error("Motion 状态机有状态未注册，这是不对的")
 		end
 
 		while true do
 			motion:spin_once()
 			request:yield()
+		end
+	end)
+
+	-- 决策状态机
+	scheduler:append_task(function()
+		while true do
+			request:sleep(1)
 		end
 	end)
 

@@ -93,9 +93,6 @@ private:
             } catch (const std::exception& exception) {
                 return std::unexpected{exception.what()};
             }
-
-            auto vector = std::vector<int>{};
-            vector.emplace_back(1);
         }
 
     private:
@@ -174,6 +171,8 @@ private:
         api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
         api.set_function("fuck", [this](const std::string& text) { fuck("Lua: {}", text); });
 
+        // @TODO:
+        //  补全这些实现
         api.set_function("apply_navigation_goal", [this](double x, double y) {
             warn("unimplement: apply_navigation_goal({}, {})", x, y);
         });
