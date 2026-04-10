@@ -1,5 +1,5 @@
 navigation:
-  map_yaml: maps/rmul.yaml
+  map_yaml: maps/empty.yaml
   local_map_yaml: maps/empty.yaml
   local_map_mock_topic: /local_map
 

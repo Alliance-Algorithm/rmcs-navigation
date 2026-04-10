@@ -2,7 +2,7 @@
 # 联盟赛决策配置文件
 #
 navigation:
-  map_yaml: maps/rmul.yaml
+  map_yaml: maps/empty.yaml
 
 decision:
   health_limit: 250

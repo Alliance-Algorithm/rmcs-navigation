@@ -24,6 +24,7 @@
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>odin_ros_driver</exec_depend>
   <exec_depend>py_trees</exec_depend>
   <exec_depend>point_lio</exec_depend>
   <exec_depend>rclpy</exec_depend>

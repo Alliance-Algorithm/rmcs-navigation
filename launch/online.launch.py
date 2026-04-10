@@ -21,23 +21,19 @@ def _load_config(config_file):
 
 def _build_actions(context):
     navigation_share = get_package_share_directory("rmcs-navigation")
-    livox_share = get_package_share_directory("livox_ros_driver2")
-    point_lio_share = get_package_share_directory("point_lio")
+    odin_share = get_package_share_directory("odin_ros_driver")
     config_name = LaunchConfiguration("config_name").perform(context)
+    odin_config_file = LaunchConfiguration("odin_config_file").perform(context)
     if config_name == "":
         raise RuntimeError("Launch argument 'config_name' must not be empty")
 
-    livox_launch = os.path.join(
-        livox_share,
+    odin_launch = os.path.join(
+        odin_share,
         "launch",
-        "msg_MID360_launch.py",
-    )
-    point_lio_launch = os.path.join(
-        point_lio_share,
-        "launch",
-        "point_lio.launch.py",
+        "odin1_ros2.launch.py",
     )
     nav2_launch = os.path.join(navigation_share, "launch", "nav2.launch.py")
+    nav2_params = os.path.join(navigation_share, "config", "nav2.yaml")
 
     navigation_config = _load_config(
         os.path.join(navigation_share, "config", f"{config_name}.yaml")
@@ -54,8 +50,12 @@ def _build_actions(context):
     else:
         map_yaml = os.path.join(navigation_share, map_yaml_config)
 
-    local_map_topic = "/local_map"
+    local_map_topic = "/map"
     global_map_topic = "/map"
+
+    odin_launch_arguments = {}
+    if odin_config_file != "":
+        odin_launch_arguments["config_file"] = odin_config_file
 
     nav2_actions = [
         IncludeLaunchDescription(
@@ -63,11 +63,12 @@ def _build_actions(context):
             launch_arguments={
                 "use_sim_time": "false",
                 "autostart": "true",
+                "params_file": nav2_params,
                 "local_map_topic": local_map_topic,
-                "local_map_transient_local": "false",
+                "local_map_transient_local": "true",
                 "global_map_topic": global_map_topic,
                 "use_lifecycle_manager": "true",
-                "enable_local_map_node": "true",
+                "enable_local_map_node": "false",
             }.items(),
         ),
         Node(
@@ -105,13 +106,10 @@ def _build_actions(context):
             ],
         ),
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(livox_launch),
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(point_lio_launch),
+            PythonLaunchDescriptionSource(odin_launch),
+            launch_arguments=odin_launch_arguments.items(),
         ),
         TimerAction(period=3.0, actions=nav2_actions),
-        # 联盟赛初始坐标，以地图右下角 ROS 系为原点
         TimerAction(
             period=0.1,
             actions=[
@@ -120,8 +118,23 @@ def _build_actions(context):
                     executable="static_transform_publisher",
                     name="world_to_odom_tf",
                     arguments=[
-                        "1.2", "6.3", "0",
+                        "0.18", "0", "0.25",
                         "0", "0", "0", "world", "odom"
+                    ],
+                    output="screen",
+                ),
+            ],
+        ),
+        TimerAction(
+            period=0.1,
+            actions=[
+                Node(
+                    package="tf2_ros",
+                    executable="static_transform_publisher",
+                    name="sensor_to_chassis_tf",
+                    arguments=[
+                        "-0.18", "0", "-0.25",
+                        "0", "0", "0", "odin1_base_link", "odin1_chassis_link"
                     ],
                     output="screen",
                 ),
@@ -135,5 +148,6 @@ def _build_actions(context):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("config_name"),
+        DeclareLaunchArgument("odin_config_file", default_value=""),
         OpaqueFunction(function=_build_actions),
     ])

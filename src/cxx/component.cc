@@ -17,8 +17,10 @@
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/node.hpp>
+#include <rclcpp/publisher.hpp>
 #include <rclcpp/subscription.hpp>
 #include <sol/sol.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -33,7 +35,9 @@ class Navigation
 private:
     mutable std::mutex io_mutex;
 
+    using PoseStamped = geometry_msgs::msg::PoseStamped;
     using Twist = geometry_msgs::msg::Twist;
+    std::shared_ptr<rclcpp::Publisher<PoseStamped>> publisher_goal;
     std::shared_ptr<rclcpp::Subscription<Twist>> subscription_twist;
 
     bool mock_context = false;
@@ -164,6 +168,22 @@ private:
         return result;
     }
 
+    auto publish_navigation_goal(double x, double y) -> void {
+        auto goal = PoseStamped{};
+        goal.header.stamp = now();
+        goal.header.frame_id = "world";
+        goal.pose.position.x = x;
+        goal.pose.position.y = y;
+        goal.pose.position.z = 0.0;
+        goal.pose.orientation.x = 0.0;
+        goal.pose.orientation.y = 0.0;
+        goal.pose.orientation.z = 0.0;
+        goal.pose.orientation.w = 1.0;
+
+        publisher_goal->publish(goal);
+        info("Navigation goal updated: ({}, {})", x, y);
+    }
+
     auto make_api_injection() {
         auto api_result = unwrap_sol(
             lua->safe_script("return require('api')", sol::script_pass_on_error),
@@ -174,9 +194,8 @@ private:
         api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
         api.set_function("fuck", [this](const std::string& text) { fuck("Lua: {}", text); });
 
-        api.set_function("apply_navigation_goal", [this](double x, double y) {
-            warn("unimplement: apply_navigation_goal({}, {})", x, y);
-        });
+        api.set_function(
+            "apply_navigation_goal", [this](double x, double y) { publish_navigation_goal(x, y); });
         api.set_function("update_gimbal_direction", [this](double angle) {
             warn("unimplement: update_gimbal_direction({})", angle);
         });
@@ -184,7 +203,8 @@ private:
             warn("unimplement: update_chassis_mode(\"{}\")", mode);
         });
         api.set_function("update_chassis_vel", [this](double x, double y) {
-            warn("unimplement: update_chassis_vel({}, {})", x, y);
+            command.chassis_velocity->x() = x;
+            command.chassis_velocity->y() = y;
         });
     }
 
@@ -207,8 +227,8 @@ private:
     auto lua_init() {
         lua = std::make_unique<sol::state>();
         lua->open_libraries(
-            sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::package,
-            sol::lib::string, sol::lib::table, sol::lib::debug);
+            sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::io,
+            sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::debug);
 
         // Load Lua Env Path
         auto package_root =
@@ -254,6 +274,7 @@ public:
 
         context.init(mock_context);
         command.init(*this);
+        publisher_goal = Node::create_publisher<PoseStamped>("/move_base_simple/goal", 10);
 
         lua_init();
 

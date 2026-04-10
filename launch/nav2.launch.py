@@ -1,6 +1,9 @@
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import (
+    PackageNotFoundError,
+    get_package_share_directory,
+)
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
@@ -11,7 +14,15 @@ from nav2_common.launch import RewrittenYaml
 
 def generate_launch_description():
     navigation_share = get_package_share_directory("rmcs-navigation")
-    local_map_share = get_package_share_directory("rmcs_local_map")
+    try:
+        local_map_share = get_package_share_directory("rmcs_local_map")
+        local_map_params_default = os.path.join(
+            local_map_share,
+            "config",
+            "local_map.yaml",
+        )
+    except PackageNotFoundError:
+        local_map_params_default = ""
 
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
@@ -65,11 +76,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "local_map_params_file",
-            default_value=os.path.join(
-                local_map_share,
-                "config",
-                "local_map.yaml",
-            ),
+            default_value=local_map_params_default,
         ),
         DeclareLaunchArgument(
             "local_map_topic",
@@ -85,7 +92,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "local_map_grid_frame",
-            default_value="base_link",
+            default_value="odin1_chassis_link",
         ),
         DeclareLaunchArgument(
             "local_map_publish_cloud",
