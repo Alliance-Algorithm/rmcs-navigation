@@ -32,9 +32,14 @@ package.loaded["api"] = {
 }
 
 package.loaded["blackboard"] = nil
+package.loaded["option"] = nil
 package.loaded["main"] = nil
 local Blackboard = require("blackboard")
+local option = require("option")
 local bb = Blackboard.singleton()
+
+-- Mimic C++ option injection in component.cc
+option.decision = "auxiliary"
 
 bb.play.rswitch = "DOWN"
 bb.meta.timestamp = 0

@@ -1,1 +1,78 @@
 launch:
+  # Export
+  - arg:
+      name: "launch_livox"
+      default: "false"
+  - arg:
+      name: "launch_odin1"
+      default: "false"
+  - arg:
+      name: "global_map"
+      default: "rmul"
+
+  # Private
+  - arg:
+      name: "share_location"
+      default: "$(find-pkg-share rmcs-navigation)"
+
+  # Context
+  # 1. 传感器节点
+  - include:
+      if: "$(var launch_odin1)"
+      file: "$(find-pkg-share odin_ros_driver)/launch_ROS2/odin1_ros2.launch.py"
+  - include:
+      if: "$(var launch_livox)"
+      file: "$(find-pkg-share livox_ros_driver2)/launch/msg_MID360_launch.py"
+
+
+  # 2. 生命周期管理器
+  - let:
+      name: "managed_nodes"
+      value: "['global_map']"
+      if: "$(var launch_livox)"
+  - let:
+      name: "managed_nodes"
+      value: "['global_map', 'local_map']"
+      unless: "$(var launch_livox)"
+  - node:
+      pkg: "nav2_lifecycle_manager"
+      exec: "lifecycle_manager"
+      name: "lifecycle_manager_sensor"
+      param:
+        - name: "use_sim_time"
+          value: false
+        - name: "autostart"
+          value: true
+        - name: "node_names"
+          value: "$(var managed_nodes)"
+
+  # 3. 局部地图 Mock
+  - node:
+      unless: "$(var launch_livox)"
+      pkg: "nav2_map_server"
+      exec: "map_server"
+      name: "local_map"
+      param:
+        - name: "yaml_filename"
+          value: "$(var share_location)/maps/empty.yaml"
+        - name: "topic_name"
+          value: "local_map"
+        - name: "frame_id"
+          value: "base_link"
+
+  # 4. 全局地图服务
+  - node:
+      pkg: "nav2_map_server"
+      exec: "map_server"
+      name: "global_map"
+      param:
+        - from: "$(var share_location)/config/sensor.yaml"
+        - name: "yaml_filename"
+          value: "$(var share_location)/maps/$(var global_map).yaml"
+
+  # 5. 初始变换
+  - node:
+      pkg: "tf2_ros"
+      exec: "static_transform_publisher"
+      name: "initial_transform"
+      args: "0 0 0 0 0 0 world base_link"
