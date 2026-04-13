@@ -6,22 +6,17 @@
 
 #include "cxx/context.hh"
 #include "cxx/navigation.hh"
-#include "cxx/util/logger_mixin.hh"
+#include "cxx/util/node_mixin.hh"
 #include "cxx/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 
-#include <rmcs_executor/component.hpp>
-
 #include <filesystem>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <string_view>
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
+#include <rmcs_executor/component.hpp>
 #include <sol/sol.hpp>
 
 namespace rmcs::navigation {
@@ -29,7 +24,7 @@ namespace rmcs::navigation {
 class Navigation
     : public rmcs_executor::Component
     , public rclcpp::Node
-    , public rmcs::navigation::LoggerMixin {
+    , public rmcs::navigation::NodeMixin {
 private:
     mutable std::mutex io_mutex;
 
@@ -91,7 +86,11 @@ private:
 
         // @TODO:
         //  补全这些实现
-        api.set_function("move", [this](double x, double y) { navigation.move(x, y); });
+        api.set_function(
+            "send_target", [this](double x, double y) { navigation.send_target(x, y); });
+        api.set_function("switch_topic_forward", [this](bool enable) {
+            navigation.switch_topic_forward(enable);
+        });
         api.set_function("update_gimbal_direction", [this](double angle) {
             warn("unimplement: update_gimbal_direction({})", angle);
         });
@@ -101,6 +100,49 @@ private:
         api.set_function("update_chassis_vel", [this](double x, double y) {
             warn("unimplement: update_chassis_vel({}, {})", x, y);
         });
+    }
+
+    auto make_option_injection() {
+        auto option_result = unwrap_sol(
+            lua->safe_script("return require('option')", sol::script_pass_on_error),
+            "failed to get lua option");
+
+        auto option = option_result.get<sol::table>();
+
+        auto parameters = std::map<std::string, rclcpp::Parameter>{};
+        get_parameters("", parameters);
+
+        auto to_lua_array = [this]<typename T>(const std::vector<T>& values) {
+            auto array = lua->create_table(static_cast<int>(values.size()), 0);
+            for (auto index = std::size_t{0}; index < values.size(); ++index)
+                array[index + 1] = values[index];
+
+            return array;
+        };
+
+        for (const auto& [name, parameter] : parameters) {
+            switch (parameter.get_type()) {
+            case rclcpp::PARAMETER_BOOL: option[name] = parameter.as_bool(); break;
+            case rclcpp::PARAMETER_INTEGER: option[name] = parameter.as_int(); break;
+            case rclcpp::PARAMETER_DOUBLE: option[name] = parameter.as_double(); break;
+            case rclcpp::PARAMETER_STRING: option[name] = parameter.as_string(); break;
+            case rclcpp::PARAMETER_BOOL_ARRAY:
+                option[name] = to_lua_array(parameter.as_bool_array());
+                break;
+            case rclcpp::PARAMETER_INTEGER_ARRAY:
+                option[name] = to_lua_array(parameter.as_integer_array());
+                break;
+            case rclcpp::PARAMETER_DOUBLE_ARRAY:
+                option[name] = to_lua_array(parameter.as_double_array());
+                break;
+            case rclcpp::PARAMETER_STRING_ARRAY:
+                option[name] = to_lua_array(parameter.as_string_array());
+                break;
+            default: option[name] = sol::lua_nil; break;
+            }
+        }
+
+        info("injected {} ros parameters into lua option", parameters.size());
     }
 
     auto lua_sync() {
@@ -136,9 +178,10 @@ private:
 
         // Api Injection
         make_api_injection();
+        make_option_injection();
 
         // Load Function Binding
-        auto endpoint = get_parameter("endpoint").as_string();
+        auto endpoint = param<std::string>("endpoint");
         auto required = std::format("require('endpoint.{}')", endpoint);
         auto load_result = unwrap_sol(
             lua->safe_script(required, sol::script_pass_on_error), "failed to load lua main");
@@ -166,14 +209,16 @@ public:
         , context{*this, *this}
         , navigation{*this} {
 
-        mock_context = get_parameter_or("mock_context", false);
+        mock_context = param<bool>("mock_context");
+        auto enable_goal_topic_forward = get_parameter_or("enable_goal_topic_forward", true);
 
         context.init(io_mutex, mock_context);
         command.init(*this);
+        navigation.switch_topic_forward(enable_goal_topic_forward);
 
         lua_init();
 
-        const auto command_vel_name = get_parameter("command_vel_name").as_string();
+        const auto command_vel_name = param<std::string>("command_vel_name");
         subscription_twist = Node::create_subscription<Twist>(
             command_vel_name, 10, [this](const std::unique_ptr<Twist>& msg) {
                 auto lock = std::scoped_lock{io_mutex};

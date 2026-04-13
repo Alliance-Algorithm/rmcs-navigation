@@ -6,6 +6,7 @@ local api = require("api")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local fsm = require("util.fsm")
+local option = require("option")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -17,13 +18,13 @@ local NaN = 0 / 0
 local cache = {
 	goal = { x = NaN, y = NaN },
 }
-function cache:move()
+function cache:send_target()
 	local x = self.goal.x
 	local y = self.goal.y
 	if x ~= x or y ~= y then
 		return
 	end
-	api.move(x, y)
+	api.send_target(x, y)
 end
 
 ---
@@ -45,11 +46,13 @@ blackboard = require("blackboard").singleton()
 on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
+	api.info("use decision: '" .. option.decision .. "'")
+
 	-- 定期更新导航的目标，防止规划失败后停滞
 	scheduler:append_task(function()
 		while true do
 			request:sleep(2.0)
-			cache:move()
+			cache:send_target()
 		end
 	end)
 
@@ -61,7 +64,7 @@ on_init = function()
 			local y = cache.goal.y
 
 			if x ~= last.x or y ~= last.y then
-				cache:move()
+				cache:send_target()
 			end
 
 			last = { x = x, y = y }
@@ -104,7 +107,7 @@ on_init = function()
 		end
 
 		while true do
-			motion:spin_once()
+			-- motion:spin_once()
 			request:yield()
 		end
 	end)

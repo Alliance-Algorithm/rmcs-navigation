@@ -1,0 +1,50 @@
+launch:
+  - arg:
+      name: "configuration"
+      default: "$(find-pkg-share rmcs-navigation)/config/motion.yaml"
+  - arg:
+      name: "use_sim_time"
+      default: "true"
+
+  # 1. 生命周期管理器
+  - node:
+      pkg: "nav2_lifecycle_manager"
+      exec: "lifecycle_manager"
+      name: "lifecycle_manager_navigation"
+      param:
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+        - name: "autostart"
+          value: true
+        - name: "node_names"
+          value: ["planner_server", "controller_server", "velocity_smoother"]
+
+  # 2. 规划服务器
+  - node:
+      pkg: "nav2_planner"
+      exec: "planner_server"
+      name: "planner_server"
+      param:
+        - from: "$(var configuration)"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 3. 控制服务器
+  - node:
+      pkg: "nav2_controller"
+      exec: "controller_server"
+      name: "controller_server"
+      param:
+        - from: "$(var configuration)"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 4. 速度平滑器
+  - node:
+      pkg: "nav2_velocity_smoother"
+      exec: "velocity_smoother"
+      name: "velocity_smoother"
+      param:
+        - from: "$(var configuration)"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"

@@ -9,7 +9,7 @@ local assert_true = test_util.assert_true
 local assert_table_eq = test_util.assert_table_eq
 
 local calls = {
-	move = {},
+	send_target = {},
 	restart_navigation = {},
 	update_chassis_vel = {},
 }
@@ -17,8 +17,8 @@ local calls = {
 package.loaded["api"] = {
 	info = function(_) end,
 	warn = function(_) end,
-	move = function(x, y)
-		calls.move[#calls.move + 1] = { x, y }
+	send_target = function(x, y)
+		calls.send_target[#calls.send_target + 1] = { x, y }
 	end,
 	restart_navigation = function(config)
 		calls.restart_navigation[#calls.restart_navigation + 1] = config
@@ -63,21 +63,21 @@ local function tick(now)
 end
 
 tick(0)
-assert_eq(#calls.move, 0, "initial tick should not send NaN goal")
+assert_eq(#calls.send_target, 0, "initial tick should not send NaN goal")
 
 cache.goal.x = 1.5
 cache.goal.y = -2.0
 
 tick(0.1)
-assert_eq(#calls.move, 1, "goal change should trigger immediate send")
-assert_table_eq(calls.move[1], { 1.5, -2.0 }, "immediate goal payload")
+assert_eq(#calls.send_target, 1, "goal change should trigger immediate send")
+assert_table_eq(calls.send_target[1], { 1.5, -2.0 }, "immediate goal payload")
 
 tick(1.0)
-assert_eq(#calls.move, 1, "without new goal change should not resend before period")
+assert_eq(#calls.send_target, 1, "without new goal change should not resend before period")
 
 tick(2.0)
-assert_eq(#calls.move, 2, "periodic task should resend goal every 2 seconds")
-assert_table_eq(calls.move[2], { 1.5, -2.0 }, "periodic goal payload")
+assert_eq(#calls.send_target, 2, "periodic task should resend goal every 2 seconds")
+assert_table_eq(calls.send_target[2], { 1.5, -2.0 }, "periodic goal payload")
 
 assert_eq(#calls.restart_navigation, 0, "edge callback should not trigger on DOWN")
 bb.play.rswitch = "UP"

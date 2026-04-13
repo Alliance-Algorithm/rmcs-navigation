@@ -6,11 +6,13 @@ local util = require("util.native")
 
 --- @class Api
 ---
+--- @field switch_topic_forward fun(enable: boolean)
+---
 --- @field info fun(message: string)
 --- @field warn fun(message: string)
 --- @field fuck fun(message: string)
 ---
---- @field move fun(x: number, y: number)
+--- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(angle: number)
 --- @field update_chassis_mode fun(mode: string)
 --- @field update_chassis_vel fun(x: number, y: number)

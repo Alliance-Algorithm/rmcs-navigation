@@ -63,5 +63,6 @@ for _, line in ipairs(ascii_art) do
 end
 
 return {
+	--- @type string
 	banner = banner,
 }

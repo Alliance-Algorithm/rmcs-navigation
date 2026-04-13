@@ -3,12 +3,6 @@ install(
     DESTINATION lib/${PROJECT_NAME}/
 )
 install(
-    PROGRAMS
-        src/script/goal_topic_bridge.py
-        src/script/follow_waypoints_runner.py
-    DESTINATION lib/${PROJECT_NAME}/
-)
-install(
     DIRECTORY config/
     DESTINATION share/${PROJECT_NAME}/config/
 )

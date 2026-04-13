@@ -1,8 +1,0 @@
-navigation:
-  map_yaml: maps/rmul.yaml
-  local_map_yaml: maps/empty.yaml
-  local_map_mock_topic: /local_map
-
-bag:
-  path: /workspaces/data/bag/520双创飙车事件/
-  use_clock: true

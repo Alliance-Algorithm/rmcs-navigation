@@ -69,19 +69,21 @@ target_include_directories(
 )
 target_link_libraries(
     ${PROJECT_NAME}
-    rclcpp::rclcpp
-    ament_index_cpp::ament_index_cpp
-    yaml-cpp::yaml-cpp
-    Eigen3::Eigen
-    ${rmcs_executor_LIBRARIES}
-    ${geometry_msgs_LIBRARIES}
-    ${std_srvs_LIBRARIES}
-    ${rmcs_msgs_LIBRARIES}
-    ${tf2_ros_LIBRARIES}
-    ${rclcpp_action_LIBRARIES}
-    ${nav2_msgs_LIBRARIES}
-    ${LUA_LIBRARIES}
-    sol2::sol2
+    PRIVATE
+        ${LUA_LIBRARIES}
+        sol2::sol2
+        -rdynamic
+        rclcpp::rclcpp
+        ament_index_cpp::ament_index_cpp
+        yaml-cpp::yaml-cpp
+        Eigen3::Eigen
+        ${rmcs_executor_LIBRARIES}
+        ${geometry_msgs_LIBRARIES}
+        ${std_srvs_LIBRARIES}
+        ${rmcs_msgs_LIBRARIES}
+        ${tf2_ros_LIBRARIES}
+        ${rclcpp_action_LIBRARIES}
+        ${nav2_msgs_LIBRARIES}
 )
 
 find_package(pluginlib REQUIRED)
