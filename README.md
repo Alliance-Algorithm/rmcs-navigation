@@ -13,3 +13,17 @@
 ### 信息流与调用链总览
 
 ![Call Chain](doc/call-chain.svg)
+
+### Component
+
+配置项：
+
+```yaml
+rmcs_navigation:
+  ros__parameters:
+    command_vel_name: "/cmd_vel_smoothed"
+    mock_context: true
+    endpoint: "main"
+    decision: "fast-push-output"
+    # ......
+```

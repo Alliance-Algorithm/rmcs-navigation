@@ -240,8 +240,8 @@ public:
 
             return {translation.x, translation.y, yaw};
         } catch (const tf2::TransformException& exception) {
-            warn("failed to query {}->{} pose: {}", kWorldFrame, kBaseFrame, exception.what());
-            return {0.0, 0.0, 0.0};
+            constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
+            return {kNan, kNan, kNan};
         }
     }
 };

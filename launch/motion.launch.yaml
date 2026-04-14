@@ -32,6 +32,8 @@ launch:
         - from: "$(var configuration)/motion.yaml"
         - name: default_nav_to_pose_bt_xml
           value: "$(var configuration)/motion.xml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
 
   # 2. 全局规划 + 全局地图处理
   - node:
