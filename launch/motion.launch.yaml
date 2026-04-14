@@ -1,14 +1,12 @@
-# TODO: 顶层导航调度节点配置
-
 launch:
   - arg:
       name: "configuration"
-      default: "$(find-pkg-share rmcs-navigation)/config/motion.yaml"
+      default: "$(find-pkg-share rmcs-navigation)/config"
   - arg:
       name: "use_sim_time"
-      default: "true"
+      default: "false"
 
-  # 1. 生命周期管理器
+  # 0. 生命周期管理器
   - node:
       pkg: "nav2_lifecycle_manager"
       exec: "lifecycle_manager"
@@ -19,25 +17,39 @@ launch:
         - name: "autostart"
           value: true
         - name: "node_names"
-          value: ["planner_server", "controller_server", "velocity_smoother"]
+          value:
+            - "bt_navigator"
+            - "planner_server"
+            - "controller_server"
+            - "velocity_smoother"
 
-  # 2. 规划服务器
+  # 1. 导航行为调度
+  - node:
+      pkg: "nav2_bt_navigator"
+      exec: "bt_navigator"
+      name: "bt_navigator"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: default_nav_to_pose_bt_xml
+          value: "$(var configuration)/motion.xml"
+
+  # 2. 全局规划 + 全局地图处理
   - node:
       pkg: "nav2_planner"
       exec: "planner_server"
       name: "planner_server"
       param:
-        - from: "$(var configuration)"
+        - from: "$(var configuration)/motion.yaml"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"
 
-  # 3. 控制服务器
+  # 3. 局部规划 + 局部地图处理
   - node:
       pkg: "nav2_controller"
       exec: "controller_server"
       name: "controller_server"
       param:
-        - from: "$(var configuration)"
+        - from: "$(var configuration)/motion.yaml"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"
 
@@ -47,6 +59,6 @@ launch:
       exec: "velocity_smoother"
       name: "velocity_smoother"
       param:
-        - from: "$(var configuration)"
+        - from: "$(var configuration)/motion.yaml"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"

@@ -1,4 +1,11 @@
-# TODO: 顶层导航调度节点配置
+# 导航行为调度
+bt_navigator:
+  ros__parameters:
+    global_frame: world
+    robot_base_frame: base_link
+    navigators: ["navigate_to_pose"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
 
 # 全局地图 + 全局规划
 global_costmap:
@@ -16,38 +23,14 @@ global_costmap:
 
 planner_server:
   ros__parameters:
-    planner_plugins: ["global_planner"]
-    global_planner:
+    global_frame: world
+    planner_plugins: ["GridBased"]
+    GridBased:
       plugin: "nav2_navfn_planner::NavfnPlanner"
       use_astar: false
       allow_unknown: true
 
 # 局部地图 + 局部规划
-controller_server:
-  ros__parameters:
-    controller_frequency: 20.0
-    progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["goal_checker"]
-    controller_plugins: ["local_planner"]
-
-    progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.1
-      movement_time_allowance: 10.0
-
-    goal_checker:
-      plugin: "nav2_controller::PositionGoalChecker"
-      xy_goal_tolerance: 0.2
-
-    local_planner:
-      plugin: "dwb_core::DWBLocalPlanner"
-      critics: ["BaseObstacle", "PathDist", "GoalDist"]
-      max_vel_x: 5.0
-      max_accel_x: 20.0
-      BaseObstacle.scale: 2.0
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -65,6 +48,110 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         inflation_radius: 0.2
 
+controller_server:
+  ros__parameters:
+    global_frame: world
+    controller_frequency: 20.0
+
+    # 进度检查，超时没有移动会导向导航事件失败
+    progress_checker_plugin: "progress_checker"
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.1
+      movement_time_allowance: 60.0
+
+    # 目标检查，一般不检查旋转角
+    goal_checker_plugins: ["general_goal_checker"]
+    general_goal_checker:
+      plugin: "nav2_controller::PositionGoalChecker"
+      xy_goal_tolerance: 0.2
+
+    # 布局规划核心
+    controller_plugins: ["FollowPath"]
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: false
+
+      # 速度范围约束
+      max_vel_x: +5.0
+      min_vel_x: -5.0
+      max_vel_y: +5.0
+      min_vel_y: -5.0
+      max_vel_theta: +1.0
+      min_vel_theta: -1.0
+
+      # 速度模长约束
+      min_speed_xy: 0.0
+      max_speed_xy: 8.0
+      min_speed_theta: 0.0
+      max_speed_theta: 3.0
+
+      # 加减速度约束
+      acc_lim_x: +20.0
+      decel_lim_x: -20.0
+      acc_lim_y: +20.0
+      decel_lim_y: -20.0
+      acc_lim_theta: +3.0
+      decel_lim_theta: -3.0
+
+      # 采样密度
+      vx_samples: 8
+      vy_samples: 8
+      vtheta_samples: 0
+
+      # 前向仿真参数
+      # 控制候选轨迹向前模拟的时长和离散精度。
+      sim_time: 1.0
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+
+      # 终点判定与停车行为
+      # 控制接近目标时的容差，以及何时认为机器人已停下。
+      xy_goal_tolerance: 0.25
+      path_length_tolerance: 1.0
+      trans_stopped_velocity: 0.25
+      stateful: true
+
+      # 评估流程控制
+      # 控制轨迹打分时是否短路，以及速度命令的裁剪方式。
+      short_circuit_trajectory_evaluation: false
+      limit_vel_cmd_in_traj: false
+
+      # 轨迹评价器
+      # 决定 DWB 如何权衡障碍物、路径贴合、目标逼近和旋转行为。
+      critics:
+        [
+          "Oscillation",
+          "BaseObstacle",
+          "ObstacleFootprint",
+          "GoalAlign",
+          "PathAlign",
+          "PathDist",
+          "GoalDist",
+          "Twirling",
+        ]
+
+      # 障碍物相关评价
+      # 惩罚靠近障碍物或 footprint 碰撞风险较高的轨迹。
+      BaseObstacle.scale: 1.2
+      ObstacleFootprint.scale: 1.0
+
+      # 朝向与路径对齐评价
+      # 鼓励轨迹朝向目标并贴合全局路径方向。
+      GoalAlign.scale: 4.0
+      GoalAlign.forward_point_distance: 0.1
+      PathAlign.scale: 12.0
+      PathAlign.forward_point_distance: 0.1
+
+      # 路径距离与目标距离评价
+      # 鼓励轨迹贴近路径并持续逼近目标点。
+      PathDist.scale: 12.0
+      GoalDist.scale: 10.0
+
+      # 旋转行为惩罚
+      # 抑制无意义的原地打转或过度旋转。
+      Twirling.scale: 12.0
+
 # 末端速度优化
 velocity_smoother:
   ros__parameters:
@@ -72,4 +159,4 @@ velocity_smoother:
     max_velocity: [3.5, 3.5, 3.0]
     max_accel: [+8.0, +30.0, +30.0]
     max_decel: [-8.0, -30.0, -30.0]
-    odom_topic: /aft_mapped_to_init
+    odom_topic: /odom

@@ -1,4 +1,4 @@
-map_server:
+global_map:
   ros__parameters:
     frame_id: "world"
     topic_name: "map"

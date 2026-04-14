@@ -1,6 +1,9 @@
 launch:
   # Export
   - arg:
+      name: "use_sim_time"
+      default: "false"
+  - arg:
       name: "launch_livox"
       default: "false"
   - arg:
@@ -24,7 +27,6 @@ launch:
       if: "$(var launch_livox)"
       file: "$(find-pkg-share livox_ros_driver2)/launch/msg_MID360_launch.py"
 
-
   # 2. 生命周期管理器
   - let:
       name: "managed_nodes"
@@ -39,12 +41,12 @@ launch:
       exec: "lifecycle_manager"
       name: "lifecycle_manager_sensor"
       param:
-        - name: "use_sim_time"
-          value: false
         - name: "autostart"
           value: true
         - name: "node_names"
           value: "$(var managed_nodes)"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
 
   # 3. 局部地图 Mock
   - node:
@@ -59,6 +61,8 @@ launch:
           value: "local_map"
         - name: "frame_id"
           value: "base_link"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
 
   # 4. 全局地图服务
   - node:
@@ -69,8 +73,10 @@ launch:
         - from: "$(var share_location)/config/sensor.yaml"
         - name: "yaml_filename"
           value: "$(var share_location)/maps/$(var global_map).yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
 
-  # 5. 初始变换
+  # 5. 初始变换 (remove after testing)
   - node:
       pkg: "tf2_ros"
       exec: "static_transform_publisher"
