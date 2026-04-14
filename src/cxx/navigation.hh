@@ -30,7 +30,7 @@ public:
     /// - tuple 第 3 项：yaw（弧度）。
     ///
     /// 行为说明：
-    /// - 若 TF 查询失败，会记录告警并返回 {0.0, 0.0, 0.0}。
+    /// - 若 TF 查询失败，会返回 {nan, nan, nan}。
     ///
     /// 用法示例：
     /// - auto [x, y, yaw] = navigation.check_position();
