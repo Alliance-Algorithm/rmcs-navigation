@@ -13,6 +13,7 @@ local function create_default_blackboard()
 			bullet = 0,
 			x = 0,
 			y = 0,
+			yaw = 0,
 		},
 		game = {
 			stage = "UNKNOWN",

@@ -31,7 +31,8 @@ end
 ---@param command string
 ---@return boolean, string
 function M.run_command(command)
-	local success, reason, code = os.execute(command)
+	local escaped_command = command:gsub("'", [['"'"']])
+	local success, reason, code = os.execute("bash -lc '" .. escaped_command .. "'")
 	if success == true or success == 0 then
 		return true, "ok"
 	end

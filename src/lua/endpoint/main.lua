@@ -120,7 +120,12 @@ on_init = function()
 	end)
 
 	edges:on(blackboard.getter.rswitch, "UP", function()
-		api.restart_navigation("rmul")
+		api.restart_navigation({
+			launch_livox = false,
+			launch_odin1 = false,
+			global_map = "rmul",
+			use_sim_time = false,
+		})
 	end)
 
 	api.info(ascii.banner)

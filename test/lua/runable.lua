@@ -88,7 +88,10 @@ assert_eq(#calls.restart_navigation, 0, "edge callback should not trigger on DOW
 bb.play.rswitch = "UP"
 tick(2.1)
 assert_eq(#calls.restart_navigation, 1, "rising edge should trigger restart once")
-assert_eq(calls.restart_navigation[1], "rmul", "restart config")
+assert_eq(calls.restart_navigation[1].launch_livox, false, "restart config launch_livox")
+assert_eq(calls.restart_navigation[1].launch_odin1, false, "restart config launch_odin1")
+assert_eq(calls.restart_navigation[1].global_map, "rmul", "restart config global_map")
+assert_eq(calls.restart_navigation[1].use_sim_time, false, "restart config use_sim_time")
 
 tick(2.2)
 assert_eq(#calls.restart_navigation, 1, "holding UP should not retrigger restart")

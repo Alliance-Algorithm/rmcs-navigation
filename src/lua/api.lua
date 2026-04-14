@@ -33,33 +33,38 @@ local api = setmetatable({}, {
 --- Native Impl
 ---
 
+--- @param config { launch_livox: boolean, launch_odin1: boolean, global_map: string, use_sim_time: boolean }
 function api.restart_navigation(config)
-	local screen_label = "rmcs-navigation"
-	if config == nil or config == "" then
-		error("api.restart_navigation(config): config is required and cannot be empty")
+	local filename, msg = util.find_env_setup_bash()
+	if not filename then
+		error(msg)
 	end
 
-	local target_label = config
-	local env_setup_bash, env_error = util.search_setup_filename()
-	if env_setup_bash == nil then
-		error("api.restart_navigation(config): " .. tostring(env_error))
-	end
+	local launch_livox = tostring(config.launch_livox)
+	local launch_odin1 = tostring(config.launch_odin1)
+	local global_map = tostring(config.global_map)
+	local use_sim_time = tostring(config.use_sim_time)
 
-	local launch_command = string.format(
-		"source %q && ros2 launch rmcs-navigation online.launch.py config_name:=%q",
-		env_setup_bash,
-		target_label
+	local sensor_config = string.format(
+		"launch_livox:=%s launch_odin1:=%s global_map:=%s use_sim_time:=%s",
+		launch_livox,
+		launch_odin1,
+		global_map,
+		use_sim_time
 	)
+	local motion_config = string.format("use_sim_time:=%s", use_sim_time)
 
-	return util.run_command(
-		string.format(
-			"if screen -S %q -Q select . >/dev/null 2>&1; then screen -S %q -X quit >/dev/null 2>&1; fi; sleep 0.5; screen -dmS %q bash -lc %q",
-			screen_label,
-			screen_label,
-			screen_label,
-			launch_command
-		)
-	)
+	local command = [[
+        source %q
+        screen -S rmcs-navigation -X quit 2>/dev/null
+
+        screen -dmS rmcs-navigation
+        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml %s"
+        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation motion.launch.yaml %s"
+    ]]
+	local packed_command = string.format(command, filename, sensor_config, motion_config)
+
+	util.run_command(packed_command)
 end
 
 return api

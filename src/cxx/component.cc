@@ -33,6 +33,7 @@ private:
 
     bool mock_context = false;
 
+    std::atomic<std::uint16_t> lua_tick_count = 0;
     std::unique_ptr<sol::state> lua;
     sol::table lua_blackboard;
     sol::protected_function lua_on_init;
@@ -146,9 +147,14 @@ private:
     }
 
     auto lua_sync() {
+        const auto [x, y, yaw] = navigation.check_position();
+
         auto user = lua_blackboard["user"].get<sol::table>();
         user["health"] = *context.robot_health;
         user["bullet"] = *context.robot_bullet;
+        user["x"] = x;
+        user["y"] = y;
+        user["yaw"] = yaw;
 
         auto game = lua_blackboard["game"].get<sol::table>();
         game["stage"] = detail::to_string(*context.game_stage);
@@ -165,7 +171,7 @@ private:
         lua = std::make_unique<sol::state>();
         lua->open_libraries(
             sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::package,
-            sol::lib::string, sol::lib::table, sol::lib::debug);
+            sol::lib::string, sol::lib::table, sol::lib::debug, sol::lib::io);
 
         // Load Lua Env Path
         auto package_root =
@@ -234,9 +240,12 @@ public:
     }
 
     auto update() -> void override {
-        auto lock = std::scoped_lock{io_mutex};
-        lua_sync();
-        lua_tick();
+        if (lua_tick_count++ == 100) {
+            lua_tick_count = 0;
+            auto lock = std::scoped_lock{io_mutex};
+            lua_sync();
+            lua_tick();
+        }
     }
 };
 
