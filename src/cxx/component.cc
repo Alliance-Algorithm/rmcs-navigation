@@ -8,6 +8,7 @@
 #include "cxx/navigation.hh"
 #include "cxx/util/node_mixin.hh"
 #include <filesystem>
+#include <limits>
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -45,6 +46,7 @@ private:
 
     struct Command {
         OutputInterface<Eigen::Vector2d> chassis_speed;
+        OutputInterface<Eigen::Vector2d> gimbal_direction;
         OutputInterface<std::size_t> nod_count;
         OutputInterface<bool> rotate_chassis;
         OutputInterface<bool> detect_targets;
@@ -53,6 +55,12 @@ private:
         auto init(Navigation& component) -> void {
             component.register_output(
                 "/rmcs_navigation/chassis_velocity", chassis_speed, Eigen::Vector2d::Zero());
+            component.register_output(
+                "/rmcs_navigation/gimbal_direction", gimbal_direction,
+                Eigen::Vector2d{
+                    std::numeric_limits<double>::quiet_NaN(),
+                    std::numeric_limits<double>::quiet_NaN(),
+                });
             component.register_output("/rmcs_navigation/nod_count", nod_count, 0);
             component.register_output("/rmcs_navigation/rotate_chassis", rotate_chassis, false);
             component.register_output("/rmcs_navigation/detect_targets", detect_targets, false);
@@ -92,9 +100,10 @@ private:
         api.set_function("switch_topic_forward", [this](bool enable) {
             navigation.switch_topic_forward(enable);
         });
-        api.set_function("update_gimbal_direction", [this](double angle) {
-            warn("unimplement: update_gimbal_direction({})", angle);
-        });
+        api.set_function(
+            "update_gimbal_direction", [this](double gimbal_angle, double pitch_angle) {
+                *command.gimbal_direction = Eigen::Vector2d{gimbal_angle, pitch_angle};
+            });
         api.set_function("update_chassis_mode", [this](const std::string& mode) {
             warn("unimplement: update_chassis_mode(\"{}\")", mode);
         });
