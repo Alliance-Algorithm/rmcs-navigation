@@ -1,69 +1,58 @@
 local blackboard = require("blackboard").singleton()
-local request = require("util.scheduler").request
 local action = require("action")
+local navigate_to_point = require("task.navigate-to-point")
+local crossing_fluctuant_road = require("task.crossing-fluctuant-road")
 
 --- @param ours_zone boolean
 --- @param forward_center boolean
 --- @return boolean is_success
 return function(ours_zone, forward_center)
+	assert(type(ours_zone) == "boolean", "ours_zone should be a boolean")
+	assert(type(forward_center) == "boolean", "forward_center should be a boolean")
 	action:info("开始crossing-road-zone")
 
-	local x = blackboard.user.x
-	local y = blackboard.user.y
-
 	local rule = blackboard.rule
-	local begin, final
+	local road_begin, road_final
 	if ours_zone then
-		begin = rule.road_zone_begin.ours
-		final = rule.road_zone_final.ours
+		road_begin = rule.road_zone_begin.ours
+		road_final = rule.road_zone_final.ours
 	else
-		begin = rule.road_zone_begin.them
-		final = rule.road_zone_final.them
+		road_begin = rule.road_zone_begin.them
+		road_final = rule.road_zone_final.them
 	end
 
 	local from, to
 	if forward_center then
-		from = begin
-		to = final
+		from = road_begin
+		to = road_final
 	else
-		from = final
-		to = begin
+		from = road_final
+		to = road_begin
 	end
 
-	local condition = blackboard.condition
-
-	action:navigate(from)
-	local is_timeout = request:wait_until {
-		monitor = function()
-			return condition.near(from, 0.1)
-		end,
+	local ok = navigate_to_point(from, {
+		tolerance = 0.1,
 		timeout = 10,
-	}
-
-	if is_timeout then
-		action:warn(string.format(
-			"crossing-road-zone: 导航到起点失败 (x=%.2f, y=%.2f)",
-			from.x,
-			from.y
-		))
+	})
+	if not ok then
+		action:warn("crossing-road-zone: 导航到公路区入口失败（超时）")
 		return false
 	end
 
-	action:navigate(to)
-	local is_timeout = request:wait_until {
-		monitor = function()
-			return condition.near(to, 0.1)
-		end,
+	ok = navigate_to_point(to, {
+		tolerance = 0.1,
 		timeout = 10,
-	}
-	if is_timeout then
-		action:warn(string.format(
-			"crossing-road-zone: 导航到终点失败 (x=%.2f, y=%.2f)",
-			to.x,
-			to.y
-		))
+	})
+	if not ok then
+		action:warn("crossing-road-zone: 导航到公路区出口失败（超时）")
 		return false
 	end
 
-	return not is_timeout
+	ok = crossing_fluctuant_road(ours_zone, forward_center)
+	if not ok then
+		action:warn("crossing-road-zone: 通过起伏路段失败")
+		return false
+	end
+
+	return true
 end
