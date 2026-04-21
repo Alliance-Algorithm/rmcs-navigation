@@ -33,10 +33,10 @@ local function create_default_blackboard()
 
 			-- 状态类规则
 
-			health_limit = 0,
-			health_ready = 0,
-			bullet_limit = 0,
-			bullet_ready = 0,
+			health_limit = 210,
+			health_ready = 400,
+			bullet_limit = 40,
+			bullet_ready = 300,
 
 			-- 坐标类规则
 			-- 定义顺序：ours = 0，them = 1
@@ -50,6 +50,9 @@ local function create_default_blackboard()
 			launch_ramp_final = PointPair { { 0, 0 }, { 0, 0 } },
 			outpost_resupply = PointPair { { 0, 0 }, { 0, 0 } }, -- 前哨站补给点
 			assembly_zone = PointPair { { 0, 0 }, { 0, 0 } },
+			central_highland_near_crossing_road = PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地靠近公路一侧
+			central_highland_near_doghole =  PointPair { { 0, 0 }, { 0, 0 } }, --中央高地靠近狗洞一侧
+			central_highland_two_steps = PointPair { { 0, 0 }, { 0, 0 } }, --中央高地靠近二级台阶（二级台阶增益点前）
 
 			-- 特殊跨越地形坐标
 			road_tunnel_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 公路隧道
@@ -58,6 +61,8 @@ local function create_default_blackboard()
 			one_step_final = PointPair { { 0, 0 }, { 0, 0 } },
 			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 二级台阶
 			two_step_final = PointPair { { 0, 0 }, { 0, 0 } },
+			fluctuant_road_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 起伏路段
+			fluctuant_road_final = PointPair { { 0, 0 }, { 0, 0 } },
 			common_elevated_ground_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 普通高地（飞坡起点那个高地）
 			common_elevated_ground_final = PointPair { { 0, 0 }, { 0, 0 } },
 		},
