@@ -57,8 +57,8 @@ local function create_default_blackboard()
 			-- 特殊跨越地形坐标
 			road_tunnel_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 公路隧道
 			road_tunnel_final = PointPair { { 0, 0 }, { 0, 0 } },
-			one_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 一级台阶
-			one_step_final = PointPair { { 0, 0 }, { 0, 0 } },
+			one_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 一级台阶高点
+			one_step_final = PointPair { { 0, 0 }, { 0, 0 } }, -- 一级台阶低点
 			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 二级台阶
 			two_step_final = PointPair { { 0, 0 }, { 0, 0 } },
 			fluctuant_road_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 起伏路段

@@ -1,5 +1,6 @@
 local blackboard = require("blackboard").singleton()
 local action = require("action")
+local go_down_onestep = require("task.go-down-onestep")
 local navigate_to_point = require("task.navigate-to-point")
 
 --- 回家补给：从当前位置直接导航至补给点。
@@ -16,7 +17,13 @@ return function(ours_zone)
 		resupply_zone = rule.resupply_zone.them
 	end
 
-	local is_success = navigate_to_point(resupply_zone, {
+	local is_success = go_down_onestep(ours_zone)
+	if not is_success then
+		action:warn("escape-to-home: 下一级台阶失败")
+		return false
+	end
+
+	is_success = navigate_to_point(resupply_zone, {
 		tolerance = 0.15,
 		timeout = 10,
 	})
