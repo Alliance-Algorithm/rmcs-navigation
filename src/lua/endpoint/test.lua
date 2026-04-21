@@ -8,7 +8,7 @@ local clock = require("util.clock")
 local fsm = require("util.fsm")
 local option = require("option")
 
-local start_cruise = require("intent.start-cruise-train")
+local start_cruise = require("intent.start-cruise")
 local keep_cruise = require("intent.keep-cruise")
 local escape_to_home = require("intent.escape-to-home")
 
@@ -60,14 +60,7 @@ local function configure_test_rule()
 	rule.bullet_limit = read_option("fsm_bullet_limit", 40)
 	rule.bullet_ready = read_option("fsm_bullet_ready", 300)
 
-	-- Ours side sample points
-	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }   		--家
-	rule.road_zone_begin.ours = { x = 0.0, y = 0.0 }		--公路区起点
-	rule.road_zone_final.ours = { x = 0.0, y = 0.0 }		--公路区终点
-	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }			--一级台阶高点（先随便标个回家路上的点）
-	rule.one_step_final.ours = { x = 0.0, y = 0.0 }			--一级台阶低点（先随便标个回家路上的点）
-	rule.central_highland_near_crossing_road.ours = { x = 0.0, y = 0.0 }  	--高地靠近公路
-	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }			--高地靠近狗洞
+	-- 坐标点位由地图/配置提供，这里不再覆写为 (0,0)。
 end
 
 local function reset_job_status()
