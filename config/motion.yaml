@@ -43,14 +43,14 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.36
-        cost_scaling_factor: 2.0
+        inflation_radius: 0.15
+        cost_scaling_factor: 5.0
 
 # 局部地图 + 局部规划
 controller_server:
   ros__parameters:
     global_frame: world
-    controller_frequency: 20.0
+    controller_frequency: 30.0
 
     # 进度检查，超时没有移动会导向导航事件失败
     progress_checker_plugin: "progress_checker"
@@ -83,15 +83,15 @@ controller_server:
       visualize: true
 
       # 速度与加速度限制
-      vx_max: +2.2
-      vx_min: -2.0
-      vy_max: +2.2
-      vy_min: -2.0
+      vx_max: +2.8
+      vx_min: -2.6
+      vy_max: +2.8
+      vy_min: -2.6
       wz_max: +0.001
-      ax_max: +20.0
-      ax_min: -20.0
-      ay_max: +20.0
-      ay_min: -20.0
+      ax_max: +26.0
+      ax_min: -26.0
+      ay_max: +26.0
+      ay_min: -26.0
       az_max: +0.001
 
       # 采样噪声，鼓励左右探索
@@ -114,18 +114,18 @@ controller_server:
       ConstraintCritic.cost_weight: 5.0
 
       CostCritic.enabled: true
-      CostCritic.cost_weight: 16.0
+      CostCritic.cost_weight: 10.0
       CostCritic.critical_cost: 120.0
       CostCritic.collision_cost: 8000000.0
-      CostCritic.near_collision_cost: 253
+      CostCritic.near_collision_cost: 200
       CostCritic.cost_power: 2
       CostCritic.consider_footprint: true
-      CostCritic.near_goal_distance: 0.8
+      CostCritic.near_goal_distance: 1.0
       CostCritic.trajectory_point_step: 1
 
       GoalCritic.enabled: true
-      GoalCritic.cost_weight: 4.5
-      GoalCritic.threshold_to_consider: 1.2
+      GoalCritic.cost_weight: 12.0
+      GoalCritic.threshold_to_consider: 1.5
 
       PathAlignCritic.enabled: true
       PathAlignCritic.cost_weight: 0.8
@@ -166,4 +166,4 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         inflation_radius: 0.35
-        cost_scaling_factor: 1.0
+        cost_scaling_factor: 2.0

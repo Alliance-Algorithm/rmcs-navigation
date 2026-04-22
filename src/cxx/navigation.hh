@@ -47,6 +47,18 @@ public:
     /// - navigation.switch_topic_forward(true);
     /// - navigation.switch_topic_forward(false);
     auto switch_topic_forward(bool enable) -> void;
+
+    /// 查询当前活跃导航目标点（world 坐标系）。
+    ///
+    /// 返回值：
+    /// - tuple 第 1 项：goal x（米）；
+    /// - tuple 第 2 项：goal y（米）；
+    ///
+    /// 行为说明：
+    /// - 优先返回当前活跃 action 目标；
+    /// - 若无活跃 action 目标，会尝试回退到最近一次全局路径末端点；
+    /// - 若两者都不可用，返回 {nan, nan}。
+    auto check_active_goal() const -> std::tuple<double, double>;
 };
 
 } // namespace rmcs::navigation::details

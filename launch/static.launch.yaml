@@ -34,7 +34,7 @@ launch:
       default: "false"
   - arg:
       name: "global_map"
-      default: "rmul"
+      default: "empty"
 
   # 0. 传感侧生命周期管理器（仅管理 map server）
   - node:

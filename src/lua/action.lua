@@ -61,8 +61,8 @@ function action:fuck(message)
 	api.fuck(message)
 end
 
-function action:update_gimbal_direction(angle)
-	api.update_gimbal_direction(angle)
+function action:update_gimbal_direction(gimbal_angle, pitch_angle)
+	api.update_gimbal_direction(gimbal_angle, pitch_angle)
 end
 
 function action:update_gimbal_dominator(name)

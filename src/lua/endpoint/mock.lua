@@ -7,6 +7,7 @@ local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local edges = require("util.edge").new()
 local native = require("util.native")
+local option = require("option")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -25,8 +26,11 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 	action:switch_topic_forward(true)
 
-	native.run_command("ros2 launch rmcs-navigation static.launch.yaml &")
-	action:info("static.launch.yaml launched")
+	local global_map = option.global_map or "empty"
+	native.run_command(
+		string.format("ros2 launch rmcs-navigation static.launch.yaml global_map:=%s &", global_map)
+	)
+	action:info("static.launch.yaml launched with global_map:=" .. global_map)
 
 	scheduler:append_task(function()
 		while true do

@@ -12,6 +12,22 @@ launch:
   - arg:
       name: "global_map"
       default: "empty"
+  # 机器人起始位姿（world 坐标系）。在 launch_livox=true 时，等价于给 odom 一个世界系锚点。
+  - arg:
+      name: "world_to_odom_x"
+      default: "12.9"
+  - arg:
+      name: "world_to_odom_y"
+      default: "6.7"
+  - arg:
+      name: "world_to_odom_z"
+      default: "0.0"
+  - arg:
+      name: "world_to_odom_yaw"
+      default: "0.0"
+  - arg:
+      name: "livox_bag_dir"
+      default: "/workspaces/data/bag/livox"
 
   # Private
   - arg:
@@ -33,6 +49,15 @@ launch:
   - include:
       if: "$(var launch_livox)"
       file: "$(find-pkg-share point_lio)/launch/point_lio.launch.py"
+  - executable:
+      if: "$(var launch_livox)"
+      cmd: "mkdir -p $(var livox_bag_dir)"
+      output: "screen"
+  - executable:
+      if: "$(var launch_livox)"
+      cwd: "$(var livox_bag_dir)"
+      cmd: "ros2 bag record --regex ^/?livox/(lidar|imu).*"
+      output: "screen"
 
   # 2. 生命周期管理器
   - let:
@@ -87,7 +112,7 @@ launch:
   - node:
       pkg: "tf2_ros"
       exec: "static_transform_publisher"
-      args: "0 0 0 0 0 0 world odom"
+      args: "$(var world_to_odom_x) $(var world_to_odom_y) $(var world_to_odom_z) $(var world_to_odom_yaw) 0 0 world odom"
   - node:
       unless: "$(var launch_livox)"
       pkg: "tf2_ros"

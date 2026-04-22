@@ -7,8 +7,11 @@
 #include "cxx/context.hh"
 #include "cxx/navigation.hh"
 #include "cxx/util/node_mixin.hh"
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <limits>
+#include <numbers>
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -27,6 +30,7 @@ class Navigation
     , public rmcs::navigation::NodeMixin {
 private:
     mutable std::mutex io_mutex;
+    static constexpr auto kNan_ = std::numeric_limits<double>::quiet_NaN();
 
     using Twist = geometry_msgs::msg::Twist;
     std::shared_ptr<rclcpp::Subscription<Twist>> subscription_twist;
@@ -43,6 +47,14 @@ private:
 
     details::Context context;
     details::Navigation navigation;
+    bool lua_gimbal_direction_override_active_ = false;
+    Eigen::Vector2d lua_gimbal_direction_override_ = Eigen::Vector2d{kNan_, kNan_};
+    double last_navigation_goal_yaw_ = kNan_;
+    const double gimbal_goal_deadzone_ = get_parameter_or<double>("gimbal_goal_deadzone", 0.15);
+    const bool require_goal_heading_alignment_ =
+        get_parameter_or<bool>("require_goal_heading_alignment", true);
+    const double navigation_goal_yaw_tolerance_ =
+        get_parameter_or<double>("navigation_goal_yaw_tolerance", 0.1);
 
     struct Command {
         OutputInterface<Eigen::Vector2d> chassis_speed;
@@ -102,7 +114,7 @@ private:
         });
         api.set_function(
             "update_gimbal_direction", [this](double gimbal_angle, double pitch_angle) {
-                *command.gimbal_direction = Eigen::Vector2d{gimbal_angle, pitch_angle};
+                set_lua_gimbal_direction_override(gimbal_angle, pitch_angle);
             });
         api.set_function("update_chassis_mode", [this](const std::string& mode) {
             warn("unimplement: update_chassis_mode(\"{}\")", mode);
@@ -233,6 +245,84 @@ private:
 
     auto lua_tick() { auto result = unwrap_sol(lua_on_tick(), "lua on_tick failed"); }
 
+    auto set_lua_gimbal_direction_override(double gimbal_angle, double pitch_angle) -> void {
+        if (std::isfinite(gimbal_angle) && std::isfinite(pitch_angle)) {
+            lua_gimbal_direction_override_active_ = true;
+            lua_gimbal_direction_override_ = Eigen::Vector2d{gimbal_angle, pitch_angle};
+            return;
+        }
+
+        lua_gimbal_direction_override_active_ = false;
+        lua_gimbal_direction_override_ = Eigen::Vector2d{kNan_, kNan_};
+    }
+
+    static auto wrap_angle(double angle) -> double {
+        constexpr auto kPi = std::numbers::pi_v<double>;
+        while (angle > kPi)
+            angle -= 2.0 * kPi;
+        while (angle <= -kPi)
+            angle += 2.0 * kPi;
+        return angle;
+    }
+
+    auto navigation_heading_aligned(double desired_yaw, double base_yaw) const -> bool {
+        if (!require_goal_heading_alignment_)
+            return true;
+        if (!std::isfinite(desired_yaw))
+            return false;
+        if (!std::isfinite(base_yaw))
+            return false;
+
+        const auto yaw_error = wrap_angle(desired_yaw - base_yaw);
+        return std::abs(yaw_error) <= std::max(navigation_goal_yaw_tolerance_, 0.0);
+    }
+
+    auto sync_gimbal_direction_to_navigation_goal() -> void {
+        if (lua_gimbal_direction_override_active_) {
+            *command.gimbal_direction = lua_gimbal_direction_override_;
+            return;
+        }
+
+        const auto [goal_x, goal_y] = navigation.check_active_goal();
+        const auto [x, y, base_yaw] = navigation.check_position();
+        if (!std::isfinite(goal_x) || !std::isfinite(goal_y) || !std::isfinite(x)
+            || !std::isfinite(y)) {
+            if (std::isfinite(last_navigation_goal_yaw_)) {
+                if (navigation_heading_aligned(last_navigation_goal_yaw_, base_yaw)) {
+                    last_navigation_goal_yaw_ = kNan_;
+                    *command.gimbal_direction = Eigen::Vector2d{kNan_, kNan_};
+                    return;
+                }
+                *command.gimbal_direction = Eigen::Vector2d{last_navigation_goal_yaw_, 0.0};
+                return;
+            }
+
+            *command.gimbal_direction = Eigen::Vector2d{kNan_, kNan_};
+            return;
+        }
+
+        const auto dx = goal_x - x;
+        const auto dy = goal_y - y;
+        if (std::hypot(dx, dy) <= std::max(gimbal_goal_deadzone_, 0.0)) {
+            if (!std::isfinite(last_navigation_goal_yaw_)) {
+                *command.gimbal_direction = Eigen::Vector2d{kNan_, kNan_};
+                return;
+            }
+
+            if (navigation_heading_aligned(last_navigation_goal_yaw_, base_yaw)) {
+                last_navigation_goal_yaw_ = kNan_;
+                *command.gimbal_direction = Eigen::Vector2d{kNan_, kNan_};
+                return;
+            }
+            *command.gimbal_direction = Eigen::Vector2d{last_navigation_goal_yaw_, 0.0};
+            return;
+        }
+
+        // Publish world-frame yaw target; gimbal controller closes the loop with encoder feedback.
+        last_navigation_goal_yaw_ = std::atan2(dy, dx);
+        *command.gimbal_direction = Eigen::Vector2d{last_navigation_goal_yaw_, 0.0};
+    }
+
 public:
     explicit Navigation()
         : rclcpp::Node{get_component_name(), option()}
@@ -267,6 +357,8 @@ public:
             lua_sync();
             lua_tick();
         }
+
+        sync_gimbal_direction_to_navigation_goal();
     }
 };
 

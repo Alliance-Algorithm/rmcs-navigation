@@ -13,6 +13,7 @@
 #include <utility>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
@@ -31,6 +32,8 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     using GoalClient = rclcpp_action::Client<GoalAction>;
     using GoalSubscription = rclcpp::Subscription<geometry_msgs::msg::PoseStamped>;
     using PoseStamped = geometry_msgs::msg::PoseStamped;
+    using Path = nav_msgs::msg::Path;
+    using PathSubscription = rclcpp::Subscription<Path>;
 
     using TfBuffer = tf2_ros::Buffer;
     using TfListener = tf2_ros::TransformListener;
@@ -42,6 +45,8 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     static constexpr auto kBaseFrame = "base_link";
     static constexpr auto kMoveBaseGoalTopic = "/move_base_simple/goal";
     static constexpr auto kGoalPoseTopic = "/goal_pose";
+    static constexpr auto kGlobalPlanTopic = "/plan";
+    static constexpr auto kPlanGoalTimeout = std::chrono::seconds{2};
 
     struct Target final {
         double x = std::numeric_limits<double>::quiet_NaN();
@@ -78,9 +83,23 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     std::shared_ptr<GoalSubscription> goal_pose_subscription;
     bool topic_forward_enabled = false;
 
+    // Goal Observation Fallback (for external action clients that bypass this wrapper)
+    std::shared_ptr<PathSubscription> global_plan_subscription = node.create_subscription<Path>(
+        std::string{kGlobalPlanTopic}, 10, [this](const std::unique_ptr<Path>& message) {
+            if (!message || message->poses.empty()) {
+                observed_plan_goal.reset();
+                return;
+            }
+            const auto& position = message->poses.back().pose.position;
+            observed_plan_goal = Target{.x = position.x, .y = position.y};
+            observed_plan_goal_timestamp = std::chrono::steady_clock::now();
+        });
+
     // Goal Runtime State
     std::shared_ptr<GoalHandle> current_goal_handle;
     std::optional<Target> active_goal;
+    std::optional<Target> observed_plan_goal;
+    std::chrono::steady_clock::time_point observed_plan_goal_timestamp{};
 
     std::uint64_t latest_request_id = 0;
 
@@ -240,6 +259,20 @@ public:
             return {kNan, kNan, kNan};
         }
     }
+
+    auto check_active_goal() const -> std::tuple<double, double> {
+        constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
+        if (active_goal.has_value())
+            return {active_goal->x, active_goal->y};
+
+        if (observed_plan_goal.has_value()
+            && (std::chrono::steady_clock::now() - observed_plan_goal_timestamp)
+                 <= kPlanGoalTimeout) {
+            return {observed_plan_goal->x, observed_plan_goal->y};
+        }
+
+        return {kNan, kNan};
+    }
 };
 
 Navigation::Navigation(rclcpp::Node& node) noexcept
@@ -253,6 +286,10 @@ auto Navigation::switch_topic_forward(bool enable) -> void { pimpl->switch_topic
 
 auto Navigation::check_position() const -> std::tuple<double, double, double> {
     return pimpl->check_position();
+}
+
+auto Navigation::check_active_goal() const -> std::tuple<double, double> {
+    return pimpl->check_active_goal();
 }
 
 } // namespace rmcs::navigation::details

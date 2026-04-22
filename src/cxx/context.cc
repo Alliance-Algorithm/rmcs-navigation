@@ -17,6 +17,8 @@ auto try_sync(Context::InputInterface<T>& input, const YAML::Node& root, const s
         /*^^*/ if constexpr (std::is_enum_v<T>) {
             using U = std::underlying_type_t<T>;
             to_sync = static_cast<T>(data.as<U>());
+        } else if constexpr (std::is_arithmetic_v<T>) {
+            to_sync = data.as<T>();
         } else if constexpr (std::is_constructible_v<T, std::uint8_t>) {
             to_sync = T{data.as<std::uint8_t>()};
         } else {
