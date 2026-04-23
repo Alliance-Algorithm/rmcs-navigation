@@ -24,7 +24,7 @@ return function(ours_zone)
 		timeout = 10,
 	})
 	if not ok then
-		action:warn("crossing-road-zone-train: 导航到公路区起点失败（超时）")
+		action:warn("crossing-road-zone-train: 导航到公路区起点失败")
 		return false
 	end
 
@@ -33,7 +33,7 @@ return function(ours_zone)
 		timeout = 10,
 	})
 	if not ok then
-		action:warn("crossing-road-zone-train: 导航到公路区终点失败（超时）")
+		action:warn("crossing-road-zone-train: 导航到公路区终点失败")
 		return false
 	end
 

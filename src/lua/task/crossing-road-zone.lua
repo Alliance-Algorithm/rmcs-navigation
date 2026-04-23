@@ -35,7 +35,13 @@ return function(ours_zone, forward_center)
 		timeout = 10,
 	})
 	if not ok then
-		action:warn("crossing-road-zone: 导航到公路区入口失败（超时）")
+		action:warn("crossing-road-zone: 导航到公路区入口失败")
+		return false
+	end
+
+	ok = crossing_fluctuant_road(ours_zone, forward_center)
+	if not ok then
+		action:warn("crossing-road-zone: 通过起伏路段失败")
 		return false
 	end
 
@@ -44,13 +50,7 @@ return function(ours_zone, forward_center)
 		timeout = 10,
 	})
 	if not ok then
-		action:warn("crossing-road-zone: 导航到公路区出口失败（超时）")
-		return false
-	end
-
-	ok = crossing_fluctuant_road(ours_zone, forward_center)
-	if not ok then
-		action:warn("crossing-road-zone: 通过起伏路段失败")
+		action:warn("crossing-road-zone: 导航到公路区出口失败")
 		return false
 	end
 

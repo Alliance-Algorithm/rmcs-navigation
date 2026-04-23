@@ -116,6 +116,7 @@ end
 
 local function set_state(name)
 	runtime.current_state = name
+	blackboard.meta.fsm_state = name
 	action:info("fsm state -> " .. name)
 end
 

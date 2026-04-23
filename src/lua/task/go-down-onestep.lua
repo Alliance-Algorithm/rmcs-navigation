@@ -24,7 +24,7 @@ return function(ours_zone)
 		timeout = 10,
 	})
 	if not ok then
-		action:warn("go-down-onestep: 导航到一级台阶高点失败（超时）")
+		action:warn("go-down-onestep: 导航到一级台阶高点失败")
 		return false
 	end
 
@@ -33,7 +33,7 @@ return function(ours_zone)
 		timeout = 10,
 	})
 	if not ok then
-		action:warn("go-down-onestep: 导航到一级台阶低点失败（超时）")
+		action:warn("go-down-onestep: 导航到一级台阶低点失败")
 		return false
 	end
 

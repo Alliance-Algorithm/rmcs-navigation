@@ -2,6 +2,7 @@ local blackboard = require("blackboard").singleton()
 local clock = require("util.clock")
 local request = require("util.scheduler").request
 local action = require("action")
+local navigate_to_point = require("task.navigate-to-point")
 
 local function distance_to(target)
 	local dx = target.x - blackboard.user.x
@@ -19,7 +20,6 @@ return function(ours_zone, switch_interval)
 	action:info("开始cruise-in-central-highlands")
 
 	local rule = blackboard.rule
-	local condition = blackboard.condition
 	local navigation_timeout = math.max(10.0, switch_interval * 2.0)
 	local near_crossing_road, near_doghole
 	if ours_zone then
@@ -36,14 +36,11 @@ return function(ours_zone, switch_interval)
 
 	while true do
 		local phase_start = clock:now()
-		action:navigate(target)
-		local is_timeout = request:wait_until {
-			monitor = function()
-				return condition.near(target, 0.15)
-			end,
+		local ok = navigate_to_point(target, {
+			tolerance = 0.15,
 			timeout = navigation_timeout,
-		}
-		if is_timeout then
+		})
+		if not ok then
 			action:warn(string.format(
 				"cruise-in-central-highlands: 导航到巡航点失败 (x=%.2f, y=%.2f, timeout=%.2fs)",
 				target.x,

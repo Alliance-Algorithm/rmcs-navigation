@@ -25,6 +25,9 @@ local function create_default_blackboard()
 		},
 		meta = {
 			timestamp = 0, -- 秒
+			fsm_state = "unknown",
+			navigate_point_queue = {},
+			navigate_point_queue_max = 200,
 		},
 
 		-- Static Information
@@ -73,6 +76,43 @@ local function create_default_blackboard()
 			return result.play.rswitch
 		end,
 	}
+
+	--- @param point {x: number, y: number}
+	--- @param tag? string
+	function result.enqueue_navigate_point(point, tag)
+		assert(type(point) == "table", "point should be a table")
+		assert(type(point.x) == "number", "point.x should be a number")
+		assert(type(point.y) == "number", "point.y should be a number")
+
+		local queue = result.meta.navigate_point_queue
+		if type(queue) ~= "table" then
+			queue = {}
+			result.meta.navigate_point_queue = queue
+		end
+
+		local max = tonumber(result.meta.navigate_point_queue_max) or 200
+		if max < 1 then
+			max = 1
+		end
+
+		queue[#queue + 1] = {
+			ts = result.meta.timestamp,
+			x = point.x,
+			y = point.y,
+			hp = result.user.health,
+			bullet = result.user.bullet,
+			stage = result.game.stage,
+			state = result.meta.fsm_state,
+			tag = tag,
+		}
+
+		while #queue > max do
+			table.remove(queue, 1)
+		end
+	end
+
+	-- Backward-compatible alias.
+	result.push_navigate_point = result.enqueue_navigate_point
 
 	result.condition = {
 		low_health = function()
