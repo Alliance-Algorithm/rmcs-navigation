@@ -29,8 +29,6 @@ local runtime = {
 	switch_interval = 2.0,
 	current_state = "idle",
 	navigation_ready = false,
-	escape_retry_delay = 20.0,
-	escape_retry_deadline = nil,
 }
 
 local requests = {
@@ -120,18 +118,9 @@ local function set_state(name)
 	action:info("fsm state -> " .. name)
 end
 
-local function arm_escape_retry(reason)
-	runtime.escape_retry_deadline = clock:now() + runtime.escape_retry_delay
-	action:warn(string.format(
-		"%s，%.1f 秒后重试 escape-to-home",
-		reason,
-		runtime.escape_retry_delay
-	))
-end
-
 local function start_navigation()
 	local ok, message = action:restart_navigation({
-		global_map = read_option("global_map", "rmuc"),
+		global_map = read_option("global_map", "train_map"),
 		launch_livox = read_option("launch_livox", true),
 		launch_odin1 = read_option("launch_odin1", false),
 		use_sim_time = read_option("use_sim_time", false),
@@ -149,18 +138,44 @@ local function setup_edges()
 	end)
 end
 
+local function clear_navigate_history()
+	local queue = blackboard.meta.navigate_point_queue
+	if type(queue) ~= "table" then
+		blackboard.meta.navigate_point_queue = {}
+		return
+	end
+
+	for i = #queue, 1, -1 do
+		queue[i] = nil
+	end
+end
+
 local function create_intent_fsm()
 	local State = {
 		idle = "idle",
 		start_cruise = "start_cruise",
 		keep_cruise = "keep_cruise",
 		escape = "escape",
-		wait_escape = "wait_escape",
 		recover = "recover",
 	}
 
 	local condition = blackboard.condition
 	local intent_fsm = fsm:new(State.idle)
+	local function restart_start_cruise_job()
+		run_job("start_cruise", function()
+			return start_cruise(runtime.ours_zone)
+		end)
+	end
+	local function restart_keep_cruise_job()
+		run_job("keep_cruise", function()
+			return keep_cruise(runtime.ours_zone, runtime.switch_interval)
+		end)
+	end
+	local function restart_escape_job()
+		run_job("escape_to_home", function()
+			return escape_to_home(runtime.ours_zone)
+		end)
+	end
 
 	intent_fsm:use({
 		state = State.idle,
@@ -168,7 +183,6 @@ local function create_intent_fsm()
 			cancel_job()
 			set_state(State.idle)
 			runtime.navigation_ready = false
-			runtime.escape_retry_deadline = nil
 		end,
 		event = function(handle)
 			if take_request("start") then
@@ -177,6 +191,7 @@ local function create_intent_fsm()
 			end
 
 			if runtime.navigation_ready and blackboard.game.stage == "STARTED" then
+				clear_navigate_history()
 				handle:set_next(State.start_cruise)
 			end
 		end,
@@ -186,9 +201,7 @@ local function create_intent_fsm()
 		state = State.start_cruise,
 		enter = function()
 			set_state(State.start_cruise)
-			run_job("start_cruise", function()
-				return start_cruise(runtime.ours_zone)
-			end)
+			restart_start_cruise_job()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
@@ -197,24 +210,25 @@ local function create_intent_fsm()
 				return
 			end
 
-					if job.done then
-						if job.success then
-							handle:set_next(State.keep_cruise)
-						else
-							arm_escape_retry("fsm(start_cruise): 导航失败")
-							handle:set_next(State.wait_escape)
-						end
-					end
-				end,
-			})
+			if not job.done then
+				return
+			end
+
+			if job.success then
+				handle:set_next(State.keep_cruise)
+				return
+			end
+
+			action:warn("fsm(start_cruise): 导航失败，重试当前状态")
+			restart_start_cruise_job()
+		end,
+	})
 
 	intent_fsm:use({
 		state = State.keep_cruise,
 		enter = function()
 			set_state(State.keep_cruise)
-			run_job("keep_cruise", function()
-				return keep_cruise(runtime.ours_zone, runtime.switch_interval)
-			end)
+			restart_keep_cruise_job()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
@@ -223,47 +237,37 @@ local function create_intent_fsm()
 				return
 			end
 
-					if job.done and not job.success then
-						arm_escape_retry("fsm(keep_cruise): 导航失败")
-						handle:set_next(State.wait_escape)
-					end
-				end,
-			})
+			if not job.done then
+				return
+			end
+
+			if job.success then
+				return
+			end
+
+			action:warn("fsm(keep_cruise): 导航失败，重试当前状态")
+			restart_keep_cruise_job()
+		end,
+	})
 
 	intent_fsm:use({
 		state = State.escape,
 		enter = function()
 			set_state(State.escape)
-			run_job("escape_to_home", function()
-				return escape_to_home(runtime.ours_zone)
-			end)
+			restart_escape_job()
 		end,
 		event = function(handle)
-					if job.done then
-						if job.success then
-							handle:set_next(State.recover)
-						else
-							arm_escape_retry("fsm(escape): 导航失败")
-							handle:set_next(State.wait_escape)
-						end
-					end
-				end,
-			})
+			if not job.done then
+				return
+			end
 
-	intent_fsm:use({
-		state = State.wait_escape,
-		enter = function()
-			cancel_job()
-			set_state(State.wait_escape)
-			if runtime.escape_retry_deadline == nil then
-				runtime.escape_retry_deadline = clock:now() + runtime.escape_retry_delay
+			if job.success then
+				handle:set_next(State.recover)
+				return
 			end
-		end,
-		event = function(handle)
-			if clock:now() >= runtime.escape_retry_deadline then
-				runtime.escape_retry_deadline = nil
-				handle:set_next(State.escape)
-			end
+
+			action:warn("fsm(escape): 导航失败，重试当前状态")
+			restart_escape_job()
 		end,
 	})
 
@@ -272,7 +276,6 @@ local function create_intent_fsm()
 		enter = function()
 			cancel_job()
 			set_state(State.recover)
-			runtime.escape_retry_deadline = nil
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
@@ -298,9 +301,6 @@ on_init = function()
 
 	runtime.ours_zone = read_option("fsm_ours_zone", true)
 	runtime.switch_interval = read_option("fsm_switch_interval", 2.0)
-	runtime.escape_retry_delay = read_option("fsm_escape_retry_delay", 20.0)
-	assert(type(runtime.escape_retry_delay) == "number", "fsm_escape_retry_delay should be a number")
-	assert(runtime.escape_retry_delay >= 0, "fsm_escape_retry_delay should be non-negative")
 
 	configure_test_rule()
 	setup_edges()
