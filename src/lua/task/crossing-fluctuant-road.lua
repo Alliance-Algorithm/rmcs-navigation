@@ -20,13 +20,15 @@ return function(ours_zone, forward_center)
 		final = rule.fluctuant_road_final.them
 	end
 
-	local from, to
+	local from, to, gimbal_yaw
 	if forward_center then
 		from = begin
 		to = final
+		gimbal_yaw = 0
 	else
 		from = final
 		to = begin
+		gimbal_yaw = math.pi
 	end
 
 	local ok = navigate_to_point(from, {
@@ -42,6 +44,12 @@ return function(ours_zone, forward_center)
 		return false
 	end
 
+	action:update_chassis_mode("LAUNCH_RAMP")
+	action:info(string.format(
+		"crossing-fluctuant-road: LAUNCH_RAMP 云台朝向=%.3f rad",
+		gimbal_yaw
+	))
+	action:update_gimbal_direction(gimbal_yaw)
 	ok = navigate_to_point(to, {
 		tolerance = 0.1,
 		timeout = 10,

@@ -30,6 +30,7 @@ return function(ours_zone, forward_center)
 		to = road_begin
 	end
 
+	action:update_chassis_mode("SPIN")
 	local ok = navigate_to_point(from, {
 		tolerance = 0.1,
 		timeout = 10,
@@ -45,6 +46,7 @@ return function(ours_zone, forward_center)
 		return false
 	end
 
+	action:update_chassis_mode("SPIN")
 	ok = navigate_to_point(to, {
 		tolerance = 0.1,
 		timeout = 10,

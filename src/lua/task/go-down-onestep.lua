@@ -28,6 +28,14 @@ return function(ours_zone)
 		return false
 	end
 
+	action:update_chassis_mode("LAUNCH_RAMP")
+	local gimbal_yaw = math.pi / 2
+	action:info(string.format(
+		"go-down-onestep: 云台朝向=%.3f rad",
+		gimbal_yaw
+	))
+	action:update_gimbal_direction(gimbal_yaw)
+
 	ok = navigate_to_point(one_step_low, {
 		tolerance = 0.1,
 		timeout = 10,
@@ -36,6 +44,7 @@ return function(ours_zone)
 		action:warn("go-down-onestep: 导航到一级台阶低点失败")
 		return false
 	end
+	action:update_chassis_mode("SPIN")
 
 	return true
 end

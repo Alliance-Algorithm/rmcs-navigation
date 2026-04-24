@@ -37,7 +37,7 @@ return function(ours_zone, switch_interval)
 	while true do
 		local phase_start = clock:now()
 		local ok = navigate_to_point(target, {
-			tolerance = 0.15,
+			tolerance = 0.1,
 			timeout = navigation_timeout,
 		})
 		if not ok then

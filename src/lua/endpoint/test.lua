@@ -25,8 +25,8 @@ local edges = require("util.edge").new()
 blackboard = require("blackboard").singleton()
 
 local runtime = {
-	ours_zone = true,
-	switch_interval = 2.0,
+	ours_zone = nil,
+	switch_interval = nil,
 	current_state = "idle",
 	navigation_ready = false,
 }
@@ -154,21 +154,21 @@ local function create_intent_fsm()
 
 	local condition = blackboard.condition
 	local intent_fsm = fsm:new(State.idle)
-	local function restart_start_cruise_job()
+	local function run_start_cruise_job()
 		run_job("start_cruise", function()
 			return start_cruise(runtime.ours_zone)
 		end)
 	end
-	local function restart_keep_cruise_job()
+	local function run_keep_cruise_job()
 		run_job("keep_cruise", function()
 			return keep_cruise(runtime.ours_zone, runtime.switch_interval)
 		end)
 	end
-	local function restart_escape_job()
-		run_job("escape_to_home", function()
-			return escape_to_home(runtime.ours_zone)
-		end)
-	end
+		local function run_escape_job()
+			run_job("escape_to_home", function()
+				return escape_to_home()
+			end)
+		end
 
 	intent_fsm:use({
 		state = State.idle,
@@ -194,7 +194,7 @@ local function create_intent_fsm()
 		state = State.start_cruise,
 		enter = function()
 			set_state(State.start_cruise)
-			restart_start_cruise_job()
+			run_start_cruise_job()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
@@ -213,7 +213,7 @@ local function create_intent_fsm()
 			end
 
 			action:warn("fsm(start_cruise): 导航失败，重试当前状态")
-			restart_start_cruise_job()
+			run_start_cruise_job()
 		end,
 	})
 
@@ -221,7 +221,7 @@ local function create_intent_fsm()
 		state = State.keep_cruise,
 		enter = function()
 			set_state(State.keep_cruise)
-			restart_keep_cruise_job()
+			run_keep_cruise_job()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
@@ -239,7 +239,7 @@ local function create_intent_fsm()
 			end
 
 			action:warn("fsm(keep_cruise): 导航失败，重试当前状态")
-			restart_keep_cruise_job()
+			run_keep_cruise_job()
 		end,
 	})
 
@@ -247,7 +247,7 @@ local function create_intent_fsm()
 		state = State.escape,
 		enter = function()
 			set_state(State.escape)
-			restart_escape_job()
+			run_escape_job()
 		end,
 		event = function(handle)
 			if not job.done then
@@ -260,7 +260,7 @@ local function create_intent_fsm()
 			end
 
 			action:warn("fsm(escape): 导航失败，重试当前状态")
-			restart_escape_job()
+			run_escape_job()
 		end,
 	})
 

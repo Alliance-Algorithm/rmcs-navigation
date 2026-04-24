@@ -19,6 +19,7 @@ return function(ours_zone)
 		road_final = rule.road_zone_final.them
 	end
 
+	action:update_chassis_mode("SPIN")
 	local ok = navigate_to_point(road_begin, {
 		tolerance = 0.1,
 		timeout = 10,
