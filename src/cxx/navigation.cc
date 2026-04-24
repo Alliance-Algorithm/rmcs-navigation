@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <mutex>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,6 +25,25 @@
 
 namespace rmcs::navigation::details {
 
+namespace {
+
+auto parse_pose_yaw(const geometry_msgs::msg::Quaternion& rotation) -> double {
+    const auto sin_yaw = 2.0 * ((rotation.w * rotation.z) + (rotation.x * rotation.y));
+    const auto cos_yaw = 1.0 - (2.0 * ((rotation.y * rotation.y) + (rotation.z * rotation.z)));
+    return std::atan2(sin_yaw, cos_yaw);
+}
+
+auto make_yaw_quaternion(double yaw) -> geometry_msgs::msg::Quaternion {
+    auto orientation = geometry_msgs::msg::Quaternion{};
+    orientation.x = 0.0;
+    orientation.y = 0.0;
+    orientation.z = std::sin(yaw * 0.5);
+    orientation.w = std::cos(yaw * 0.5);
+    return orientation;
+}
+
+} // namespace
+
 struct Navigation::Impl : rmcs::navigation::NodeMixin {
 
     using GoalAction = nav2_msgs::action::NavigateToPose;
@@ -36,6 +57,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     using TfListener = tf2_ros::TransformListener;
 
     static constexpr auto kPositionEpsilon = 1e-2;
+    static constexpr auto kYawEpsilon = 1e-2;
     static constexpr auto kServerWaitTimeout = std::chrono::seconds{1};
     static constexpr auto kNavigateToPoseActionName = "/navigate_to_pose";
     static constexpr auto kWorldFrame = "world";
@@ -46,14 +68,26 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     struct Target final {
         double x = std::numeric_limits<double>::quiet_NaN();
         double y = std::numeric_limits<double>::quiet_NaN();
+        double yaw = std::numeric_limits<double>::quiet_NaN();
+
+        static auto same_yaw(double lhs, double rhs) noexcept -> bool {
+            const auto lhs_finite = std::isfinite(lhs);
+            const auto rhs_finite = std::isfinite(rhs);
+            if (!lhs_finite || !rhs_finite)
+                return lhs_finite == rhs_finite;
+
+            return std::abs(std::remainder(lhs - rhs, 2 * std::numbers::pi_v<double>))
+                <= Impl::kYawEpsilon;
+        }
 
         auto operator==(const Target& rhs) const noexcept -> bool {
             return std::abs(x - rhs.x) <= Impl::kPositionEpsilon
-                && std::abs(y - rhs.y) <= Impl::kPositionEpsilon;
+                && std::abs(y - rhs.y) <= Impl::kPositionEpsilon && same_yaw(yaw, rhs.yaw);
         }
     };
 
     rclcpp::Node& node;
+    mutable std::mutex goal_mutex;
 
     // TF Query
     std::shared_ptr<TfBuffer> tf_buffer = std::make_shared<TfBuffer>(node.get_clock());
@@ -85,7 +119,18 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     std::uint64_t latest_request_id = 0;
 
     auto has_same_goal(const Target& goal) const -> bool {
+        auto lock = std::scoped_lock{goal_mutex};
         return active_goal.has_value() && *active_goal == goal;
+    }
+
+    auto set_active_goal(const Target& goal) -> void {
+        auto lock = std::scoped_lock{goal_mutex};
+        active_goal = goal;
+    }
+
+    auto reset_active_goal() -> void {
+        auto lock = std::scoped_lock{goal_mutex};
+        active_goal.reset();
     }
 
     auto ensure_server_ready() -> bool {
@@ -103,6 +148,8 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
         navigation_goal_message.pose.header.stamp = node.now();
         navigation_goal_message.pose.pose.position.x = goal.x;
         navigation_goal_message.pose.pose.position.y = goal.y;
+        navigation_goal_message.pose.pose.orientation =
+            std::isfinite(goal.yaw) ? make_yaw_quaternion(goal.yaw) : make_yaw_quaternion(0.0);
     }
 
     auto log_result(const Target& goal, rclcpp_action::ResultCode code) const -> void {
@@ -130,7 +177,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
             [request_id, this, goal](const std::shared_ptr<GoalHandle>& handle) {
                 if (!handle) {
                     if (request_id == latest_request_id)
-                        active_goal.reset();
+                        reset_active_goal();
 
                     warn("navigate_to_pose goal rejected: x={}, y={}", goal.x, goal.y);
                     return;
@@ -149,7 +196,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
             if (request_id != latest_request_id)
                 return;
 
-            active_goal.reset();
+            reset_active_goal();
             current_goal_handle.reset();
             log_result(goal, result.code);
         };
@@ -165,8 +212,11 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
                     return;
 
                 auto& position = message->pose.position;
-                send_target(position.x, position.y);
-                info("forward {} -> ({:.1}, {:.1})", topic, position.x, position.y);
+                auto yaw = parse_pose_yaw(message->pose.orientation);
+                send_target(position.x, position.y, yaw);
+                info(
+                    "forward {} -> ({:.1}, {:.1}, yaw={:.2f}rad)", topic, position.x, position.y,
+                    yaw);
             });
     }
 
@@ -176,7 +226,7 @@ public:
 
     ~Impl() {
         auto current_handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
-        active_goal.reset();
+        reset_active_goal();
         ++latest_request_id;
 
         if (current_handle)
@@ -186,7 +236,11 @@ public:
     auto get_logger() const -> rclcpp::Logger { return node.get_logger(); }
 
     auto send_target(double x, double y) -> void {
-        auto goal = Target{.x = x, .y = y};
+        send_target(x, y, std::numeric_limits<double>::quiet_NaN());
+    }
+
+    auto send_target(double x, double y, double yaw) -> void {
+        auto goal = Target{.x = x, .y = y, .yaw = yaw};
         if (has_same_goal(goal))
             return;
 
@@ -196,7 +250,7 @@ public:
         if (has_same_goal(goal))
             return;
 
-        active_goal = goal;
+        set_active_goal(goal);
         auto request_id = ++latest_request_id;
         auto cancel_handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
 
@@ -228,17 +282,25 @@ public:
             auto transform =
                 tf_buffer->lookupTransform(kWorldFrame, kBaseFrame, tf2::TimePointZero);
             auto& translation = transform.transform.translation;
-            auto& rotation = transform.transform.rotation;
-
-            auto sin_yaw = 2.0 * ((rotation.w * rotation.z) + (rotation.x * rotation.y));
-            auto cos_yaw = 1.0 - (2.0 * ((rotation.y * rotation.y) + (rotation.z * rotation.z)));
-            auto yaw = std::atan2(sin_yaw, cos_yaw);
+            auto yaw = parse_pose_yaw(transform.transform.rotation);
 
             return {translation.x, translation.y, yaw};
-        } catch (const tf2::TransformException& exception) {
+        } catch (const tf2::TransformException&) {
             constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
             return {kNan, kNan, kNan};
         }
+    }
+
+    auto check_bottom_yaw() const -> double { return std::get<2>(check_position()); }
+
+    auto check_active_goal() const -> std::tuple<double, double, double> {
+        auto lock = std::scoped_lock{goal_mutex};
+        if (!active_goal.has_value()) {
+            constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
+            return {kNan, kNan, kNan};
+        }
+
+        return {active_goal->x, active_goal->y, active_goal->yaw};
     }
 };
 
@@ -248,11 +310,20 @@ Navigation::Navigation(rclcpp::Node& node) noexcept
 Navigation::~Navigation() noexcept = default;
 
 auto Navigation::send_target(double x, double y) -> void { pimpl->send_target(x, y); }
+auto Navigation::send_target(double x, double y, double yaw) -> void {
+    pimpl->send_target(x, y, yaw);
+}
 
 auto Navigation::switch_topic_forward(bool enable) -> void { pimpl->switch_topic_forward(enable); }
 
 auto Navigation::check_position() const -> std::tuple<double, double, double> {
     return pimpl->check_position();
+}
+
+auto Navigation::check_bottom_yaw() const -> double { return pimpl->check_bottom_yaw(); }
+
+auto Navigation::check_active_goal() const -> std::tuple<double, double, double> {
+    return pimpl->check_active_goal();
 }
 
 } // namespace rmcs::navigation::details
