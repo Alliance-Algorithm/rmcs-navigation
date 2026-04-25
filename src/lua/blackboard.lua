@@ -26,8 +26,6 @@ local function create_default_blackboard()
 		meta = {
 			timestamp = 0, -- 秒
 			fsm_state = "unknown",
-			navigate_point_queue = {},
-			navigate_point_queue_max = 200,
 		},
 
 		-- Static Information
@@ -53,7 +51,7 @@ local function create_default_blackboard()
 			launch_ramp_final = PointPair { { 0, 0 }, { 0, 0 } },
 			outpost_resupply = PointPair { { 0, 0 }, { 0, 0 } }, -- 前哨站补给点
 			assembly_zone = PointPair { { 0, 0 }, { 0, 0 } },
-			central_highland_near_crossing_road = PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地靠近公路一侧
+			central_highland_near_fluctuant_road = PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地靠近起伏路一侧
 			central_highland_near_doghole =  PointPair { { 0, 0 }, { 0, 0 } }, --中央高地靠近狗洞一侧
 			central_highland_two_steps = PointPair { { 0, 0 }, { 0, 0 } }, --中央高地靠近二级台阶（二级台阶增益点前）
 
@@ -76,43 +74,6 @@ local function create_default_blackboard()
 			return result.play.rswitch
 		end,
 	}
-
-	--- @param point {x: number, y: number}
-	--- @param tag? string
-	function result.enqueue_navigate_point(point, tag)
-		assert(type(point) == "table", "point should be a table")
-		assert(type(point.x) == "number", "point.x should be a number")
-		assert(type(point.y) == "number", "point.y should be a number")
-
-		local queue = result.meta.navigate_point_queue
-		if type(queue) ~= "table" then
-			queue = {}
-			result.meta.navigate_point_queue = queue
-		end
-
-		local max = tonumber(result.meta.navigate_point_queue_max) or 200
-		if max < 1 then
-			max = 1
-		end
-
-		queue[#queue + 1] = {
-			ts = result.meta.timestamp,
-			x = point.x,
-			y = point.y,
-			hp = result.user.health,
-			bullet = result.user.bullet,
-			stage = result.game.stage,
-			state = result.meta.fsm_state,
-			tag = tag,
-		}
-
-		while #queue > max do
-			table.remove(queue, 1)
-		end
-	end
-
-	-- Backward-compatible alias.
-	result.push_navigate_point = result.enqueue_navigate_point
 
 	result.condition = {
 		low_health = function()

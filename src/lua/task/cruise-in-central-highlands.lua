@@ -10,7 +10,7 @@ local function distance_to(target)
 	return math.sqrt(dx * dx + dy * dy)
 end
 
---- 中央高地巡航：在“靠近公路侧”与“靠近狗洞侧”之间按固定周期切换导航目标。
+	--- 中央高地巡航：在“靠近起伏路侧”与“靠近狗洞侧”之间按固定周期切换导航目标。
 --- @param ours_zone boolean
 --- @param switch_interval number 切换周期（秒）
 return function(ours_zone, switch_interval)
@@ -21,18 +21,18 @@ return function(ours_zone, switch_interval)
 
 	local rule = blackboard.rule
 	local navigation_timeout = math.max(10.0, switch_interval * 2.0)
-	local near_crossing_road, near_doghole
+	local near_fluctuant_road, near_doghole
 	if ours_zone then
-		near_crossing_road = rule.central_highland_near_crossing_road.ours
+		near_fluctuant_road = rule.central_highland_near_fluctuant_road.ours
 		near_doghole = rule.central_highland_near_doghole.ours
 	else
-		near_crossing_road = rule.central_highland_near_crossing_road.them
+		near_fluctuant_road = rule.central_highland_near_fluctuant_road.them
 		near_doghole = rule.central_highland_near_doghole.them
 	end
 
 	-- 首次优先去更近的点，减少无效折返。
-	local go_crossing_road_first = distance_to(near_crossing_road) <= distance_to(near_doghole)
-	local target = go_crossing_road_first and near_crossing_road or near_doghole
+	local go_fluctuant_road_first = distance_to(near_fluctuant_road) <= distance_to(near_doghole)
+	local target = go_fluctuant_road_first and near_fluctuant_road or near_doghole
 
 	while true do
 		local phase_start = clock:now()
@@ -57,10 +57,10 @@ return function(ours_zone, switch_interval)
 			request:sleep(remain)
 		end
 
-		if target == near_crossing_road then
+		if target == near_fluctuant_road then
 			target = near_doghole
 		else
-			target = near_crossing_road
+			target = near_fluctuant_road
 		end
 	end
 

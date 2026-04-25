@@ -8,9 +8,10 @@ local clock = require("util.clock")
 local fsm = require("util.fsm")
 local option = require("option")
 
-local start_cruise = require("intent.start-cruise-train")
 local keep_cruise = require("intent.keep-cruise")
 local escape_to_home = require("intent.escape-to-home")
+local cross_fluctuant_road = require("task.cross-fluctuant-road")
+local navigate_to_fluctuant_begin = require("task.navigate-to-fluctuant-begin")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -27,6 +28,7 @@ blackboard = require("blackboard").singleton()
 local runtime = {
 	ours_zone = nil,
 	switch_interval = nil,
+	escape_route = nil,
 	current_state = "idle",
 	navigation_ready = false,
 }
@@ -60,11 +62,11 @@ local function configure_test_rule()
 
 	-- Ours side sample points
 	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }   		--家
-	rule.road_zone_begin.ours = { x = 0.0, y = 0.0 }		--公路区起点
-	rule.road_zone_final.ours = { x = 0.0, y = 0.0 }		--公路区终点
+	rule.fluctuant_road_begin.ours = { x = 0.0, y = 0.0 }		--起伏路段起点
+	rule.fluctuant_road_final.ours = { x = 0.0, y = 0.0 }		--起伏路段终点
 	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }			--一级台阶高点（先随便标个回家路上的点）
 	rule.one_step_final.ours = { x = 0.0, y = 0.0 }			--一级台阶低点（先随便标个回家路上的点）
-	rule.central_highland_near_crossing_road.ours = { x = 0.0, y = 0.0 }  	--高地靠近公路
+	rule.central_highland_near_fluctuant_road.ours = { x = 0.0, y = 0.0 }  	--高地靠近起伏路
 	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }			--高地靠近狗洞
 end
 
@@ -138,22 +140,11 @@ local function setup_edges()
 	end)
 end
 
-local function clear_navigate_history()
-	local queue = blackboard.meta.navigate_point_queue
-	if type(queue) ~= "table" then
-		blackboard.meta.navigate_point_queue = {}
-		return
-	end
-
-	for i = #queue, 1, -1 do
-		queue[i] = nil
-	end
-end
-
 local function create_intent_fsm()
 	local State = {
 		idle = "idle",
-		start_cruise = "start_cruise",
+		navigate_to_fluctuant_begin = "navigate_to_fluctuant_begin",
+		cross_fluctuant = "cross_fluctuant",
 		keep_cruise = "keep_cruise",
 		escape = "escape",
 		recover = "recover",
@@ -161,9 +152,14 @@ local function create_intent_fsm()
 
 	local condition = blackboard.condition
 	local intent_fsm = fsm:new(State.idle)
-	local function run_start_cruise_job()
-		run_job("start_cruise", function()
-			return start_cruise(runtime.ours_zone)
+	local function run_navigate_to_fluctuant_begin_job()
+		run_job("navigate_to_fluctuant_begin", function()
+			return navigate_to_fluctuant_begin(runtime.ours_zone, true)
+		end)
+	end
+	local function run_cross_fluctuant_job()
+		run_job("cross_fluctuant", function()
+			return cross_fluctuant_road(runtime.ours_zone, true)
 		end)
 	end
 	local function run_keep_cruise_job()
@@ -171,16 +167,24 @@ local function create_intent_fsm()
 			return keep_cruise(runtime.ours_zone, runtime.switch_interval)
 		end)
 	end
-		local function run_escape_job()
-			run_job("escape_to_home", function()
-				return escape_to_home()
-			end)
-		end
+	local function run_escape_job()
+		assert(type(runtime.escape_route) == "string", "escape_route should be set before escape")
+		run_job("escape_to_home", function()
+			return escape_to_home(runtime.escape_route)
+		end)
+	end
+	local function enter_escape(handle, route)
+		assert(type(route) == "string", "route should be a string")
+		runtime.escape_route = route
+		cancel_job()
+		handle:set_next(State.escape)
+	end
 
 	intent_fsm:use({
 		state = State.idle,
 		enter = function()
 			cancel_job()
+			runtime.escape_route = nil
 			set_state(State.idle)
 			runtime.navigation_ready = false
 		end,
@@ -191,22 +195,46 @@ local function create_intent_fsm()
 			end
 
 			if runtime.navigation_ready and blackboard.game.stage == "STARTED" then
-				clear_navigate_history()
-				handle:set_next(State.start_cruise)
+				handle:set_next(State.navigate_to_fluctuant_begin)
 			end
 		end,
 	})
 
 	intent_fsm:use({
-		state = State.start_cruise,
+		state = State.navigate_to_fluctuant_begin,
 		enter = function()
-			set_state(State.start_cruise)
-			run_start_cruise_job()
+			set_state(State.navigate_to_fluctuant_begin)
+			run_navigate_to_fluctuant_begin_job()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
-				cancel_job()
-				handle:set_next(State.escape)
+				enter_escape(handle, "direct")
+				return
+			end
+
+			if not job.done then
+				return
+			end
+
+			if job.success then
+				handle:set_next(State.cross_fluctuant)
+				return
+			end
+
+			action:warn("fsm(navigate_to_fluctuant_begin): 导航失败，重试当前阶段")
+			run_navigate_to_fluctuant_begin_job()
+		end,
+	})
+
+	intent_fsm:use({
+		state = State.cross_fluctuant,
+		enter = function()
+			set_state(State.cross_fluctuant)
+			run_cross_fluctuant_job()
+		end,
+		event = function(handle)
+			if condition.low_health() or condition.low_bullet() then
+				enter_escape(handle, "fluctuant_road")
 				return
 			end
 
@@ -219,8 +247,8 @@ local function create_intent_fsm()
 				return
 			end
 
-			action:warn("fsm(start_cruise): 导航失败，重试当前状态")
-			run_start_cruise_job()
+			action:warn("fsm(cross_fluctuant): 导航失败，重试当前阶段")
+			run_cross_fluctuant_job()
 		end,
 	})
 
@@ -232,8 +260,7 @@ local function create_intent_fsm()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
-				cancel_job()
-				handle:set_next(State.escape)
+				enter_escape(handle, "onestep")
 				return
 			end
 
@@ -275,6 +302,7 @@ local function create_intent_fsm()
 		state = State.recover,
 		enter = function()
 			cancel_job()
+			runtime.escape_route = nil
 			set_state(State.recover)
 		end,
 		event = function(handle)
@@ -283,7 +311,7 @@ local function create_intent_fsm()
 			end
 
 			if condition.health_ready() and condition.bullet_ready() then
-				handle:set_next(State.start_cruise)
+				handle:set_next(State.navigate_to_fluctuant_begin)
 			end
 		end,
 	})
@@ -300,7 +328,7 @@ on_init = function()
 	end)
 
 	runtime.ours_zone = read_option("fsm_ours_zone", true)
-	runtime.switch_interval = read_option("fsm_switch_interval", 7.0)
+	runtime.switch_interval = read_option("fsm_switch_interval", 5.0)
 
 	configure_test_rule()
 	setup_edges()

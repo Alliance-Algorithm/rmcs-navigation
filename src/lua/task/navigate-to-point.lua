@@ -40,7 +40,6 @@ return function(point, options)
 	local tolerance, timeout = normalize_options(options)
 	local condition = blackboard.condition
 
-	blackboard.enqueue_navigate_point(point, "navigate-to-point")
 	action:navigate(point)
 	local is_timeout = request:wait_until {
 		monitor = function()
