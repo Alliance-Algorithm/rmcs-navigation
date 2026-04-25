@@ -15,6 +15,7 @@ return function(ours_zone)
 		fortress = rule.fortress.them
 	end
 
+	action:update_chassis_mode("SPIN")
 	local is_success = navigate_to_point(fortress, {
 		tolerance = 0.1,
 		timeout = 10,

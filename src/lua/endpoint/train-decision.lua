@@ -10,8 +10,8 @@ local option = require("option")
 
 local keep_cruise = require("intent.keep-cruise")
 local escape_to_home = require("intent.escape-to-home")
-local cross_fluctuant_road = require("task.cross-fluctuant-road")
-local navigate_to_fluctuant_begin = require("task.navigate-to-fluctuant-begin")
+local cross_fluctuant_road = require("task.cross-fluctuant.cross-fluctuant-road")
+local navigate_to_fluctuant_begin = require("task.cross-fluctuant.navigate-to-fluctuant-begin")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -61,6 +61,7 @@ local function configure_test_rule()
 	rule.bullet_ready = read_option("fsm_bullet_ready", 300)
 
 	-- Ours side sample points
+	-- 暂时全为0 
 	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }   		--家
 	rule.fluctuant_road_begin.ours = { x = 0.0, y = 0.0 }		--起伏路段起点
 	rule.fluctuant_road_final.ours = { x = 0.0, y = 0.0 }		--起伏路段终点
@@ -68,6 +69,10 @@ local function configure_test_rule()
 	rule.one_step_final.ours = { x = 0.0, y = 0.0 }			--一级台阶低点（先随便标个回家路上的点）
 	rule.central_highland_near_fluctuant_road.ours = { x = 0.0, y = 0.0 }  	--高地靠近起伏路
 	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }			--高地靠近狗洞
+
+	rule.central_highland_near_fluctuant_road.them = { x = 0.0, y = 0.0 }  	--高地靠近起伏路
+	rule.central_highland_near_doghole.them = { x = 0.0, y = 0.0 }			--高地靠近狗洞
+	rule.fluctuant_road_final.them = { x = 0.0, y = 0.0 }		--起伏路段终点
 end
 
 local function reset_job_status()

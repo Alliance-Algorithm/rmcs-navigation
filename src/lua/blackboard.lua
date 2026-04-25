@@ -52,15 +52,16 @@ local function create_default_blackboard()
 			outpost_resupply = PointPair { { 0, 0 }, { 0, 0 } }, -- 前哨站补给点
 			assembly_zone = PointPair { { 0, 0 }, { 0, 0 } },
 			central_highland_near_fluctuant_road = PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地靠近起伏路一侧
-			central_highland_near_doghole =  PointPair { { 0, 0 }, { 0, 0 } }, --中央高地靠近狗洞一侧
-			central_highland_two_steps = PointPair { { 0, 0 }, { 0, 0 } }, --中央高地靠近二级台阶（二级台阶增益点前）
+			central_highland_near_doghole =  PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地靠近狗洞一侧
+			central_highland_gain_pount = PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地增益点
+			central_highland_near_two_steps_and_outpost = PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地靠近二级台阶（二级台阶增益点和前哨站中间）
 
 			-- 特殊跨越地形坐标
 			road_tunnel_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 公路隧道
 			road_tunnel_final = PointPair { { 0, 0 }, { 0, 0 } },
 			one_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 一级台阶高点
 			one_step_final = PointPair { { 0, 0 }, { 0, 0 } }, -- 一级台阶低点
-			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 二级台阶
+			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 二级台阶高点
 			two_step_final = PointPair { { 0, 0 }, { 0, 0 } },
 			fluctuant_road_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 起伏路段
 			fluctuant_road_final = PointPair { { 0, 0 }, { 0, 0 } },

@@ -1,7 +1,7 @@
 local blackboard = require("blackboard").singleton()
 local action = require("action")
-local go_down_onestep = require("task.go-down-onestep")
-local cross_fluctuant_road = require("task.cross-fluctuant-road")
+local go_down_onestep = require("task.one-step.go-down-onestep")
+local cross_fluctuant_road = require("task.cross-fluctuant.cross-fluctuant-road")
 local navigate_to_point = require("task.navigate-to-point")
 
 --- @param route "direct"|"onestep"|"fluctuant_road"

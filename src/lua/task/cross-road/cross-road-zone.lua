@@ -47,5 +47,6 @@ return function(ours_zone, forward_center)
 		return false
 	end
 
+	action:update_chassis_mode("SPIN")
 	return true
 end

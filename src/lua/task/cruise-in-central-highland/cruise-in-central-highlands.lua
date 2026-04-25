@@ -36,6 +36,7 @@ return function(ours_zone, switch_interval)
 
 	while true do
 		local phase_start = clock:now()
+		action:update_chassis_mode("SPIN")
 		local ok = navigate_to_point(target, {
 			tolerance = 0.1,
 			timeout = navigation_timeout,

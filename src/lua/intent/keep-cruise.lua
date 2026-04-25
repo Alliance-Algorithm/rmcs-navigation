@@ -1,5 +1,5 @@
 local action = require("action")
-local cruise_in_central_highlands = require("task.cruise-in-central-highlands")
+local cruise_in_central_highlands = require("task.cruise-in-central-highland.cruise-in-central-highlands")
 
 --- 持续巡航：在中央高地两点间循环巡航（通常为长期运行）。
 --- @param ours_zone boolean
