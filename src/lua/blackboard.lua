@@ -15,9 +15,32 @@ local function create_default_blackboard()
 			x = 0,
 			y = 0,
 			yaw = 0,
+
+			mode = "UNKNOWN",
+
 		},
 		game = {
 			stage = "UNKNOWN",
+			
+			outpost_health = 0, -- 前哨站血量
+			base_health = 0, -- 基地血量
+
+			hero_health = 150,
+			infantry_1_health = 150,
+			infantry_2_health = 150,
+			engineer_health = 250,
+
+			remaining_time = 0, -- 比赛剩余时间
+			gold_coin = 0, -- 队伍剩余金币数
+			exchangeable_ammunition_quantity = 0, -- 队伍 17mm 允许发弹量的剩余可兑换数
+			
+			our_dart_nmber_of_hits = 0, -- 己方飞镖击中次数
+			double_damage_activated = false, -- 雷达双倍易伤是否开启
+			fortress_occupied = false, -- 己方堡垒是否被占领
+			big_energy_mechanism_activated = false, -- 大能量机关是否被激活
+			small_energy_mechanism_activated = false, -- 小能量机关是否被激活
+
+
 		},
 		play = {
 			rswitch = "UNKNOWN",
@@ -26,18 +49,48 @@ local function create_default_blackboard()
 		meta = {
 			timestamp = 0, -- 秒
 			fsm_state = "unknown",
+			fsm_phase = "none",
 		},
 
 		-- Static Information
 		rule = {
 			decision = "auxiliary",
 
-			-- 状态类规则
+			-- 自身状态类规则
 
 			health_limit = 210,
 			health_ready = 400,
 			bullet_limit = 40,
 			bullet_ready = 300,
+			mode = "movement",
+
+			-- 其他状态类规则
+
+			-- 比赛相关
+			time_of_the_competition = 420, --比赛剩余时间
+
+			-- 队伍资源相关
+			exchangeable_ammunition_quantity = 1000, -- 队伍 17mm 允许发弹量的剩余可兑换数
+			gold_coin = 400, -- 队伍剩余金币数
+
+			-- 前哨站相关
+			outpost_health_ready = 1500,
+			outpost_health_red_line = 1500,
+
+			-- 基地相关
+			base_health_ready = 5000,
+			base_health_red_line = 2000,
+
+			-- 友方机器人相关
+			hero_health_ready = 150,
+			infantry_1_health_ready = 150,
+			infantry_2_health_ready = 150,
+			engineer_health_ready = 250,
+
+			hero_health_ready_red_line = 50,
+			infantry_1_health_ready_red_line = 50,
+			infantry_2_health_ready_red_line = 50,
+			engineer_health_ready_red_line = 50,
 
 			-- 坐标类规则
 			-- 定义顺序：ours = 0，them = 1
@@ -88,6 +141,34 @@ local function create_default_blackboard()
 		end,
 		bullet_ready = function()
 			return result.user.bullet >= result.rule.bullet_ready
+		end,
+
+		base_in_danger = function ()
+			return result.game.base_health <= result.rule.base_health_red_line
+		end,
+
+		oupost_survival = function ()
+			return result.game.outpost_health > 0
+		end,
+
+		dart_hit_first_time = function ()
+			return result.game.our_dart_nmber_of_hits == 1
+		end,
+
+		double_damage_activated = function ()
+			return result.game.double_damage_activated
+		end,
+
+		fortress_occupied = function ()
+			return result.game.fortress_occupied
+		end,
+
+		big_energy_mechanism_activated = function ()
+			return result.game.big_energy_mechanism_activated
+		end,
+
+		small_energy_mechanism_activated = function ()
+			return result.game.small_energy_mechanism_activated
 		end,
 
 		--- @param target {x: number, y: number}

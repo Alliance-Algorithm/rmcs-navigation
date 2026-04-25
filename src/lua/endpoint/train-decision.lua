@@ -8,10 +8,9 @@ local clock = require("util.clock")
 local fsm = require("util.fsm")
 local option = require("option")
 
-local keep_cruise = require("intent.keep-cruise")
+local KeepCruiseIntent = require("intent.keep-cruise")
+local StartCruiseIntent = require("intent.start-cruise")
 local escape_to_home = require("intent.escape-to-home")
-local cross_fluctuant_road = require("task.cross-fluctuant.cross-fluctuant-road")
-local navigate_to_fluctuant_begin = require("task.cross-fluctuant.navigate-to-fluctuant-begin")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -30,6 +29,8 @@ local runtime = {
 	switch_interval = nil,
 	escape_route = nil,
 	current_state = "idle",
+	current_phase = "none",
+	current_intent = nil,
 	navigation_ready = false,
 }
 
@@ -125,6 +126,23 @@ local function set_state(name)
 	action:info("fsm state -> " .. name)
 end
 
+local function set_phase(name)
+	runtime.current_phase = name
+	blackboard.meta.fsm_phase = name
+	action:info("fsm phase -> " .. name)
+end
+
+local function sync_intent_phase(intent)
+	assert(intent ~= nil, "intent should exist before syncing phase")
+
+	if type(intent.phase_name) == "function" then
+		set_phase(intent:phase_name())
+		return
+	end
+
+	set_phase("none")
+end
+
 local function start_navigation()
 	local ok, message = action:restart_navigation({
 		global_map = read_option("global_map", "train_map"),
@@ -148,8 +166,7 @@ end
 local function create_intent_fsm()
 	local State = {
 		idle = "idle",
-		navigate_to_fluctuant_begin = "navigate_to_fluctuant_begin",
-		cross_fluctuant = "cross_fluctuant",
+		start_cruise = "start_cruise",
 		keep_cruise = "keep_cruise",
 		escape = "escape",
 		recover = "recover",
@@ -157,29 +174,36 @@ local function create_intent_fsm()
 
 	local condition = blackboard.condition
 	local intent_fsm = fsm:new(State.idle)
-	local function run_navigate_to_fluctuant_begin_job()
-		run_job("navigate_to_fluctuant_begin", function()
-			return navigate_to_fluctuant_begin(runtime.ours_zone, true)
-		end)
-	end
-	local function run_cross_fluctuant_job()
-		run_job("cross_fluctuant", function()
-			return cross_fluctuant_road(runtime.ours_zone, true)
-		end)
-	end
-	local function run_keep_cruise_job()
-		run_job("keep_cruise", function()
-			return keep_cruise(runtime.ours_zone, runtime.switch_interval)
-		end)
-	end
 	local function run_escape_job()
 		assert(type(runtime.escape_route) == "string", "escape_route should be set before escape")
 		run_job("escape_to_home", function()
 			return escape_to_home(runtime.escape_route)
 		end)
 	end
-	local function enter_escape(handle, route)
-		assert(type(route) == "string", "route should be a string")
+
+	local function create_start_cruise_intent()
+		runtime.current_intent = StartCruiseIntent.new({
+			ours_zone = runtime.ours_zone,
+		})
+		sync_intent_phase(runtime.current_intent)
+	end
+	local function create_keep_cruise_intent()
+		runtime.current_intent = KeepCruiseIntent.new({
+			ours_zone = runtime.ours_zone,
+			switch_interval = runtime.switch_interval,
+		})
+		sync_intent_phase(runtime.current_intent)
+	end
+	local function run_current_intent_job()
+		assert(runtime.current_intent ~= nil, "current intent should exist before running intent job")
+		sync_intent_phase(runtime.current_intent)
+		runtime.current_intent:run(run_job)
+	end
+	local function enter_escape(handle)
+		local route = "direct"
+		if runtime.current_intent ~= nil then
+			route = runtime.current_intent:escape_route()
+		end
 		runtime.escape_route = route
 		cancel_job()
 		handle:set_next(State.escape)
@@ -190,7 +214,9 @@ local function create_intent_fsm()
 		enter = function()
 			cancel_job()
 			runtime.escape_route = nil
+			runtime.current_intent = nil
 			set_state(State.idle)
+			set_phase("none")
 			runtime.navigation_ready = false
 		end,
 		event = function(handle)
@@ -200,20 +226,21 @@ local function create_intent_fsm()
 			end
 
 			if runtime.navigation_ready and blackboard.game.stage == "STARTED" then
-				handle:set_next(State.navigate_to_fluctuant_begin)
+				handle:set_next(State.start_cruise)
 			end
 		end,
 	})
 
 	intent_fsm:use({
-		state = State.navigate_to_fluctuant_begin,
+		state = State.start_cruise,
 		enter = function()
-			set_state(State.navigate_to_fluctuant_begin)
-			run_navigate_to_fluctuant_begin_job()
+			set_state(State.start_cruise)
+			create_start_cruise_intent()
+			run_current_intent_job()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
-				enter_escape(handle, "direct")
+				enter_escape(handle)
 				return
 			end
 
@@ -222,38 +249,19 @@ local function create_intent_fsm()
 			end
 
 			if job.success then
-				handle:set_next(State.cross_fluctuant)
+				if runtime.current_intent:advance() then
+					run_current_intent_job()
+				else
+					handle:set_next(State.keep_cruise)
+				end
 				return
 			end
 
-			action:warn("fsm(navigate_to_fluctuant_begin): 导航失败，重试当前阶段")
-			run_navigate_to_fluctuant_begin_job()
-		end,
-	})
-
-	intent_fsm:use({
-		state = State.cross_fluctuant,
-		enter = function()
-			set_state(State.cross_fluctuant)
-			run_cross_fluctuant_job()
-		end,
-		event = function(handle)
-			if condition.low_health() or condition.low_bullet() then
-				enter_escape(handle, "fluctuant_road")
-				return
-			end
-
-			if not job.done then
-				return
-			end
-
-			if job.success then
-				handle:set_next(State.keep_cruise)
-				return
-			end
-
-			action:warn("fsm(cross_fluctuant): 导航失败，重试当前阶段")
-			run_cross_fluctuant_job()
+			action:warn(string.format(
+				"fsm(start_cruise:%s): 导航失败，重试当前阶段",
+				runtime.current_phase
+			))
+			run_current_intent_job()
 		end,
 	})
 
@@ -261,11 +269,12 @@ local function create_intent_fsm()
 		state = State.keep_cruise,
 		enter = function()
 			set_state(State.keep_cruise)
-			run_keep_cruise_job()
+			create_keep_cruise_intent()
+			run_current_intent_job()
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
-				enter_escape(handle, "onestep")
+				enter_escape(handle)
 				return
 			end
 
@@ -278,7 +287,7 @@ local function create_intent_fsm()
 			end
 
 			action:warn("fsm(keep_cruise): 导航失败，重试当前状态")
-			run_keep_cruise_job()
+			run_current_intent_job()
 		end,
 	})
 
@@ -286,6 +295,7 @@ local function create_intent_fsm()
 		state = State.escape,
 		enter = function()
 			set_state(State.escape)
+			set_phase("none")
 			run_escape_job()
 		end,
 		event = function(handle)
@@ -308,7 +318,9 @@ local function create_intent_fsm()
 		enter = function()
 			cancel_job()
 			runtime.escape_route = nil
+			runtime.current_intent = nil
 			set_state(State.recover)
+			set_phase("none")
 		end,
 		event = function(handle)
 			if condition.low_health() or condition.low_bullet() then
@@ -316,7 +328,7 @@ local function create_intent_fsm()
 			end
 
 			if condition.health_ready() and condition.bullet_ready() then
-				handle:set_next(State.navigate_to_fluctuant_begin)
+				handle:set_next(State.start_cruise)
 			end
 		end,
 	})
@@ -355,8 +367,9 @@ on_init = function()
 		while true do
 			request:sleep(1.0)
 			action:info(string.format(
-				"fsm=%s stage=%s hp=%s bullet=%s rs=%s ls=%s",
+				"fsm=%s phase=%s stage=%s hp=%s bullet=%s rs=%s ls=%s",
 				runtime.current_state,
+				runtime.current_phase,
 				blackboard.game.stage,
 				tostring(blackboard.user.health),
 				tostring(blackboard.user.bullet),

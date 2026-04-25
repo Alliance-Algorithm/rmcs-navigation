@@ -1,21 +1,44 @@
 local action = require("action")
 local cruise_in_central_highlands = require("task.cruise-in-central-highland.cruise-in-central-highlands")
 
---- 持续巡航：在中央高地两点间循环巡航（通常为长期运行）。
---- @param ours_zone boolean
---- @param switch_interval number 中央高地巡航切换周期（秒）
---- @return boolean is_success
-return function(ours_zone, switch_interval)
-	assert(type(ours_zone) == "boolean", "ours_zone should be a boolean")
-	assert(type(switch_interval) == "number", "switch_interval should be a number")
-	assert(switch_interval > 0, "switch_interval should be positive")
+local KeepCruiseIntent = {}
+KeepCruiseIntent.__index = KeepCruiseIntent
 
-	action:info("keep-cruise: 进入中央高地持续巡航")
-	local ok = cruise_in_central_highlands(ours_zone, switch_interval)
-	if not ok then
-		action:warn("keep-cruise: 中央高地巡航导航失败")
-		return false
-	end
+local M = {}
 
-	return true
+--- @param args { ours_zone: boolean, switch_interval: number }
+--- @return table
+function M.new(args)
+	assert(type(args) == "table", "args should be a table")
+	assert(type(args.ours_zone) == "boolean", "args.ours_zone should be a boolean")
+	assert(type(args.switch_interval) == "number", "args.switch_interval should be a number")
+	assert(args.switch_interval > 0, "args.switch_interval should be positive")
+
+	return setmetatable({
+		ours_zone = args.ours_zone,
+		switch_interval = args.switch_interval,
+	}, KeepCruiseIntent)
 end
+
+--- @return "onestep"
+function KeepCruiseIntent:escape_route()
+	return "onestep"
+end
+
+--- @param run_job fun(name: string, fn: function)
+function KeepCruiseIntent:run(run_job)
+	assert(type(run_job) == "function", "run_job should be a function")
+
+	run_job("keep_cruise", function()
+		action:info("keep-cruise: 进入中央高地持续巡航")
+		local ok = cruise_in_central_highlands(self.ours_zone, self.switch_interval)
+		if not ok then
+			action:warn("keep-cruise: 中央高地巡航导航失败")
+			return false
+		end
+
+		return true
+	end)
+end
+
+return M
