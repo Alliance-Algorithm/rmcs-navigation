@@ -13,7 +13,7 @@ return function(switch_interval)
 	action:info("开始forward-press-in-two-step")
 
 	local rule = blackboard.rule
-	local enemy_gain_point = rule.central_highland_gain_pount.them
+	local enemy_gain_point = rule.central_highland_gain_point.them
 	local enemy_near_two_steps_and_outpost = rule.central_highland_near_two_steps_and_outpost.them
 
 	local navigation_timeout = math.max(10.0, switch_interval * 2.0)
@@ -22,7 +22,7 @@ return function(switch_interval)
 	while true do
 		local phase_start = clock:now()
 		action:update_chassis_mode("SPIN")
-		ok = navigate_to_point(target, {
+		local ok = navigate_to_point(target, {
 			tolerance = 0.1,
 			timeout = navigation_timeout,
 		})

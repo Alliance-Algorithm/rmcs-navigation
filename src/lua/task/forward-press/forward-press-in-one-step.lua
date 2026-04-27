@@ -11,7 +11,7 @@ return function()
 	local enemy_fluctuant_road_final = rule.fluctuant_road_final.them
 
 	action:update_chassis_mode("SPIN")
-	ok = navigate_to_point(enemy_fluctuant_road_final, {
+	local ok = navigate_to_point(enemy_fluctuant_road_final, {
 		tolerance = 0.1,
 		timeout = 10,
 	})

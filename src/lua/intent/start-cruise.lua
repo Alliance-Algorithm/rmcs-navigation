@@ -1,5 +1,6 @@
 local cross_fluctuant_road = require("task.cross-fluctuant.cross-fluctuant-road")
 local navigate_to_fluctuant_begin = require("task.cross-fluctuant.navigate-to-fluctuant-begin")
+local ReturnStage = require("util.return-stage")
 
 local StartCruiseIntent = {}
 StartCruiseIntent.__index = StartCruiseIntent
@@ -26,6 +27,7 @@ function M.new(args)
 	return setmetatable({
 		ours_zone = args.ours_zone,
 		phase = Phase.to_fluctuant_begin,
+		_return_stage = ReturnStage.before_fluctuant,
 	}, StartCruiseIntent)
 end
 
@@ -34,16 +36,9 @@ function StartCruiseIntent:phase_name()
 	return self.phase
 end
 
---- @return "direct"|"fluctuant_road"|"onestep"
-function StartCruiseIntent:escape_route()
-	if self.phase == Phase.to_fluctuant_begin then
-		return "direct"
-	end
-	if self.phase == Phase.crossing_fluctuant then
-		return "fluctuant_road"
-	end
-
-	unknown_phase_error(self.phase)
+--- @return "before_fluctuant"|"on_fluctuant"|"after_fluctuant"
+function StartCruiseIntent:return_stage()
+	return self._return_stage
 end
 
 --- @param run_job fun(name: string, fn: function)
@@ -71,6 +66,7 @@ end
 function StartCruiseIntent:advance()
 	if self.phase == Phase.to_fluctuant_begin then
 		self.phase = Phase.crossing_fluctuant
+		self._return_stage = ReturnStage.on_fluctuant
 		return true
 	end
 
@@ -79,6 +75,12 @@ function StartCruiseIntent:advance()
 	end
 
 	unknown_phase_error(self.phase)
+end
+
+function StartCruiseIntent:on_job_succeeded()
+	if self.phase == Phase.crossing_fluctuant then
+		self._return_stage = ReturnStage.after_fluctuant
+	end
 end
 
 return M

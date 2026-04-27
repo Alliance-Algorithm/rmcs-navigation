@@ -2,18 +2,12 @@ local blackboard = require("blackboard").singleton()
 local action = require("action")
 local navigate_to_point = require("task.navigate-to-point")
 
---- @param ours_zone boolean
 --- @return boolean is_success
-return function(ours_zone)
+return function()
 	action:info("开始occupy-fortress")
 
 	local rule = blackboard.rule
-	local fortress
-	if ours_zone then
-		fortress = rule.fortress.ours
-	else
-		fortress = rule.fortress.them
-	end
+	local fortress = rule.fortress.ours
 
 	action:update_chassis_mode("SPIN")
 	local is_success = navigate_to_point(fortress, {
@@ -21,7 +15,11 @@ return function(ours_zone)
 		timeout = 10,
 	})
 	if not is_success then
-		action:warn("前往堡垒点超时")
+		action:warn(string.format(
+			"occupy-fortress: 导航到己方堡垒失败 (x=%.2f, y=%.2f)",
+			fortress.x,
+			fortress.y
+		))
 		return false
 	end
 
