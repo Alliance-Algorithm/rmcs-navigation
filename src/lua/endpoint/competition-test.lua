@@ -6,14 +6,15 @@ local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local fsm = require("util.fsm")
+local Map = require("map")
 local option = require("option")
-local ReturnStage = require("util.return-stage")
 
+local EscapeToHomeIntent = require("intent.escape-to-home")
 local ForwardPressIntent = require("intent.forward-press")
 local GuardHomeIntent = require("intent.guard-home")
 local KeepCruiseIntent = require("intent.keep-cruise")
+local Region = require("region")
 local StartCruiseIntent = require("intent.start-cruise")
-local escape_to_home = require("intent.escape-to-home")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -30,14 +31,16 @@ blackboard = require("blackboard").singleton()
 local runtime = {
 	ours_zone = nil,
 	switch_interval = nil,
-	return_stage = nil,
-	escape_route = nil,
-	forward_press_mode = nil,
-	forward_press_started_at = nil,
+	region = nil,
+	region_name = "unknown",
+	region_phase = Region.Phase.unknown,
 	current_state = "idle",
 	current_phase = "none",
+	current_intent_kind = nil,
 	current_intent = nil,
 	navigation_ready = false,
+	escape_route = nil,
+	forward_press_mode = nil,
 }
 
 local forward_press_duration = 30.0
@@ -82,23 +85,20 @@ local function configure_test_rule()
 	rule.engineer_health_ready_red_line =
 		read_option("engineer_health_ready_red_line", 50)
 
-	-- Ours side sample points
-	-- 暂时全为0 
-	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }   		                    -- 家
-	rule.fluctuant_road_begin.ours = { x = 0.0, y = 0.0 }		                -- 起伏路段起点
-	rule.fluctuant_road_final.ours = { x = 0.0, y = 0.0 }		                -- 起伏路段终点
-	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }			                    -- 一级台阶高点（先随便标个回家路上的点）
-	rule.one_step_final.ours = { x = 0.0, y = 0.0 }			                    -- 一级台阶低点（先随便标个回家路上的点）
-	rule.central_highland_near_fluctuant_road.ours = { x = 0.0, y = 0.0 }  	    -- 高地靠近起伏路
-	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }			    -- 高地靠近狗洞
-    rule.base_left_gain_point.ours = { x = 0.0, y = 0.0 }                       -- 左侧基地增益点
-	rule.base_right_gain_point.ours = { x = 0.0, y = 0.0 }                      -- 右侧基地增益点
-    rule.fortress.ours = { x = 0.0, y = 0.0 }                                   -- 堡垒增益点
+	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }
+	rule.fluctuant_road_begin.ours = { x = 0.0, y = 0.0 }
+	rule.fluctuant_road_final.ours = { x = 0.0, y = 0.0 }
+	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }
+	rule.one_step_final.ours = { x = 0.0, y = 0.0 }
+	rule.central_highland_near_fluctuant_road.ours = { x = 0.0, y = 0.0 }
+	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }
+	rule.base_left_gain_point.ours = { x = 0.0, y = 0.0 }
+	rule.base_right_gain_point.ours = { x = 0.0, y = 0.0 }
+	rule.fortress.ours = { x = 0.0, y = 0.0 }
 
-	rule.central_highland_near_fluctuant_road.them = { x = 0.0, y = 0.0 }  	    -- 高地靠近起伏路
-	rule.central_highland_near_doghole.them = { x = 0.0, y = 0.0 }			    -- 高地靠近狗洞
-	rule.fluctuant_road_final.them = { x = 0.0, y = 0.0 }		                -- 起伏路段终点
-
+	rule.central_highland_near_fluctuant_road.them = { x = 0.0, y = 0.0 }
+	rule.central_highland_near_doghole.them = { x = 0.0, y = 0.0 }
+	rule.fluctuant_road_final.them = { x = 0.0, y = 0.0 }
 end
 
 local function reset_job_status()
@@ -139,6 +139,13 @@ local function run_job(name, fn)
 	end)
 end
 
+local function clear_current_intent()
+	cancel_job()
+	runtime.current_intent_kind = nil
+	runtime.current_intent = nil
+	runtime.current_phase = "none"
+end
+
 local function take_request(name)
 	local value = requests[name]
 	requests[name] = false
@@ -146,68 +153,51 @@ local function take_request(name)
 end
 
 local function set_state(name)
+	if runtime.current_state == name then
+		return
+	end
 	runtime.current_state = name
 	blackboard.meta.fsm_state = name
 	action:info("fsm state -> " .. name)
 end
 
 local function set_phase(name)
+	if runtime.current_phase == name then
+		return
+	end
 	runtime.current_phase = name
 	action:info("fsm phase -> " .. name)
 end
 
-local function set_return_stage(name)
-	assert(type(name) == "string", "return stage should be a string")
+local function sync_region()
+	local region, region_name = Region.current()
+	runtime.region = region
+	runtime.region_name = region_name
+	runtime.region_phase = Region.phase(region)
+	blackboard.meta.region = region_name
+	blackboard.meta.fsm_return_stage = Region.return_stage(region)
+end
 
-	if runtime.return_stage == name then
-		return
+local function configure_region_map(name)
+	assert(type(name) == "string", "global_map should be a string")
+	local ok, loaded_or_error = pcall(Map.singleton, name)
+	if not ok then
+		action:fuck("load region map failed: " .. tostring(loaded_or_error))
+		return false, loaded_or_error
 	end
-
-	runtime.return_stage = name
-	blackboard.meta.fsm_return_stage = name
-	action:info("fsm return-stage -> " .. name)
-end
-
-local function resolve_escape_route()
-	assert(type(runtime.return_stage) == "string", "return_stage should be set before escape")
-	return ReturnStage.resolve_escape_route(runtime.return_stage)
-end
-
-local function sync_intent_phase(intent)
-	assert(intent ~= nil, "intent should exist before syncing phase")
-
-	if type(intent.phase_name) == "function" then
-		set_phase(intent:phase_name())
-		return
-	end
-
-	set_phase("none")
-end
-
-local function sync_intent_return_stage(intent, apply_job_result)
-	assert(intent ~= nil, "intent should exist before syncing return stage")
-	assert(type(intent.return_stage) == "function", "intent should expose return_stage()")
-
-	if apply_job_result and job.done and job.success and type(intent.on_job_succeeded) == "function" then
-		intent:on_job_succeeded()
-	end
-
-	set_return_stage(intent:return_stage())
-end
-
-local function sync_intent_runtime(intent)
-	sync_intent_phase(intent)
-	sync_intent_return_stage(intent, false)
-end
-
-local function clear_forward_press_runtime()
-	runtime.forward_press_mode = nil
-	runtime.forward_press_started_at = nil
+	action:info("region map -> " .. Map.current_name())
+	return true, loaded_or_error
 end
 
 local function start_navigation()
+	local global_map = read_option("global_map", "rmuc")
+	local ok, load_error = configure_region_map(global_map)
+	if not ok then
+		return false, load_error
+	end
+
 	local ok, message = action:restart_navigation({
-		global_map = read_option("global_map", "train_map"),
+		global_map = global_map,
 		launch_livox = read_option("launch_livox", true),
 		launch_odin1 = read_option("launch_odin1", false),
 		use_sim_time = read_option("use_sim_time", false),
@@ -225,375 +215,278 @@ local function setup_edges()
 	end)
 end
 
-local function create_intent_fsm()
+local function should_enter_guard_home()
+	local condition = blackboard.condition
+	return condition.game_close_to_end() or condition.base_in_danger()
+end
+
+local function guard_home_target()
+	if blackboard.condition.fortress_occupied() then
+		return "cruise_in_front_of_base"
+	end
+	return "occupy_fortress"
+end
+
+local last_double_damage_activated = false
+local last_big_energy_mechanism_activated = false
+local last_small_energy_mechanism_activated = false
+
+local function select_forward_press_mode()
+	local condition = blackboard.condition
+	local dart_hit_first_time = condition.dart_hit_first_time()
+	local double_damage_activated = condition.double_damage_activated()
+	local big_energy_mechanism_activated = condition.big_energy_mechanism_activated()
+	local small_energy_mechanism_activated = condition.small_energy_mechanism_activated()
+	local double_damage_rising = double_damage_activated and not last_double_damage_activated
+	local big_energy_rising = big_energy_mechanism_activated and not last_big_energy_mechanism_activated
+	local small_energy_rising =
+		small_energy_mechanism_activated and not last_small_energy_mechanism_activated
+
+	last_double_damage_activated = double_damage_activated
+	last_big_energy_mechanism_activated = big_energy_mechanism_activated
+	last_small_energy_mechanism_activated = small_energy_mechanism_activated
+
+	if small_energy_rising then
+		return "two_step"
+	end
+
+	if dart_hit_first_time or double_damage_rising or big_energy_rising then
+		return "one_step"
+	end
+
+	return nil
+end
+
+local function create_intent(kind)
+	if kind == "start_cruise" then
+		return StartCruiseIntent.new({
+			ours_zone = runtime.ours_zone,
+		})
+	end
+
+	if kind == "keep_cruise" then
+		return KeepCruiseIntent.new({
+			ours_zone = runtime.ours_zone,
+			switch_interval = runtime.switch_interval,
+		})
+	end
+
+	if kind == "guard_home" then
+		return GuardHomeIntent.new({
+			ours_zone = runtime.ours_zone,
+		})
+	end
+
+	if kind == "forward_press" then
+		assert(type(runtime.forward_press_mode) == "string", "forward_press_mode should be set")
+		return ForwardPressIntent.new({
+			mode = runtime.forward_press_mode,
+			switch_interval = runtime.switch_interval,
+			duration = forward_press_duration,
+		})
+	end
+
+	if kind == "escape" then
+		assert(type(runtime.escape_route) == "string", "escape_route should be set")
+		return EscapeToHomeIntent.new({
+			route = runtime.escape_route,
+		})
+	end
+
+	error("unknown intent kind: " .. tostring(kind))
+end
+
+local function replace_intent(kind, force)
+	assert(type(kind) == "string", "intent kind should be a string")
+	if not force and runtime.current_intent_kind == kind and runtime.current_intent ~= nil then
+		return
+	end
+
+	clear_current_intent()
+	runtime.current_intent_kind = kind
+	runtime.current_intent = create_intent(kind)
+	action:info("intent -> " .. kind)
+end
+
+local intent_ctx = {
+	run_job = run_job,
+	cancel_job = cancel_job,
+	job_state = function()
+		return job
+	end,
+	region = function()
+		return runtime.region
+	end,
+	region_phase = function()
+		return runtime.region_phase
+	end,
+	guard_home_target = guard_home_target,
+}
+
+local function sync_intent_phase()
+	if runtime.current_intent == nil or type(runtime.current_intent.phase_name) ~= "function" then
+		set_phase("none")
+		return
+	end
+	set_phase(runtime.current_intent:phase_name())
+end
+
+local function spin_current_intent()
+	if runtime.current_intent == nil then
+		set_phase("none")
+		return nil
+	end
+
+	local status = runtime.current_intent:spin(intent_ctx)
+	sync_intent_phase()
+	return status
+end
+
+local function choose_active_intent_kind()
+	if should_enter_guard_home() then
+		return "guard_home"
+	end
+
+	if runtime.current_intent_kind == "forward_press" and runtime.current_intent ~= nil then
+		return "forward_press"
+	end
+
+	if Region.is_before_fluctuant(runtime.region) or Region.is_on_fluctuant(runtime.region) then
+		return "start_cruise"
+	end
+
+	local mode = select_forward_press_mode()
+	if mode ~= nil then
+		runtime.forward_press_mode = mode
+		return "forward_press"
+	end
+
+	return "keep_cruise"
+end
+
+local function create_endpoint_fsm()
 	local State = {
 		idle = "idle",
-		start_cruise = "start_cruise",
-		keep_cruise = "keep_cruise",
-		guard_home = "guard_home",
-		forward_press = "forward_press",
+		active = "active",
 		escape = "escape",
 		recover = "recover",
 	}
 
 	local condition = blackboard.condition
-	local last_double_damage_activated = false
-	local last_big_energy_mechanism_activated = false
-	local last_small_energy_mechanism_activated = false
-	local intent_fsm = fsm:new(State.idle)
-	local function run_escape_job()
-		assert(type(runtime.escape_route) == "string", "escape_route should be set before escape")
-		run_job("escape_to_home", function()
-			return escape_to_home(runtime.escape_route)
-		end)
-	end
+	local endpoint_fsm = fsm:new(State.idle)
 
-	local function create_start_cruise_intent()
-		runtime.current_intent = StartCruiseIntent.new({
-			ours_zone = runtime.ours_zone,
-		})
-		sync_intent_runtime(runtime.current_intent)
-	end
-	local function create_keep_cruise_intent()
-		runtime.current_intent = KeepCruiseIntent.new({
-			ours_zone = runtime.ours_zone,
-			switch_interval = runtime.switch_interval,
-		})
-		sync_intent_runtime(runtime.current_intent)
-	end
-	local function create_guard_home_intent(phase)
-		runtime.current_intent = GuardHomeIntent.new({
-			phase = phase,
-			return_stage = runtime.return_stage,
-		})
-		sync_intent_runtime(runtime.current_intent)
-	end
-	local function create_forward_press_intent(mode)
-		runtime.current_intent = ForwardPressIntent.new({
-			mode = mode,
-			switch_interval = runtime.switch_interval,
-		})
-		sync_intent_runtime(runtime.current_intent)
-	end
-	local function run_current_intent_job()
-		assert(runtime.current_intent ~= nil, "current intent should exist before running intent job")
-		sync_intent_runtime(runtime.current_intent)
-		runtime.current_intent:run(run_job)
-	end
-	local function select_forward_press_mode()
-		local dart_hit_first_time = condition.dart_hit_first_time()
-		local double_damage_activated = condition.double_damage_activated()
-		local big_energy_mechanism_activated = condition.big_energy_mechanism_activated()
-		local small_energy_mechanism_activated = condition.small_energy_mechanism_activated()
-		local double_damage_rising = double_damage_activated and not last_double_damage_activated
-		local big_energy_rising =
-			big_energy_mechanism_activated and not last_big_energy_mechanism_activated
-		local small_energy_rising =
-			small_energy_mechanism_activated and not last_small_energy_mechanism_activated
-
-		last_double_damage_activated = double_damage_activated
-		last_big_energy_mechanism_activated = big_energy_mechanism_activated
-		last_small_energy_mechanism_activated = small_energy_mechanism_activated
-
-		if small_energy_rising then
-			return "two_step"
-		end
-
-		if dart_hit_first_time or double_damage_rising or big_energy_rising then
-			return "one_step"
-		end
-
-		return nil
-	end
-	local function should_enter_guard_home()
-		return condition.game_close_to_end() or condition.base_in_danger()
-	end
-	local function select_guard_home_phase()
-		if condition.fortress_occupied() then
-			return "cruise_in_front_of_base"
-		end
-
-		return "occupy_fortress"
-	end
-	local function advance_current_intent()
-		assert(runtime.current_intent ~= nil, "current intent should exist before advancing")
-
-		if type(runtime.current_intent.advance) ~= "function" then
-			return false
-		end
-
-		return runtime.current_intent:advance()
-	end
-	local function enter_escape(handle)
-		if runtime.current_intent ~= nil then
-			sync_intent_return_stage(runtime.current_intent, true)
-		end
-		local route = resolve_escape_route()
-		runtime.escape_route = route
-		cancel_job()
-		handle:set_next(State.escape)
-	end
-
-	intent_fsm:use({
+	endpoint_fsm:use({
 		state = State.idle,
 		enter = function()
-			cancel_job()
-			set_return_stage(ReturnStage.before_fluctuant)
+			clear_current_intent()
 			runtime.escape_route = nil
-			runtime.current_intent = nil
-			clear_forward_press_runtime()
+			runtime.forward_press_mode = nil
+			runtime.navigation_ready = false
 			set_state(State.idle)
 			set_phase("none")
-			runtime.navigation_ready = false
 		end,
 		event = function(handle)
+			sync_region()
+
 			if take_request("start") then
 				local ok = start_navigation()
 				runtime.navigation_ready = ok
 			end
 
 			if runtime.navigation_ready and blackboard.game.stage == "STARTED" then
-				if should_enter_guard_home() then
-					handle:set_next(State.guard_home)
-				else
-					handle:set_next(State.start_cruise)
-				end
+				handle:set_next(State.active)
 			end
 		end,
 	})
 
-	intent_fsm:use({
-		state = State.start_cruise,
+	endpoint_fsm:use({
+		state = State.active,
 		enter = function()
-			set_state(State.start_cruise)
-			set_return_stage(ReturnStage.before_fluctuant)
-			create_start_cruise_intent()
-			run_current_intent_job()
+			set_state(State.active)
 		end,
 		event = function(handle)
-			sync_intent_return_stage(runtime.current_intent, true)
+			sync_region()
 
 			if condition.low_health() or condition.low_bullet() then
-				enter_escape(handle)
+				runtime.escape_route = Region.escape_route(runtime.region)
+				clear_current_intent()
+				handle:set_next(State.escape)
 				return
 			end
 
-			if not job.done then
-				return
+			local desired_kind = choose_active_intent_kind()
+			if runtime.current_intent_kind ~= desired_kind or runtime.current_intent == nil then
+				replace_intent(desired_kind, true)
 			end
 
-			if job.success then
-				if advance_current_intent() then
-					run_current_intent_job()
-				else
-					sync_intent_return_stage(runtime.current_intent, true)
-					handle:set_next(State.keep_cruise)
-				end
-				return
-			end
-
-			action:warn(string.format(
-				"fsm(start_cruise:%s): 导航失败，重试当前阶段",
-				runtime.current_phase
-			))
-			run_current_intent_job()
-		end,
-	})
-
-	intent_fsm:use({
-		state = State.keep_cruise,
-		enter = function()
-			set_state(State.keep_cruise)
-			set_return_stage(ReturnStage.after_fluctuant)
-			clear_forward_press_runtime()
-			create_keep_cruise_intent()
-			run_current_intent_job()
-		end,
-		event = function(handle)
-			sync_intent_return_stage(runtime.current_intent, true)
-
-			if condition.low_health() or condition.low_bullet() then
-				enter_escape(handle)
-				return
-			end
-
-			if should_enter_guard_home() then
-				handle:set_next(State.guard_home)
-				return
-			end
-
-			local forward_press_mode = select_forward_press_mode()
-			if forward_press_mode ~= nil then
-				runtime.forward_press_mode = forward_press_mode
-				handle:set_next(State.forward_press)
-				return
-			end
-
-			if not job.done then
-				return
-			end
-
-			if job.success then
-				return
-			end
-
-			action:warn("fsm(keep_cruise): 导航失败，重试当前状态")
-			run_current_intent_job()
-		end,
-	})
-
-	intent_fsm:use({
-		state = State.guard_home,
-		enter = function()
-			set_state(State.guard_home)
-			clear_forward_press_runtime()
-			create_guard_home_intent(select_guard_home_phase())
-			run_current_intent_job()
-		end,
-		event = function(handle)
-			sync_intent_return_stage(runtime.current_intent, true)
-
-			if condition.low_health() or condition.low_bullet() then
-				enter_escape(handle)
-				return
-			end
-
-			local next_phase = select_guard_home_phase()
-			if runtime.current_intent:phase_name() ~= next_phase then
-				action:info(string.format(
-					"fsm(guard_home:%s): 切换到 %s",
+			local status = spin_current_intent()
+			if status == "failed" then
+				action:warn(string.format(
+					"fsm(active:%s): 当前 intent 失败，重建 %s",
 					runtime.current_phase,
-					next_phase
+					desired_kind
 				))
-				create_guard_home_intent(next_phase)
-				run_current_intent_job()
+				replace_intent(desired_kind, true)
 				return
 			end
 
-			if not job.done then
-				return
-			end
-
-			if job.success then
-				if advance_current_intent() then
-					run_current_intent_job()
-					return
+			if status == "success" then
+				if runtime.current_intent_kind == "forward_press" then
+					runtime.forward_press_mode = nil
 				end
-
-				return
+				clear_current_intent()
 			end
-
-			action:warn(string.format(
-				"fsm(guard_home:%s): 导航失败，重试当前阶段",
-				runtime.current_phase
-			))
-			run_current_intent_job()
 		end,
 	})
 
-	intent_fsm:use({
-		state = State.forward_press,
-		enter = function()
-			assert(type(runtime.forward_press_mode) == "string", "forward_press_mode should be set")
-			set_state(State.forward_press)
-			set_return_stage(ReturnStage.after_fluctuant)
-			runtime.forward_press_started_at = clock:now()
-			create_forward_press_intent(runtime.forward_press_mode)
-			run_current_intent_job()
-		end,
-		event = function(handle)
-			sync_intent_return_stage(runtime.current_intent, true)
-
-			if condition.low_health() or condition.low_bullet() then
-				enter_escape(handle)
-				return
-			end
-
-			if should_enter_guard_home() then
-				handle:set_next(State.guard_home)
-				return
-			end
-
-			local elapsed = clock:now() - runtime.forward_press_started_at
-			if elapsed >= forward_press_duration then
-				action:info(string.format(
-					"fsm(forward_press:%s): 前压持续 %.1fs，返回 keep_cruise",
-					runtime.current_phase,
-					forward_press_duration
-				))
-				cancel_job()
-				runtime.current_intent = nil
-				handle:set_next(State.keep_cruise)
-				return
-			end
-
-			if not job.done then
-				return
-			end
-
-			if job.success then
-				return
-			end
-
-			action:warn(string.format(
-				"fsm(forward_press:%s): 前压失败，重试当前状态",
-				runtime.current_phase
-			))
-			run_current_intent_job()
-		end,
-	})
-
-	intent_fsm:use({
+	endpoint_fsm:use({
 		state = State.escape,
 		enter = function()
-			clear_forward_press_runtime()
 			set_state(State.escape)
-			set_phase("none")
-			run_escape_job()
+			runtime.escape_route = runtime.escape_route or Region.escape_route(runtime.region)
+			replace_intent("escape", true)
 		end,
 		event = function(handle)
-			if not job.done then
+			sync_region()
+
+			local status = spin_current_intent()
+			if status == "failed" then
+				action:warn("fsm(escape): 回家失败，重试 escape intent")
+				replace_intent("escape", true)
 				return
 			end
 
-			if job.success then
+			if status == "success" then
+				clear_current_intent()
 				handle:set_next(State.recover)
-				return
 			end
-
-			action:warn("fsm(escape): 导航失败，重试当前状态")
-			run_escape_job()
 		end,
 	})
 
-	intent_fsm:use({
+	endpoint_fsm:use({
 		state = State.recover,
 		enter = function()
-			cancel_job()
-			set_return_stage(ReturnStage.before_fluctuant)
+			clear_current_intent()
 			runtime.escape_route = nil
-			runtime.current_intent = nil
-			clear_forward_press_runtime()
+			runtime.forward_press_mode = nil
 			set_state(State.recover)
 			set_phase("none")
 		end,
 		event = function(handle)
+			sync_region()
+
 			if condition.low_health() or condition.low_bullet() then
 				return
 			end
 
 			if condition.health_ready() and condition.bullet_ready() then
-				if should_enter_guard_home() then
-					handle:set_next(State.guard_home)
-				else
-					handle:set_next(State.start_cruise)
-				end
+				handle:set_next(State.active)
 			end
 		end,
 	})
 
-	assert(intent_fsm:init_ready(State), "intent fsm init_ready failed")
-	return intent_fsm
+	assert(endpoint_fsm:init_ready(State), "endpoint fsm init_ready failed")
+	return endpoint_fsm
 end
 
 on_init = function()
@@ -607,6 +500,10 @@ on_init = function()
 	runtime.switch_interval = read_option("fsm_switch_interval", 5.0)
 
 	configure_test_rule()
+	do
+		local ok, err = configure_region_map(read_option("global_map", "rmuc"))
+		assert(ok, "failed to configure region map: " .. tostring(err))
+	end
 	setup_edges()
 
 	if read_option("enable_goal_topic_forward", false) then
@@ -614,10 +511,10 @@ on_init = function()
 	end
 	action:bind(scheduler)
 
-	local intent_fsm = create_intent_fsm()
+	local endpoint_fsm = create_endpoint_fsm()
 	scheduler:append_task(function()
 		while true do
-			intent_fsm:spin_once()
+			endpoint_fsm:spin_once()
 			request:yield()
 		end
 	end)
@@ -626,11 +523,11 @@ on_init = function()
 		while true do
 			request:sleep(1.0)
 			action:info(string.format(
-				"fsm=%s phase=%s return_stage=%s stage=%s hp=%s bullet=%s rs=%s ls=%s",
+				"fsm=%s intent=%s phase=%s region=%s hp=%s bullet=%s rs=%s ls=%s",
 				runtime.current_state,
+				tostring(runtime.current_intent_kind),
 				runtime.current_phase,
-				tostring(runtime.return_stage),
-				blackboard.game.stage,
+				runtime.region_name,
 				tostring(blackboard.user.health),
 				tostring(blackboard.user.bullet),
 				blackboard.play.rswitch,
@@ -640,7 +537,7 @@ on_init = function()
 	end)
 
 	action:info(ascii.banner)
-	action:warn("FSM test endpoint loaded")
+	action:warn("new FSM endpoint loaded")
 end
 
 on_tick = function()
@@ -650,11 +547,10 @@ on_tick = function()
 end
 
 on_exit = function()
-	cancel_job()
+	clear_current_intent()
 	action:stop_navigation()
 end
 
---- Callback for velocity topic from Nav2.
 on_control = function(vx, vy, _)
 	action:update_chassis_vel(vx, vy)
 end

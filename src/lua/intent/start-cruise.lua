@@ -1,86 +1,144 @@
+local fsm = require("util.fsm")
+local Region = require("region")
 local cross_fluctuant_road = require("task.cross-fluctuant.cross-fluctuant-road")
 local navigate_to_fluctuant_begin = require("task.cross-fluctuant.navigate-to-fluctuant-begin")
-local ReturnStage = require("util.return-stage")
 
 local StartCruiseIntent = {}
 StartCruiseIntent.__index = StartCruiseIntent
 
-local Phase = {
+local State = {
 	to_fluctuant_begin = "to_fluctuant_begin",
 	crossing_fluctuant = "crossing_fluctuant",
+	done = "done",
+	failed = "failed",
 }
-
-local function unknown_phase_error(phase)
-	error("unknown start-cruise intent phase: " .. tostring(phase))
-end
 
 local M = {
-	Phase = Phase,
+	State = State,
 }
 
---- @param args { ours_zone: boolean }
---- @return table
+local function initial_state(ctx)
+	if Region.is_after_fluctuant(ctx.region()) then
+		return State.done
+	end
+	if Region.is_on_fluctuant(ctx.region()) then
+		return State.crossing_fluctuant
+	end
+	return State.to_fluctuant_begin
+end
+
 function M.new(args)
 	assert(type(args) == "table", "args should be a table")
 	assert(type(args.ours_zone) == "boolean", "args.ours_zone should be a boolean")
 
 	return setmetatable({
 		ours_zone = args.ours_zone,
-		phase = Phase.to_fluctuant_begin,
-		_return_stage = ReturnStage.before_fluctuant,
+		phase = "none",
+		status = "running",
+		machine = nil,
 	}, StartCruiseIntent)
 end
 
---- @return string
 function StartCruiseIntent:phase_name()
 	return self.phase
 end
 
---- @return "before_fluctuant"|"on_fluctuant"|"after_fluctuant"
-function StartCruiseIntent:return_stage()
-	return self._return_stage
+function StartCruiseIntent:create_machine(ctx)
+	local machine = fsm:new(initial_state(ctx))
+
+	machine:use({
+		state = State.to_fluctuant_begin,
+		enter = function()
+			self.phase = State.to_fluctuant_begin
+			ctx.run_job("navigate_to_fluctuant_begin", function()
+				return navigate_to_fluctuant_begin(self.ours_zone, true)
+			end)
+		end,
+		event = function(handle)
+			if Region.is_after_fluctuant(ctx.region()) then
+				ctx.cancel_job()
+				handle:set_next(State.done)
+				return
+			end
+
+			if Region.is_on_fluctuant(ctx.region()) then
+				ctx.cancel_job()
+				handle:set_next(State.crossing_fluctuant)
+				return
+			end
+
+			local job = ctx.job_state()
+			if not job.done then
+				return
+			end
+
+			if job.success then
+				handle:set_next(State.crossing_fluctuant)
+			else
+				handle:set_next(State.failed)
+			end
+		end,
+	})
+
+	machine:use({
+		state = State.crossing_fluctuant,
+		enter = function()
+			self.phase = State.crossing_fluctuant
+			ctx.run_job("cross_fluctuant", function()
+				return cross_fluctuant_road(self.ours_zone, true)
+			end)
+		end,
+		event = function(handle)
+			if Region.is_after_fluctuant(ctx.region()) then
+				ctx.cancel_job()
+				handle:set_next(State.done)
+				return
+			end
+
+			local job = ctx.job_state()
+			if not job.done then
+				return
+			end
+
+			if job.success then
+				handle:set_next(State.done)
+			else
+				handle:set_next(State.failed)
+			end
+		end,
+	})
+
+	machine:use({
+		state = State.done,
+		enter = function()
+			self.phase = State.done
+			self.status = "success"
+		end,
+		event = function() end,
+	})
+
+	machine:use({
+		state = State.failed,
+		enter = function()
+			self.phase = State.failed
+			self.status = "failed"
+		end,
+		event = function() end,
+	})
+
+	assert(machine:init_ready(State), "start-cruise intent fsm init_ready failed")
+	return machine
 end
 
---- @param run_job fun(name: string, fn: function)
-function StartCruiseIntent:run(run_job)
-	assert(type(run_job) == "function", "run_job should be a function")
-
-	if self.phase == Phase.to_fluctuant_begin then
-		run_job("navigate_to_fluctuant_begin", function()
-			return navigate_to_fluctuant_begin(self.ours_zone, true)
-		end)
-		return
+function StartCruiseIntent:spin(ctx)
+	assert(type(ctx) == "table", "ctx should be a table")
+	if self.machine == nil then
+		self.machine = self:create_machine(ctx)
 	end
-
-	if self.phase == Phase.crossing_fluctuant then
-		run_job("cross_fluctuant", function()
-			return cross_fluctuant_road(self.ours_zone, true)
-		end)
-		return
+	if self.status == "running" then
+		self.machine:spin_once()
 	end
-
-	unknown_phase_error(self.phase)
-end
-
---- @return boolean has_next_phase
-function StartCruiseIntent:advance()
-	if self.phase == Phase.to_fluctuant_begin then
-		self.phase = Phase.crossing_fluctuant
-		self._return_stage = ReturnStage.on_fluctuant
-		return true
-	end
-
-	if self.phase == Phase.crossing_fluctuant then
-		return false
-	end
-
-	unknown_phase_error(self.phase)
-end
-
-function StartCruiseIntent:on_job_succeeded()
-	if self.phase == Phase.crossing_fluctuant then
-		self._return_stage = ReturnStage.after_fluctuant
-	end
+	return self.status
 end
 
 return M
