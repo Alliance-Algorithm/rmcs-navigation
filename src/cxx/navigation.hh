@@ -54,6 +54,9 @@ public:
     /// - 若当前无活跃 action 目标，返回 {nan, nan, nan}。
     auto check_active_goal() const -> std::tuple<double, double, double>;
 
+    /// 取消当前活跃导航目标。
+    auto cancel_target() -> void;
+
     /// 开关 goal topic 转发功能（可选）。
     ///
     /// 行为说明：

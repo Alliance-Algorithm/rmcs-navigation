@@ -6,13 +6,9 @@
 
 #include "cxx/context.hh"
 #include "cxx/navigation.hh"
+#include "cxx/navigation_gimbal_controller.hh"
 #include "cxx/util/node_mixin.hh"
-#include <algorithm>
-#include <cmath>
 #include <filesystem>
-#include <limits>
-#include <numbers>
-#include <optional>
 #include <tuple>
 
 #include <Eigen/Geometry>
@@ -32,12 +28,14 @@ class Navigation
     , public rmcs::navigation::NodeMixin {
 private:
     mutable std::mutex io_mutex;
-    static constexpr auto kNan_ = std::numeric_limits<double>::quiet_NaN();
 
     using Twist = geometry_msgs::msg::Twist;
     std::shared_ptr<rclcpp::Subscription<Twist>> subscription_twist;
 
     bool mock_context = false;
+
+    bool chassis_vel_override_active_ = false;
+    Eigen::Vector2d chassis_vel_override_ = Eigen::Vector2d::Zero();
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
     std::unique_ptr<sol::state> lua;
@@ -49,21 +47,14 @@ private:
 
     details::Context context;
     details::Navigation navigation;
-    mutable std::mutex lua_gimbal_target_yaw_mutex_;
-    double lua_gimbal_target_yaw_ = kNan_;
-    bool lua_gimbal_target_yaw_active_ = false;
-    double navigation_gimbal_yaw_kp_ = 0.5;
-    double navigation_gimbal_yaw_speed_max_ = 0.8;
-    double navigation_gimbal_yaw_tolerance_ = std::numbers::pi_v<double> / 18.0;
-    double navigation_gimbal_yaw_smooth_alpha_ = 0.02;
-    double navigation_gimbal_yaw_acc_limit_ = 2.0;
-    double navigation_gimbal_yaw_speed_command_ = 0.0;
+    details::NavigationGimbalController gimbal_controller;
 
     struct Command {
         OutputInterface<Eigen::Vector2d> chassis_speed;
-        OutputInterface<Eigen::Vector2d> gimbal_speed;
+        OutputInterface<rmcs_msgs::ChassisMode> chassis_mode;
+        OutputInterface<bool> enable_local_obstacle;
+        OutputInterface<double> base_link_yaw;
         OutputInterface<std::size_t> nod_count;
-        OutputInterface<bool> rotate_chassis;
         OutputInterface<bool> detect_targets;
         OutputInterface<bool> enable_autoaim;
 
@@ -71,9 +62,13 @@ private:
             component.register_output(
                 "/rmcs_navigation/chassis_velocity", chassis_speed, Eigen::Vector2d::Zero());
             component.register_output(
-                "/rmcs_navigation/gimbal_velocity", gimbal_speed, Eigen::Vector2d::Zero());
+                "/rmcs_navigation/chassis_mode", chassis_mode, rmcs_msgs::ChassisMode::AUTO);
+            component.register_output(
+                "/rmcs_navigation/enable_local_obstacle", enable_local_obstacle, true);
+            component.register_output(
+                "/rmcs_navigation/base_link_yaw", base_link_yaw,
+                std::numeric_limits<double>::quiet_NaN());
             component.register_output("/rmcs_navigation/nod_count", nod_count, 0);
-            component.register_output("/rmcs_navigation/rotate_chassis", rotate_chassis, false);
             component.register_output("/rmcs_navigation/detect_targets", detect_targets, false);
             component.register_output("/rmcs_navigation/start_autoaim", enable_autoaim, false);
         }
@@ -111,13 +106,39 @@ private:
         api.set_function("switch_topic_forward", [this](bool enable) {
             navigation.switch_topic_forward(enable);
         });
-        api.set_function(
-            "update_gimbal_direction", [this](double angle) { set_lua_gimbal_target_yaw(angle); });
+        api.set_function("update_gimbal_direction", [this](double angle) {
+            gimbal_controller.set_lua_target_yaw(angle);
+        });
         api.set_function("update_chassis_mode", [this](const std::string& mode) {
-            warn("unimplement: update_chassis_mode(\"{}\")", mode);
+            if (mode == "auto") {
+                *command.chassis_mode = rmcs_msgs::ChassisMode::AUTO;
+            } else if (mode == "spin") {
+                *command.chassis_mode = rmcs_msgs::ChassisMode::SPIN;
+            } else if (mode == "step_down") {
+                *command.chassis_mode = rmcs_msgs::ChassisMode::STEP_DOWN;
+            } else if (mode == "launch_ramp") {
+                *command.chassis_mode = rmcs_msgs::ChassisMode::LAUNCH_RAMP;
+            } else {
+                warn("unknown chassis mode \"{}\", fallback to AUTO", mode);
+                *command.chassis_mode = rmcs_msgs::ChassisMode::AUTO;
+            }
         });
         api.set_function("update_chassis_vel", [this](double x, double y) {
+            if (chassis_vel_override_active_)
+                return;
             *command.chassis_speed = Eigen::Vector2d{x, y};
+        });
+        api.set_function(
+            "set_local_obstacle", [this](bool enable) { *command.enable_local_obstacle = enable; });
+        api.set_function("cancel_target", [this]() { navigation.cancel_target(); });
+        api.set_function("set_chassis_vel_override", [this](double vx, double vy) {
+            chassis_vel_override_ = Eigen::Vector2d{vx, vy};
+            chassis_vel_override_active_ = true;
+            *command.chassis_speed = chassis_vel_override_;
+        });
+        api.set_function("clear_chassis_vel_override", [this]() {
+            chassis_vel_override_active_ = false;
+            *command.chassis_speed = Eigen::Vector2d::Zero();
         });
     }
 
@@ -167,22 +188,43 @@ private:
     auto lua_sync() {
         const auto [x, y, yaw] = navigation.check_position();
 
-        auto user = lua_blackboard["user"].get<sol::table>();
-        user["health"] = *context.robot_health;
-        user["bullet"] = *context.robot_bullet;
-        user["chassis_power_limit"] = *context.chassis_power_limit_referee;
+        if (!lua_blackboard.valid() || lua_blackboard.get_type() != sol::type::table) {
+            warn("lua blackboard is invalid, skip sync");
+            return;
+        }
+
+        auto user_object = lua_blackboard["user"];
+        auto game_object = lua_blackboard["game"];
+        auto play_object = lua_blackboard["play"];
+        auto meta_object = lua_blackboard["meta"];
+        if (user_object.get_type() != sol::type::table || game_object.get_type() != sol::type::table
+            || play_object.get_type() != sol::type::table
+            || meta_object.get_type() != sol::type::table) {
+            warn("lua blackboard schema is invalid, skip sync");
+            return;
+        }
+
+        auto user = user_object.get<sol::table>();
+        user["health"] = context.robot_health.ready() ? *context.robot_health : std::uint16_t{0};
+        user["bullet"] = context.robot_bullet.ready() ? *context.robot_bullet : std::uint16_t{0};
+        user["chassis_power_limit"] = context.chassis_power_limit_referee.ready()
+                                        ? *context.chassis_power_limit_referee
+                                        : 0.0;
         user["x"] = x;
         user["y"] = y;
         user["yaw"] = yaw;
 
-        auto game = lua_blackboard["game"].get<sol::table>();
-        game["stage"] = rmcs_msgs::to_string(*context.game_stage);
+        auto game = game_object.get<sol::table>();
+        game["stage"] =
+            context.game_stage.ready() ? rmcs_msgs::to_string(*context.game_stage) : "UNKNOWN";
 
-        auto play = lua_blackboard["play"].get<sol::table>();
-        play["rswitch"] = rmcs_msgs::to_string(*context.switch_right);
-        play["lswitch"] = rmcs_msgs::to_string(*context.switch_left);
+        auto play = play_object.get<sol::table>();
+        play["rswitch"] =
+            context.switch_right.ready() ? rmcs_msgs::to_string(*context.switch_right) : "UNKNOWN";
+        play["lswitch"] =
+            context.switch_left.ready() ? rmcs_msgs::to_string(*context.switch_left) : "UNKNOWN";
 
-        auto meta = lua_blackboard["meta"].get<sol::table>();
+        auto meta = meta_object.get<sol::table>();
         meta["timestamp"] = this->now().seconds();
     }
 
@@ -215,6 +257,10 @@ private:
         lua_on_init = (*lua)["on_init"];
         lua_on_tick = (*lua)["on_tick"];
 
+        if (!lua_blackboard.valid() || lua_blackboard.get_type() != sol::type::table) {
+            throw std::runtime_error("lua endpoint must define blackboard table");
+        }
+
         const auto situation = std::array{
             lua_on_init.valid(),
             lua_on_tick.valid(),
@@ -242,106 +288,20 @@ private:
 
     auto lua_tick() { auto result = unwrap_sol(lua_on_tick(), "lua on_tick failed"); }
 
-    auto set_lua_gimbal_target_yaw(double yaw) -> void {
-        auto lock = std::scoped_lock{lua_gimbal_target_yaw_mutex_};
-        if (std::isfinite(yaw)) {
-            lua_gimbal_target_yaw_ = yaw;
-            lua_gimbal_target_yaw_active_ = true;
-            return;
-        }
-
-        lua_gimbal_target_yaw_ = kNan_;
-        lua_gimbal_target_yaw_active_ = false;
-    }
-
-    auto get_lua_gimbal_target_yaw() const -> std::optional<double> {
-        auto lock = std::scoped_lock{lua_gimbal_target_yaw_mutex_};
-        if (!lua_gimbal_target_yaw_active_ || !std::isfinite(lua_gimbal_target_yaw_))
-            return std::nullopt;
-
-        return lua_gimbal_target_yaw_;
-    }
-
-    auto calculate_navigation_target_yaw() const -> double {
-        if (auto override_yaw = get_lua_gimbal_target_yaw(); override_yaw.has_value())
-            return *override_yaw;
-
-        const auto [goal_x, goal_y, goal_yaw] = navigation.check_active_goal();
-        const auto position = navigation.check_position();
-        const auto x = std::get<0>(position);
-        const auto y = std::get<1>(position);
-
-        if (std::isfinite(goal_yaw))
-            return goal_yaw;
-
-        if (std::isfinite(goal_x) && std::isfinite(goal_y) && std::isfinite(x) && std::isfinite(y))
-            return std::atan2(goal_y - y, goal_x - x);
-
-        return kNan_;
-    }
-
-    auto smooth_navigation_yaw_speed(double target_speed) -> double {
-        constexpr double kControlDt = 1e-3;
-
-        target_speed = std::clamp(
-            target_speed, -navigation_gimbal_yaw_speed_max_, navigation_gimbal_yaw_speed_max_);
-
-        const auto alpha = std::clamp(navigation_gimbal_yaw_smooth_alpha_, 0.0, 1.0);
-        const auto prev = navigation_gimbal_yaw_speed_command_;
-        auto filtered = prev + alpha * (target_speed - prev);
-
-        if (navigation_gimbal_yaw_acc_limit_ > 0.0) {
-            const auto max_step = navigation_gimbal_yaw_acc_limit_ * kControlDt;
-            const auto delta = std::clamp(filtered - prev, -max_step, max_step);
-            filtered = prev + delta;
-        }
-
-        if (std::abs(filtered) < 1e-4)
-            filtered = 0.0;
-
-        navigation_gimbal_yaw_speed_command_ = filtered;
-        return filtered;
-    }
-
-    auto sync_gimbal_velocity_to_navigation_goal() -> void {
-        const auto target_yaw = calculate_navigation_target_yaw();
-        auto current_yaw = std::get<2>(navigation.check_position());
-        auto target_yaw_speed = 0.0;
-
-        if (std::isfinite(target_yaw) && std::isfinite(current_yaw)) {
-            const auto yaw_error =
-                std::remainder(target_yaw - current_yaw, 2.0 * std::numbers::pi_v<double>);
-            if (std::abs(yaw_error) > navigation_gimbal_yaw_tolerance_) {
-                target_yaw_speed = navigation_gimbal_yaw_kp_ * yaw_error;
-            }
-        }
-
-        const auto yaw_speed = smooth_navigation_yaw_speed(target_yaw_speed);
-
-        *command.gimbal_speed = Eigen::Vector2d{yaw_speed, 0.0};
-    }
-
 public:
     explicit Navigation()
         : rclcpp::Node{get_component_name(), option()}
         , context{*this, *this}
-        , navigation{*this} {
+        , navigation{*this}
+        , gimbal_controller{*this, navigation} {
 
         mock_context = param<bool>("mock_context");
-        navigation_gimbal_yaw_kp_ = get_parameter_or<double>("navigation_gimbal_yaw_kp", 0.2);
-        navigation_gimbal_yaw_speed_max_ =
-            get_parameter_or<double>("navigation_gimbal_yaw_speed_max", 0.5);
-        navigation_gimbal_yaw_tolerance_ = get_parameter_or<double>(
-            "navigation_gimbal_yaw_tolerance",
-            get_parameter_or<double>("navigation_gimbal_yaw_tolerance_deg", 8.0)
-                * (std::numbers::pi_v<double> / 180.0));
-        navigation_gimbal_yaw_smooth_alpha_ =
-            get_parameter_or<double>("navigation_gimbal_yaw_smooth_alpha", 0.02);
-        navigation_gimbal_yaw_acc_limit_ =
-            get_parameter_or<double>("navigation_gimbal_yaw_acc_limit", 1.0);
+
+        gimbal_controller.init_params();
 
         context.init(io_mutex, mock_context);
         command.init(*this);
+        gimbal_controller.init_output(*this);
 
         lua_init();
 
@@ -367,7 +327,7 @@ public:
             lua_tick();
         }
 
-        sync_gimbal_velocity_to_navigation_goal();
+        gimbal_controller.update();
     }
 };
 

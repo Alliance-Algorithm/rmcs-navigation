@@ -260,6 +260,15 @@ public:
         send_target(goal, request_id);
     }
 
+    auto cancel_target() -> void {
+        auto cancel_handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
+        reset_active_goal();
+        ++latest_request_id;
+
+        if (cancel_handle)
+            client->async_cancel_goal(cancel_handle);
+    }
+
     auto switch_topic_forward(bool enable) -> void {
         if (topic_forward_enabled == enable)
             return;
@@ -325,5 +334,7 @@ auto Navigation::check_bottom_yaw() const -> double { return pimpl->check_bottom
 auto Navigation::check_active_goal() const -> std::tuple<double, double, double> {
     return pimpl->check_active_goal();
 }
+
+auto Navigation::cancel_target() -> void { pimpl->cancel_target(); }
 
 } // namespace rmcs::navigation::details

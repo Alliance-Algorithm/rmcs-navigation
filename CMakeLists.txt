@@ -51,6 +51,7 @@ target_sources(
     PRIVATE
         src/cxx/context.cc
         src/cxx/navigation.cc
+        src/cxx/navigation_gimbal_controller.cc
         src/cxx/component.cc
 )
 target_include_directories(
