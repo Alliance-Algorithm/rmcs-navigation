@@ -1,6 +1,7 @@
 local util = require("util.math")
 local api = require("api")
 local request = require("util.scheduler").request
+local blackboard = require("blackboard").singleton()
 
 local NaN = 0 / 0
 
@@ -77,6 +78,14 @@ function action:update_chassis_vel(x, y)
 	api.update_chassis_vel(x, y)
 end
 
+function action:set_local_obstacle(enable)
+	api.set_local_obstacle(enable)
+end
+
+function action:cancel_target()
+	api.cancel_target()
+end
+
 function action:restart_navigation(config)
 	return api.restart_navigation(config)
 end
@@ -94,6 +103,85 @@ function action:navigate(position)
 	end
 
 	self.target = position
+end
+
+--- 直线导航到目标点，只走当前点到目标点的方向，忽略侧向纠偏。
+---
+--- 原理：每次重发时将目标点沿道路垂向平移，使得 Nav2 看到的
+--- 前进方向始终平行于起始方向，不会产生侧向速度分量。
+---
+--- @param target {x: number, y: number}
+--- @param tolerance? number -- 沿道路方向的到达容差，默认 0.15
+--- @param timeout? number    -- 超时秒数，默认 30
+--- @param speed? number      -- 直线速度(m/s)，不传则用 Nav2 原速
+function action:navigate_straight(target, tolerance, timeout, speed)
+	if tolerance == nil then tolerance = 0.15 end
+	if timeout == nil then timeout = 30 end
+
+	local start = { x = blackboard.user.x, y = blackboard.user.y }
+
+	local dx = target.x - start.x
+	local dy = target.y - start.y
+	local length = math.sqrt(dx * dx + dy * dy)
+
+	if length < 0.01 then
+		self:warn("navigate_straight: start and target are too close")
+		self.target = { x = NaN, y = NaN }
+		self:cancel_target()
+		return
+	end
+
+	local ux = dx / length
+	local uy = dy / length
+	local nx = -uy
+	local ny = ux
+
+	local elapsed = 0
+	local interval = 0.5
+
+	while elapsed < timeout do
+		local user = blackboard.user
+
+		if speed then
+			api.set_chassis_vel_override(speed * ux, speed * uy)
+		end
+
+		local perp = (user.x - start.x) * nx + (user.y - start.y) * ny
+		self:navigate({
+			x = target.x + perp * nx,
+			y = target.y + perp * ny,
+		})
+
+		request:sleep(interval)
+		elapsed = elapsed + interval
+
+		local proj = (user.x - start.x) * ux + (user.y - start.y) * uy
+		if proj >= length - tolerance then
+			self.target = { x = NaN, y = NaN }
+			self:cancel_target()
+			if speed then
+				api.set_chassis_vel_override(0, 0)
+				request:sleep(0.3)
+				api.clear_chassis_vel_override()
+			end
+			return
+		end
+	end
+
+	self.target = { x = NaN, y = NaN }
+	self:cancel_target()
+	if speed then
+		api.set_chassis_vel_override(0, 0)
+		request:sleep(0.3)
+		api.clear_chassis_vel_override()
+	end
+
+	self:warn(
+		string.format(
+			"navigate_straight: timeout (%.1fs), target (%.2f, %.2f)",
+			timeout, target.x, target.y
+		)
+	)
 end
 
 return action

@@ -17,6 +17,7 @@ local util = require("util.native")
 --- @field update_gimbal_dominator fun(name: string)
 --- @field update_chassis_mode fun(mode: string)
 --- @field update_chassis_vel fun(x: number, y: number)
+--- @field set_local_obstacle fun(enable: boolean)
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)

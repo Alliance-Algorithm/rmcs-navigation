@@ -52,20 +52,25 @@ local function create_default_blackboard()
 			assembly_zone = PointPair { { 0, 0 }, { 0, 0 } },
 
 			-- 特殊跨越地形坐标
-			road_tunnel_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 公路隧道
+			road_tunnel_begin = PointPair { { 0, 0 }, { 0, 0 } },   -- 公路隧道
 			road_tunnel_final = PointPair { { 0, 0 }, { 0, 0 } },
-			one_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 一级台阶
+			one_step_begin = PointPair { { 0, 0 }, { 0, 0 } },      -- 一级台阶
 			one_step_final = PointPair { { 0, 0 }, { 0, 0 } },
-			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 二级台阶
+			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } },      -- 二级台阶
 			two_step_final = PointPair { { 0, 0 }, { 0, 0 } },
 			common_elevated_ground_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 普通高地（飞坡起点那个高地）
 			common_elevated_ground_final = PointPair { { 0, 0 }, { 0, 0 } },
+			rough_terrain_begin = PointPair { { 0, 0 }, { 0.0, 0 } }, -- 起伏路段
+			rough_terrain_final = PointPair { { 2.5, 0 }, { 0, 0 } },
 		},
 	}
 
 	result.getter = {
 		rswitch = function()
 			return result.play.rswitch
+		end,
+		lswitch = function()
+			return result.play.lswitch
 		end,
 	}
 

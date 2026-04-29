@@ -11,6 +11,8 @@ local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
 local request = Scheduler.request
 
+local crossing_rough_terrain = require("task.crossing-rough-terrain")
+
 local restart_navigation = function()
 	action:info("导航即将重启")
 	action:restart_navigation {
@@ -19,6 +21,12 @@ local restart_navigation = function()
 		launch_odin1 = false,
 		use_sim_time = false,
 	}
+end
+
+local run_rough_terrain = function()
+	scheduler:append_task(function()
+		crossing_rough_terrain(true)
+	end)
 end
 
 ---
@@ -34,8 +42,12 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 	action:switch_topic_forward(true)
 
+	action:bind(scheduler)
+
 	restart_navigation()
-	edges:on(blackboard.getter.rswitch, "UP", restart_navigation)
+	-- edges:on(blackboard.getter.rswitch, "UP", restart_navigation)
+	edges:on(blackboard.getter.rswitch, "UP", run_rough_terrain)
+
 
 	scheduler:append_task(function()
 		while true do
