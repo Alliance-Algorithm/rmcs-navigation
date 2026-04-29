@@ -155,7 +155,8 @@ function action:navigate_straight(target, tolerance, timeout, speed)
 		request:sleep(interval)
 		elapsed = elapsed + interval
 
-		local proj = (user.x - start.x) * ux + (user.y - start.y) * uy
+		local fresh = blackboard.user
+		local proj = (fresh.x - start.x) * ux + (fresh.y - start.y) * uy
 		if proj >= length - tolerance then
 			self.target = { x = NaN, y = NaN }
 			self:cancel_target()
