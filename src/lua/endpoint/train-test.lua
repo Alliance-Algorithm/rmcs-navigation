@@ -46,36 +46,11 @@ local job = {
 }
 
 local function read_option(name, fallback)
-	local value = option[name]
-	if value == nil then
-		return fallback
-	end
-	return value
-end
-
-local function read_point_option(name, fallback)
 	local value = rawget(option, name)
 	if value == nil then
 		return fallback
 	end
-
-	assert(type(value) == "table", name .. " should be a point table")
-	local x = value.x or value[1]
-	local y = value.y or value[2]
-	assert(type(x) == "number", name .. ".x should be a number")
-	assert(type(y) == "number", name .. ".y should be a number")
-	return { x = x, y = y }
-end
-
-local function configure_point_pair(field, option_name)
-	local pair = blackboard.rule[field]
-	local shared = read_point_option(option_name, nil)
-	if shared ~= nil then
-		pair.ours = shared
-		pair.them = shared
-	end
-	pair.ours = read_point_option(option_name .. "_ours", pair.ours)
-	pair.them = read_point_option(option_name .. "_them", pair.them)
+	return value
 end
 
 local function configure_train_rule()
@@ -86,14 +61,11 @@ local function configure_train_rule()
 	rule.bullet_limit = read_option("bullet_limit", rule.bullet_limit)
 	rule.bullet_ready = read_option("bullet_ready", rule.bullet_ready)
 
-	configure_point_pair("resupply_zone", "train_resupply_zone")
-	configure_point_pair("road_zone_begin", "train_road_zone_begin")
-	configure_point_pair("road_zone_final", "train_road_zone_final")
-	configure_point_pair(
-		"central_highland_near_fluctuant_road",
-		"train_central_highland_near_fluctuant_road"
-	)
-	configure_point_pair("central_highland_near_doghole", "train_central_highland_near_doghole")
+	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }
+	rule.road_zone_begin.ours = { x = 2.6, y = 2.1 }
+	rule.road_zone_final.ours = { x = 4.7, y = 3.6 }
+	rule.central_highland_near_fluctuant_road.ours = { x = 5.7, y = 1.9 }
+	rule.central_highland_near_doghole.ours = { x = 4.8, y = -1.4 }
 end
 
 local function reset_job_status()
@@ -378,7 +350,7 @@ on_init = function()
 		action:warn("while fetch option: " .. error)
 	end)
 
-	runtime.ours_zone = read_option("fsm_ours_zone", true)
+	runtime.ours_zone = true
 	runtime.switch_interval = read_option("fsm_switch_interval", 5.0)
 
 	configure_train_rule()

@@ -57,7 +57,7 @@ local job = {
 }
 
 local function read_option(name, fallback)
-	local value = option[name]
+	local value = rawget(option, name)
 	if value == nil then
 		return fallback
 	end
