@@ -18,7 +18,6 @@ local function create_default_blackboard()
 			yaw = 0,
 
 			mode = "UNKNOWN",
-
 		},
 		game = {
 			stage = "UNKNOWN",
@@ -41,7 +40,6 @@ local function create_default_blackboard()
 			exchangeable_ammunition_quantity = 0, -- 队伍 17mm 允许发弹量的剩余可兑换数
 			
 			our_dart_nmber_of_hits = false, -- 己方飞镖击中次数
-			double_damage_activated = false, -- 雷达双倍易伤是否开启
 			fortress_occupied = false, -- 己方堡垒是否被占领
 			big_energy_mechanism_activated = false, -- 大能量机关是否被激活
 			small_energy_mechanism_activated = false, -- 小能量机关是否被激活
@@ -161,10 +159,6 @@ local function create_default_blackboard()
 			local triggered = last_our_dart_nmber_of_hits == 0 and current == 1
 			last_our_dart_nmber_of_hits = current
 			return triggered
-		end,
-
-		double_damage_activated = function ()
-			return result.game.double_damage_activated
 		end,
 
 		fortress_occupied = function ()

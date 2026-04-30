@@ -82,7 +82,7 @@ local function validate_data(data)
 	end
 end
 
-function Map.new(data)
+local function new_map(data)
 	validate_data(data)
 
 	return setmetatable({
@@ -95,19 +95,17 @@ function Map.new(data)
 	}, Map)
 end
 
-function Map.from_file(name)
-	return Map.new(load_map_data(name))
+local function load_map(name)
+	return new_map(load_map_data(name))
 end
 
-function Map:locate(position, y)
-	local x = position
-	if type(position) == "table" then
-		x = position.x
-		y = position.y
-	end
+function Map:locate(position)
+	assert(type(position) == "table", "position should be a table")
+	assert(type(position.x) == "number", "position.x should be a number")
+	assert(type(position.y) == "number", "position.y should be a number")
 
-	local column = math.floor((x - self.origin.x) / self.resolution) + 1
-	local row = self.height - math.floor((y - self.origin.y) / self.resolution)
+	local column = math.floor((position.x - self.origin.x) / self.resolution) + 1
+	local row = self.height - math.floor((position.y - self.origin.y) / self.resolution)
 
 	if column < 1 or column > self.width or row < 1 or row > self.height then
 		return Region.WALL
@@ -123,7 +121,7 @@ function Map.singleton(name)
 	if name ~= nil then
 		assert(type(name) == "string", "map name should be a string")
 		if singleton == nil or singleton_name ~= name then
-			singleton = Map.from_file(name)
+			singleton = load_map(name)
 			singleton_name = name
 		end
 		return singleton
@@ -141,6 +139,5 @@ function Map.current_name()
 end
 
 Map.Region = Region
-Map.names = RegionName
 
 return Map
