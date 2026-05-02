@@ -1,6 +1,6 @@
 local blackboard = require("blackboard").singleton()
 local action = require("action")
-local Map = require("map")
+local Map = require("rmuc_map")
 local request = require("util.scheduler").request
 local navigate_to_point = require("task.navigate-to-point")
 

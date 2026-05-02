@@ -6,7 +6,7 @@ local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local fsm = require("util.fsm")
-local Map = require("map")
+local Map = require("rmuc_map")
 local option = require("option")
 
 local EscapeToHomeIntent = require("intent.competion.escape-to-home")

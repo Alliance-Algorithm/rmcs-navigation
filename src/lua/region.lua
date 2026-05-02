@@ -1,5 +1,5 @@
 local blackboard = require("blackboard").singleton()
-local Map = require("map")
+local Map = require("rmuc_map")
 local ReturnStage = require("util.return-stage")
 local RegionId = Map.Region
 

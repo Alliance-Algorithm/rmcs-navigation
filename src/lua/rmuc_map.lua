@@ -65,20 +65,30 @@ local function load_map_data(name)
 	error("failed to load region map " .. name .. ":\n" .. table.concat(errors, "\n"))
 end
 
+local function is_finite_number(value)
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+local function is_positive_integer(value)
+	return is_finite_number(value) and value > 0 and math.floor(value) == value
+end
+
 local function validate_data(data)
 	assert(type(data) == "table", "region map data should be a table")
-	assert(type(data.width) == "number", "region map data.width should be a number")
-	assert(type(data.height) == "number", "region map data.height should be a number")
-	assert(type(data.resolution) == "number", "region map data.resolution should be a number")
+	assert(is_positive_integer(data.width), "region map data.width should be a positive integer")
+	assert(is_positive_integer(data.height), "region map data.height should be a positive integer")
+	assert(is_finite_number(data.resolution) and data.resolution > 0, "region map data.resolution should be positive")
 	assert(type(data.origin) == "table", "region map data.origin should be a table")
-	assert(type(data.origin.x) == "number", "region map data.origin.x should be a number")
-	assert(type(data.origin.y) == "number", "region map data.origin.y should be a number")
+	assert(is_finite_number(data.origin.x), "region map data.origin.x should be finite")
+	assert(is_finite_number(data.origin.y), "region map data.origin.y should be finite")
 	assert(type(data.rows) == "table", "region map data.rows should be a table")
-	assert(#data.rows == data.height, "region map row count should equal data.height")
 
-	for y, row in ipairs(data.rows) do
-		assert(type(row) == "table", "region map row should be a table")
-		assert(#row == data.width, "region map row " .. y .. " width should equal data.width")
+	for y = 1, data.height do
+		local row = data.rows[y]
+		assert(type(row) == "table", "region map row " .. y .. " should be a table")
+		for x = 1, data.width do
+			assert(type(row[x]) == "number", "region map cell " .. y .. "," .. x .. " should be a number")
+		end
 	end
 end
 
@@ -104,6 +114,10 @@ function Map:locate(position)
 	assert(type(position.x) == "number", "position.x should be a number")
 	assert(type(position.y) == "number", "position.y should be a number")
 
+	if not is_finite_number(position.x) or not is_finite_number(position.y) then
+		return Region.WALL
+	end
+
 	local column = math.floor((position.x - self.origin.x) / self.resolution) + 1
 	local row = self.height - math.floor((position.y - self.origin.y) / self.resolution)
 
@@ -111,7 +125,12 @@ function Map:locate(position)
 		return Region.WALL
 	end
 
-	return self.rows[row][column]
+	local map_row = self.rows[row]
+	if map_row == nil then
+		return Region.WALL
+	end
+
+	return map_row[column] or Region.WALL
 end
 
 local singleton
