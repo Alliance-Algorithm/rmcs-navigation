@@ -69,11 +69,13 @@ function api.restart_navigation(config)
         # 传入配置参数
         configs=%q
 
-        # 创建新窗口启动 motion (窗口 1)
-        tmux new-window -t navigation -n "motion" "bash -lc 'ros2 launch rmcs-navigation motion.launch.yaml $configs'"
-
         # 创建新窗口启动 sensor (窗口 2)
         tmux new-window -t navigation -n "sensor" "bash -lc 'ros2 launch rmcs-navigation sensor.launch.yaml $configs'"
+
+        sleep 1
+
+        # 创建新窗口启动 motion (窗口 1)
+        tmux new-window -t navigation -n "motion" "bash -lc 'ros2 launch rmcs-navigation motion.launch.yaml $configs'"
     ]]
 	local command = string.format(template, filename, configs)
 
