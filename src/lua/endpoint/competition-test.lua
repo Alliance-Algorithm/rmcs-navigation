@@ -91,6 +91,7 @@ local function configure_test_rule()
 	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }
 	rule.one_step_final.ours = { x = 0.0, y = 0.0 }
 	rule.central_highland_near_fluctuant_road.ours = { x = 0.0, y = 0.0 }
+	rule.central_highland_middle = { x = 0.0, y = 0.0 }
 	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }
 	rule.base_left_gain_point.ours = { x = 0.0, y = 0.0 }
 	rule.base_right_gain_point.ours = { x = 0.0, y = 0.0 }

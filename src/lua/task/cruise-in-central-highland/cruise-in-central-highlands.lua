@@ -4,13 +4,14 @@ local request = require("util.scheduler").request
 local action = require("action")
 local navigate_to_point = require("task.navigate-to-point")
 
-local function distance_to(target)
-	local dx = target.x - blackboard.user.x
-	local dy = target.y - blackboard.user.y
-	return math.sqrt(dx * dx + dy * dy)
+local function select_point(point, ours_zone)
+	if type(point.x) == "number" and type(point.y) == "number" then
+		return point
+	end
+	return ours_zone and point.ours or point.them
 end
 
-	--- 中央高地巡航：在“靠近起伏路侧”与“靠近狗洞侧”之间按固定周期切换导航目标。
+--- 中央高地巡航：按固定顺序在中央高地巡航点之间切换导航目标。
 --- @param ours_zone boolean
 --- @param switch_interval number 切换周期（秒）
 return function(ours_zone, switch_interval)
@@ -21,7 +22,7 @@ return function(ours_zone, switch_interval)
 
 	local rule = blackboard.rule
 	local navigation_timeout = math.max(10.0, switch_interval * 2.0)
-	local near_fluctuant_road, near_doghole
+	local near_fluctuant_road, middle, near_doghole
 	if ours_zone then
 		near_fluctuant_road = rule.central_highland_near_fluctuant_road.ours
 		near_doghole = rule.central_highland_near_doghole.ours
@@ -29,12 +30,17 @@ return function(ours_zone, switch_interval)
 		near_fluctuant_road = rule.central_highland_near_fluctuant_road.them
 		near_doghole = rule.central_highland_near_doghole.them
 	end
+	middle = select_point(rule.central_highland_middle, ours_zone)
 
-	-- 首次优先去更近的点，减少无效折返。
-	local go_fluctuant_road_first = distance_to(near_fluctuant_road) <= distance_to(near_doghole)
-	local target = go_fluctuant_road_first and near_fluctuant_road or near_doghole
+	local targets = {
+		near_fluctuant_road,
+		middle,
+		near_doghole,
+	}
+	local target_index = 1
 
 	while true do
+		local target = targets[target_index]
 		local phase_start = clock:now()
 		action:update_chassis_mode("SPIN")
 		local ok = navigate_to_point(target, {
@@ -58,11 +64,7 @@ return function(ours_zone, switch_interval)
 			request:sleep(remain)
 		end
 
-		if target == near_fluctuant_road then
-			target = near_doghole
-		else
-			target = near_fluctuant_road
-		end
+		target_index = target_index % #targets + 1
 	end
 
 	return true
