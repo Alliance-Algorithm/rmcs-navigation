@@ -153,20 +153,117 @@ private:
     auto lua_sync() {
         const auto [x, y, yaw] = navigation.check_position();
 
+        auto read_context = []<typename T>(
+                                const details::Context::InputInterface<T>& input,
+                                T fallback) -> T {
+            if (input.ready())
+                return *input;
+
+            return fallback;
+        };
+
         auto user = lua_blackboard["user"].get<sol::table>();
-        user["health"] = *context.robot_health;
-        user["bullet"] = *context.robot_bullet;
-        user["chassis_power_limit"] = *context.chassis_power_limit_referee;
+        user["health"] = read_context(context.robot_health, std::uint16_t{0});
+        user["bullet"] = read_context(context.robot_bullet, std::uint16_t{0});
+        user["chassis_power_limit"] = read_context(context.chassis_power_limit_referee, 0.0);
         user["x"] = x;
         user["y"] = y;
         user["yaw"] = yaw;
+        user["chassis_power"] = read_context(context.chassis_power_referee, 0.0);
+        user["chassis_buffer_energy"] = read_context(context.chassis_buffer_energy_referee, 0.0);
+        user["chassis_output_status"] = read_context(context.chassis_output_status, false);
+        user["shooter_cooling"] = read_context(context.robot_shooter_cooling, std::int64_t{0});
+        user["shooter_heat_limit"] =
+            read_context(context.robot_shooter_heat_limit, std::int64_t{0});
+        user["bullet_42mm"] = read_context(context.robot_42mm_bullet, std::uint16_t{0});
+        user["fortress_17mm_bullet"] =
+            read_context(context.robot_fortress_17mm_bullet, std::uint16_t{0});
+        user["initial_speed"] = read_context(context.robot_initial_speed, 0.0F);
+        user["shoot_timestamp"] = read_context(context.robot_shoot_timestamp, 0.0);
 
         auto game = lua_blackboard["game"].get<sol::table>();
-        game["stage"] = rmcs_msgs::to_string(*context.game_stage);
+        game["stage"] = rmcs_msgs::to_string(read_context(
+            context.game_stage, rmcs_msgs::GameStage::UNKNOWN));
+        game["outpost_health"] = read_context(context.ally_outpost_hp, std::uint16_t{0});
+        game["base_health"] = read_context(context.ally_base_hp, std::uint16_t{0});
+        game["hero_health"] = read_context(context.ally_hero_hp, std::uint16_t{0});
+        game["infantry_1_health"] =
+            read_context(context.ally_infantry_1_hp, std::uint16_t{0});
+        game["infantry_2_health"] =
+            read_context(context.ally_infantry_2_hp, std::uint16_t{0});
+        game["engineer_health"] = read_context(context.ally_engineer_hp, std::uint16_t{0});
+        game["remaining_time"] = read_context(context.stage_remain_time, std::uint16_t{0});
+        game["gold_coin"] = read_context(context.remaining_gold_coin, std::uint16_t{0});
+        game["exchangeable_ammunition_quantity"] =
+            read_context(context.sentry_exchangeable_bullet, std::uint16_t{0});
+        game["our_dart_nmber_of_hits"] =
+            static_cast<int>(read_context(
+                context.dart_latest_hit_target_total_count, std::uint8_t{0}));
+        game["fortress_occupied"] =
+            read_context(context.ally_fortress_occupation_status, std::uint8_t{0}) != 0;
+        game["big_energy_mechanism_activated"] =
+            read_context(context.ally_big_energy_activation_status, std::uint8_t{0}) != 0;
+        game["small_energy_mechanism_activated"] =
+            read_context(context.ally_small_energy_activation_status, std::uint8_t{0}) != 0;
+
+        auto set_position = [](sol::table position, double x, double y) {
+            position["x"] = x;
+            position["y"] = y;
+        };
+        set_position(
+            game["hero_position"].get<sol::table>(),
+            read_context(context.ally_hero_position_x, 0.0),
+            read_context(context.ally_hero_position_y, 0.0));
+        set_position(
+            game["infantry_1_position"].get<sol::table>(),
+            read_context(context.ally_infantry_1_position_x, 0.0),
+            read_context(context.ally_infantry_1_position_y, 0.0));
+        set_position(
+            game["infantry_2_position"].get<sol::table>(),
+            read_context(context.ally_infantry_2_position_x, 0.0),
+            read_context(context.ally_infantry_2_position_y, 0.0));
+        set_position(
+            game["engineer_position"].get<sol::table>(),
+            read_context(context.ally_engineer_position_x, 0.0),
+            read_context(context.ally_engineer_position_y, 0.0));
+
+        auto referee = lua_blackboard["referee"].get<sol::table>();
+        referee["sync_timestamp"] = read_context(context.sync_timestamp, std::uint64_t{0});
+        referee["robot_id"] =
+            static_cast<int>(read_context(
+                context.robot_id, rmcs_msgs::RobotId{rmcs_msgs::RobotId::UNKNOWN}));
+        auto robots_hp = referee["robots_hp"].get<sol::table>();
+        const auto hp =
+            read_context(context.robots_hp, rmcs_core::referee::status::GameRobotHp{});
+        robots_hp["ally_1"] = hp.ally_1_robot_hp;
+        robots_hp["ally_2"] = hp.ally_2_robot_hp;
+        robots_hp["ally_3"] = hp.ally_3_robot_hp;
+        robots_hp["ally_4"] = hp.ally_4_robot_hp;
+        robots_hp["reserved"] = hp.reserved;
+        robots_hp["ally_7"] = hp.ally_7_robot_hp;
+        robots_hp["outpost"] = hp.ally_outpost_hp;
+        robots_hp["base"] = hp.ally_base_hp;
+        referee["can_confirm_free_revive"] =
+            read_context(context.sentry_can_confirm_free_revive, false);
+        referee["can_exchange_instant_revive"] =
+            read_context(context.sentry_can_exchange_instant_revive, false);
+        referee["instant_revive_cost"] =
+            read_context(context.sentry_instant_revive_cost, std::uint16_t{0});
+        referee["exchanged_bullet"] =
+            read_context(context.sentry_exchanged_bullet, std::uint16_t{0});
+        referee["remote_bullet_exchange_count"] =
+            read_context(context.sentry_remote_bullet_exchange_count, std::uint8_t{0});
+        referee["sentry_mode"] = read_context(context.sentry_mode, std::uint8_t{0});
+        referee["energy_mechanism_activatable"] =
+            read_context(context.sentry_energy_mechanism_activatable, false);
+        referee["red_score"] = read_context(context.red_score, std::uint32_t{0});
+        referee["blue_score"] = read_context(context.blue_score, std::uint32_t{0});
 
         auto play = lua_blackboard["play"].get<sol::table>();
-        play["rswitch"] = rmcs_msgs::to_string(*context.switch_right);
-        play["lswitch"] = rmcs_msgs::to_string(*context.switch_left);
+        play["rswitch"] =
+            rmcs_msgs::to_string(read_context(context.switch_right, rmcs_msgs::Switch::UNKNOWN));
+        play["lswitch"] =
+            rmcs_msgs::to_string(read_context(context.switch_left, rmcs_msgs::Switch::UNKNOWN));
 
         auto meta = lua_blackboard["meta"].get<sol::table>();
         meta["timestamp"] = this->now().seconds();

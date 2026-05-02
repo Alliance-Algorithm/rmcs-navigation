@@ -85,13 +85,83 @@ struct Context::Impl {
 
     auto init(std::mutex& io_mutex, bool mock) {
         make_input("/referee/chassis/power_limit", context.chassis_power_limit_referee, mock);
+        make_input("/referee/chassis/power", context.chassis_power_referee, mock);
+        make_input("/referee/chassis/buffer_energy", context.chassis_buffer_energy_referee, mock);
+        make_input("/referee/chassis/output_status", context.chassis_output_status, mock);
 
         make_input("/referee/id", context.robot_id, mock);
         make_input("/remote/switch/right", context.switch_right, mock);
         make_input("/remote/switch/left", context.switch_left, mock);
         make_input("/referee/game/stage", context.game_stage, mock);
+        make_input("/referee/game/stage_remain_time", context.stage_remain_time, mock);
+        make_input("/referee/game/sync_timestamp", context.sync_timestamp, mock);
+        make_input(
+            "/referee/event/ally_big_energy_activation_status",
+            context.ally_big_energy_activation_status, mock);
+        make_input(
+            "/referee/event/ally_small_energy_activation_status",
+            context.ally_small_energy_activation_status, mock);
+        make_input(
+            "/referee/event/ally_fortress_occupation_status",
+            context.ally_fortress_occupation_status, mock);
+        make_input(
+            "/referee/dart/latest_hit_target_total_count",
+            context.dart_latest_hit_target_total_count, mock);
         make_input("/referee/current_hp", context.robot_health, mock);
         make_input("/referee/shooter/bullet_allowance", context.robot_bullet, mock);
+        make_input("/referee/shooter/cooling", context.robot_shooter_cooling, mock);
+        make_input("/referee/shooter/heat_limit", context.robot_shooter_heat_limit, mock);
+        make_input("/referee/shooter/42mm_bullet_allowance", context.robot_42mm_bullet, mock);
+        make_input(
+            "/referee/shooter/fortress_17mm_bullet_allowance",
+            context.robot_fortress_17mm_bullet, mock);
+        make_input("/referee/remaining_gold_coin", context.remaining_gold_coin, mock);
+        make_input("/referee/shooter/initial_speed", context.robot_initial_speed, mock);
+        make_input("/referee/shooter/shoot_timestamp", context.robot_shoot_timestamp, mock);
+
+        make_input("/referee/robots/hp", context.robots_hp, mock);
+        make_input("/referee/ally/hero_hp", context.ally_hero_hp, mock);
+        make_input("/referee/ally/engineer_hp", context.ally_engineer_hp, mock);
+        make_input("/referee/ally/infantry_1_hp", context.ally_infantry_1_hp, mock);
+        make_input("/referee/ally/infantry_2_hp", context.ally_infantry_2_hp, mock);
+        make_input("/referee/ally/outpost/hp", context.ally_outpost_hp, mock);
+        make_input("/referee/ally/base/hp", context.ally_base_hp, mock);
+        make_input("/referee/ally/hero_position_x", context.ally_hero_position_x, mock);
+        make_input("/referee/ally/hero_position_y", context.ally_hero_position_y, mock);
+        make_input("/referee/ally/engineer_position_x", context.ally_engineer_position_x, mock);
+        make_input("/referee/ally/engineer_position_y", context.ally_engineer_position_y, mock);
+        make_input(
+            "/referee/ally/infantry_1_position_x", context.ally_infantry_1_position_x, mock);
+        make_input(
+            "/referee/ally/infantry_1_position_y", context.ally_infantry_1_position_y, mock);
+        make_input(
+            "/referee/ally/infantry_2_position_x", context.ally_infantry_2_position_x, mock);
+        make_input(
+            "/referee/ally/infantry_2_position_y", context.ally_infantry_2_position_y, mock);
+
+        make_input(
+            "/referee/sentry/can_confirm_free_revive",
+            context.sentry_can_confirm_free_revive, mock);
+        make_input(
+            "/referee/sentry/can_exchange_instant_revive",
+            context.sentry_can_exchange_instant_revive, mock);
+        make_input(
+            "/referee/sentry/instant_revive_cost", context.sentry_instant_revive_cost, mock);
+        make_input(
+            "/referee/sentry/exchanged_bullet_allowance",
+            context.sentry_exchanged_bullet, mock);
+        make_input(
+            "/referee/sentry/remote_bullet_exchange_count",
+            context.sentry_remote_bullet_exchange_count, mock);
+        make_input(
+            "/referee/sentry/exchangeable_bullet_allowance",
+            context.sentry_exchangeable_bullet, mock);
+        make_input("/referee/sentry/mode", context.sentry_mode, mock);
+        make_input(
+            "/referee/sentry/energy_mechanism_activatable",
+            context.sentry_energy_mechanism_activatable, mock);
+        make_input("/referee/game/red_score", context.red_score, mock);
+        make_input("/referee/game/blue_score", context.blue_score, mock);
 
         if (mock) {
             constexpr auto topic = "/rmcs_navigation/context/mock";

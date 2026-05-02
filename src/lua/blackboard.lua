@@ -13,6 +13,15 @@ local function create_default_blackboard()
 			health = 0,
 			bullet = 0,
 			chassis_power_limit = 0,
+			chassis_power = 0,
+			chassis_buffer_energy = 0,
+			chassis_output_status = false,
+			shooter_cooling = 0,
+			shooter_heat_limit = 0,
+			bullet_42mm = 0,
+			fortress_17mm_bullet = 0,
+			initial_speed = 0,
+			shoot_timestamp = 0,
 			x = 0,
 			y = 0,
 			yaw = 0,
@@ -52,6 +61,31 @@ local function create_default_blackboard()
 			timestamp = 0, -- 秒
 			fsm_state = "unknown",
 			fsm_return_stage = "before_fluctuant",
+		},
+		referee = {
+			sync_timestamp = 0,
+			robot_id = 0,
+			robots_hp = {
+				ally_1 = 0,
+				ally_2 = 0,
+				ally_3 = 0,
+				ally_4 = 0,
+				reserved = 0,
+				ally_7 = 0,
+				outpost = 0,
+				base = 0,
+			},
+
+			can_confirm_free_revive = false,
+			can_exchange_instant_revive = false,
+			instant_revive_cost = 0,
+			exchanged_bullet = 0,
+			remote_bullet_exchange_count = 0,
+			sentry_mode = 0,
+			energy_mechanism_activatable = false,
+
+			red_score = 0,
+			blue_score = 0,
 		},
 
 		-- Static Information

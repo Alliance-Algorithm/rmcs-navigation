@@ -17,6 +17,7 @@ local scheduler = Scheduler.new()
 local request = Scheduler.request
 
 local edges = require("util.edge").new()
+local BlackboardLogger = require("util.blackboard_logger")
 
 ---
 --- Export Context
@@ -153,6 +154,7 @@ end
 
 local function setup_edges()
 	edges:on(blackboard.getter.rswitch, "UP", function()
+		-- 手动测试入口：仅允许右拨杆向上触发启动。
 		requests.start = true
 	end)
 end
@@ -259,7 +261,7 @@ local function create_endpoint_fsm()
 			replace_intent("cross_road", true)
 		end,
 		event = function(handle)
-			if condition.low_health() or condition.low_bullet() then
+			if condition.low_health() then
 				clear_current_intent()
 				handle:set_next(State.escape)
 				return
@@ -286,7 +288,7 @@ local function create_endpoint_fsm()
 			replace_intent("keep_cruise", true)
 		end,
 		event = function(handle)
-			if condition.low_health() or condition.low_bullet() then
+			if condition.low_health() then
 				clear_current_intent()
 				handle:set_next(State.escape)
 				return
@@ -329,7 +331,7 @@ local function create_endpoint_fsm()
 			set_phase("none")
 		end,
 		event = function(handle)
-			if condition.low_health() or condition.low_bullet() then
+			if condition.low_health() then
 				return
 			end
 
@@ -369,20 +371,7 @@ on_init = function()
 		end
 	end)
 
-	scheduler:append_task(function()
-		while true do
-			request:sleep(1.0)
-			action:info(string.format(
-				"train fsm=%s intent=%s phase=%s hp=%s bullet=%s rs=%s",
-				runtime.current_state,
-				tostring(runtime.current_intent_kind),
-				runtime.current_phase,
-				tostring(blackboard.user.health),
-				tostring(blackboard.user.bullet),
-				blackboard.play.rswitch
-			))
-		end
-	end)
+	-- BlackboardLogger.attach(scheduler, blackboard)
 
 	action:info(ascii.banner)
 	action:warn("train FSM endpoint loaded")

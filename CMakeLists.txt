@@ -57,10 +57,12 @@ target_sources(
         src/cxx/context.cc
         src/cxx/component.cc
 )
+set(RMCS_CORE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../rmcs_core/src")
 target_include_directories(
     ${PROJECT_NAME}
     SYSTEM PRIVATE
         ${PROJECT_SOURCE_DIR}/src/
+        ${RMCS_CORE_SOURCE_DIR}
         ${rmcs_executor_INCLUDE_DIRS}
         ${geometry_msgs_INCLUDE_DIRS}
         ${rmcs_msgs_INCLUDE_DIRS}
