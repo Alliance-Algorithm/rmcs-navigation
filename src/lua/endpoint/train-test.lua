@@ -66,7 +66,7 @@ local function configure_train_rule()
 	rule.bullet_limit = read_option("bullet_limit", rule.bullet_limit)
 	rule.bullet_ready = read_option("bullet_ready", rule.bullet_ready)
 
-	rule.resupply_zone.ours = { x = 13.0, y = 6.5 }
+	rule.resupply_zone.ours = { x = 13.0, y = 7.1 }
 	rule.road_zone_begin.ours = { x = 16.9, y = 6.3 }
 	rule.road_zone_final.ours = { x = 17.9, y = 4.5 }
 	rule.road_zone_way_point_1 = { x = 14.3, y = 5.9 }
@@ -462,7 +462,7 @@ local function create_endpoint_fsm()
 				return
 			end
 
-			if condition.health_ready() and condition.bullet_ready() then
+			if condition.health_ready() then
 				handle:set_next(State.cross_road)
 			end
 		end,
