@@ -135,6 +135,7 @@ local function create_default_blackboard()
 			launch_ramp_begin = PointPair { { 0, 0 }, { 0, 0 } },                  -- 飞坡
 			launch_ramp_final = PointPair { { 0, 0 }, { 0, 0 } },
 			outpost_resupply = PointPair { { 0, 0 }, { 0, 0 } },                   -- 前哨站补给点
+			attack_outpost_point = PointPair { { 0, 0 }, { 0, 0 } },               -- 攻击前哨站点
 			assembly_zone = PointPair { { 0, 0 }, { 0, 0 } },
 			central_highland_near_fluctuant_road = PointPair { { 0, 0 }, { 0, 0 } }, -- 中央高地靠近起伏路一侧
 			central_highland_near_doghole = PointPair { { 0, 0 }, { 0, 0 } },      -- 中央高地靠近狗洞一侧

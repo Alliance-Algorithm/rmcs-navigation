@@ -86,6 +86,8 @@ local function configure_test_rule()
 		read_option("engineer_health_ready_red_line", 50)
 
 	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }
+	rule.road_zone_begin.ours = { x = 0.0, y = 0.0 }
+	rule.road_zone_way_point_1.ours = { x = 0.0, y = 0.0 }
 	rule.fluctuant_road_begin.ours = { x = 0.0, y = 0.0 }
 	rule.fluctuant_road_final.ours = { x = 0.0, y = 0.0 }
 	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }
@@ -95,7 +97,8 @@ local function configure_test_rule()
 	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }
 	rule.base_left_gain_point.ours = { x = 0.0, y = 0.0 }
 	rule.base_right_gain_point.ours = { x = 0.0, y = 0.0 }
-	rule.fortress.ours = { x = 0.0, y = 0.0 }
+	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }
+	rule.attack_outpost_point.ours = { x = 0.0, y = 0.0 }
 
 	rule.central_highland_near_fluctuant_road.them = { x = 0.0, y = 0.0 }
 	rule.central_highland_near_doghole.them = { x = 0.0, y = 0.0 }
