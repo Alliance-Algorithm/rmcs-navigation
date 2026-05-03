@@ -30,25 +30,37 @@ return function(ours_zone)
 	end
 
 	local navigation_timeout = math.max(10.0, switch_interval * 2.0)
-	local target
-	if distance_to(left_gain_point) <= distance_to(right_gain_point) then
-		target = left_gain_point
+	local targets = {
+		{
+			name = "base_left_gain_point",
+			point = left_gain_point,
+		},
+		{
+			name = "base_right_gain_point",
+			point = right_gain_point,
+		},
+	}
+	local target_index
+	if distance_to(targets[1].point) <= distance_to(targets[2].point) then
+		target_index = 1
 	else
-		target = right_gain_point
+		target_index = 2
 	end
 
 	while true do
+		local target = targets[target_index]
 		local phase_start = clock:now()
 		action:update_chassis_mode("SPIN")
-		local ok = navigate_to_point(target, {
+		local ok = navigate_to_point(target.point, {
 			tolerance = 0.1,
 			timeout = navigation_timeout,
 		})
 		if not ok then
 			action:warn(string.format(
-				"cruise-in-front-of-base: 导航到巡航点失败 (x=%.2f, y=%.2f, timeout=%.2fs)",
-				target.x,
-				target.y,
+				"cruise-in-front-of-base: 导航到%s失败 (x=%.2f, y=%.2f, timeout=%.2fs)",
+				target.name,
+				target.point.x,
+				target.point.y,
 				navigation_timeout
 			))
 			return false
@@ -60,11 +72,7 @@ return function(ours_zone)
 			request:sleep(remain)
 		end
 
-		if target == left_gain_point then
-			target = right_gain_point
-		else
-			target = left_gain_point
-		end
+		target_index = target_index % #targets + 1
 	end
 
 	return true

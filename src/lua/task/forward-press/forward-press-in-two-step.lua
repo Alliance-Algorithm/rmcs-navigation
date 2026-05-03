@@ -17,20 +17,32 @@ return function(switch_interval)
 	local enemy_near_two_steps_and_outpost = rule.central_highland_near_two_steps_and_outpost.them
 
 	local navigation_timeout = math.max(10.0, switch_interval * 2.0)
-	local target = enemy_gain_point
+	local targets = {
+		{
+			name = "central_highland_gain_point",
+			point = enemy_gain_point,
+		},
+		{
+			name = "central_highland_near_two_steps_and_outpost",
+			point = enemy_near_two_steps_and_outpost,
+		},
+	}
+	local target_index = 1
 
 	while true do
+		local target = targets[target_index]
 		local phase_start = clock:now()
 		action:update_chassis_mode("SPIN")
-		local ok = navigate_to_point(target, {
+		local ok = navigate_to_point(target.point, {
 			tolerance = 0.1,
 			timeout = navigation_timeout,
 		})
 		if not ok then
 			action:warn(string.format(
-				"forward-press-in-two-step: 导航到巡航点失败 (x=%.2f, y=%.2f, timeout=%.2fs)",
-				target.x,
-				target.y,
+				"forward-press-in-two-step: 导航到%s失败 (x=%.2f, y=%.2f, timeout=%.2fs)",
+				target.name,
+				target.point.x,
+				target.point.y,
 				navigation_timeout
 			))
 			return false
@@ -42,11 +54,7 @@ return function(switch_interval)
 			request:sleep(remain)
 		end
 
-		if target == enemy_gain_point then
-			target = enemy_near_two_steps_and_outpost
-		else
-			target = enemy_gain_point
-		end
+		target_index = target_index % #targets + 1
 	end
 
 	return true

@@ -33,9 +33,18 @@ return function(ours_zone, switch_interval)
 	middle = select_point(rule.central_highland_middle, ours_zone)
 
 	local targets = {
-		near_fluctuant_road,
-		middle,
-		near_doghole,
+		{
+			name = "central_highland_near_fluctuant_road",
+			point = near_fluctuant_road,
+		},
+		{
+			name = "central_highland_middle",
+			point = middle,
+		},
+		{
+			name = "central_highland_near_doghole",
+			point = near_doghole,
+		},
 	}
 	local target_index = 1
 
@@ -43,15 +52,16 @@ return function(ours_zone, switch_interval)
 		local target = targets[target_index]
 		local phase_start = clock:now()
 		action:update_chassis_mode("SPIN")
-		local ok = navigate_to_point(target, {
+		local ok = navigate_to_point(target.point, {
 			tolerance = 0.1,
 			timeout = navigation_timeout,
 		})
 		if not ok then
 			action:warn(string.format(
-				"cruise-in-central-highlands: 导航到巡航点失败 (x=%.2f, y=%.2f, timeout=%.2fs)",
-				target.x,
-				target.y,
+				"cruise-in-central-highlands: 导航到%s失败 (x=%.2f, y=%.2f, timeout=%.2fs)",
+				target.name,
+				target.point.x,
+				target.point.y,
 				navigation_timeout
 			))
 			return false

@@ -18,20 +18,38 @@ return function(ours_zone, forward_center)
 	action:info("开始cross-road-zone")
 
 	local rule = blackboard.rule
-	local targets = {
-		{
-			name = "road_zone_way_point_1",
-			point = select_point(rule.road_zone_way_point_1, ours_zone),
-		},
-		{
-			name = "road_zone_way_point_2",
-			point = select_point(rule.road_zone_way_point_2, ours_zone),
-		},
-		{
-			name = "road_zone_final",
-			point = select_point(rule.road_zone_final, ours_zone),
-		},
-	}
+	local targets
+	if forward_center then
+		targets = {
+			{
+				name = "road_zone_way_point_1",
+				point = select_point(rule.road_zone_way_point_1, ours_zone),
+			},
+			{
+				name = "road_zone_way_point_2",
+				point = select_point(rule.road_zone_way_point_2, ours_zone),
+			},
+			{
+				name = "road_zone_final",
+				point = select_point(rule.road_zone_final, ours_zone),
+			},
+		}
+	else
+		targets = {
+			{
+				name = "road_zone_final",
+				point = select_point(rule.road_zone_final, ours_zone),
+			},
+			{
+				name = "road_zone_way_point_2",
+				point = select_point(rule.road_zone_way_point_2, ours_zone),
+			},
+			{
+				name = "road_zone_way_point_1",
+				point = select_point(rule.road_zone_way_point_1, ours_zone),
+			},
+		}
+	end
 
 	for _, target in ipairs(targets) do
 		local ok = navigate_to_point(target.point, {
