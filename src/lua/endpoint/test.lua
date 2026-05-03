@@ -36,7 +36,7 @@ on_init = function()
 	action:switch_topic_forward(true)
 
 	restart_navigation()
-	edges:on(blackboard.getter.rswitch, "UP", restart_navigation)
+	-- edges:on(blackboard.getter.rswitch, "UP", restart_navigation)
 
 	scheduler:append_task(function()
 		while true do
