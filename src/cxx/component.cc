@@ -5,10 +5,16 @@
 #endif
 
 #include "cxx/context.hh"
+#include "cxx/util/localization/engine.hh"
 #include "cxx/util/navigation/navigation.hh"
 #include "cxx/util/node_mixin.hh"
-
+#include <atomic>
 #include <filesystem>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
 
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -43,6 +49,8 @@ private:
 
     details::Context context;
     details::Navigation navigation;
+    std::unique_ptr<Localization> localization;
+    bool relocalization_enabled = true;
 
     struct Command {
         OutputInterface<Eigen::Vector2d> chassis_speed;
@@ -101,6 +109,34 @@ private:
         });
         api.set_function("update_chassis_vel", [this](double x, double y) {
             *command.chassis_speed = Eigen::Vector2d{x, y};
+        });
+        // 三个 mode 共享同一个 disabled-guard + 委托模板。lua 端别名（initial / local_ / wide）
+        const auto bind_relocalize = [this, &api](std::string_view name, RelocalizeMode mode) {
+            api.set_function(
+                std::string{name}, [this, name, mode](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        warn("{} ignored: disabled", name);
+                        return false;
+                    }
+                    return localization->relocalize(mode, x, y, yaw);
+                });
+        };
+        bind_relocalize("relocalize_initial", RelocalizeMode::Initial);
+        bind_relocalize("relocalize_local",   RelocalizeMode::Local);
+        bind_relocalize("relocalize_wide",    RelocalizeMode::Wide);
+
+        // status 转 lua table：disabled/enabled。
+        api.set_function("relocalize_status", [this]() {
+            const auto status = (relocalization_enabled && localization)
+                                  ? localization->relocalize_status()
+                                  : RelocalizeStatus{.message = "disabled"};
+            return lua->create_table_with(
+                "state", static_cast<int>(status.state), "success", status.success,
+                "message", status.message, "fitness_score", status.fitness_score, "confidence",
+                status.confidence, "estimated_x", status.estimated_x, "estimated_y",
+                status.estimated_y, "estimated_z", status.estimated_z, "estimated_qx",
+                status.estimated_qx, "estimated_qy", status.estimated_qy, "estimated_qz",
+                status.estimated_qz, "estimated_qw", status.estimated_qw);
         });
     }
 
@@ -232,6 +268,21 @@ public:
         , navigation{*this} {
 
         mock_context = param<bool>("mock_context");
+        relocalization_enabled =
+            has_parameter("enable_relocalization")
+                ? get_parameter_or<bool>("enable_relocalization", true)
+                : true;
+        if (relocalization_enabled) {
+            auto config = Localization::Config{ .rclcpp = *this };
+            if (has_parameter("localization.service_name"))
+                config.service_name = get_parameter("localization.service_name").as_string();
+            if (has_parameter("localization.request_timeout_sec"))
+                config.request_timeout_sec =
+                    get_parameter("localization.request_timeout_sec").as_double();
+            localization = std::make_unique<Localization>(std::move(config));
+        } else {
+            warn("relocalization is disabled by parameter enable_relocalization=false");
+        }
 
         context.init(io_mutex, mock_context);
         command.init(*this);

@@ -1,8 +1,16 @@
 local util = require("util.math")
 local api = require("api")
 local request = require("util.scheduler").request
+local blackboard = require("blackboard").singleton()
 
 local NaN = 0 / 0
+
+local RelocalizeState = {
+	IDLE = 0,
+	IN_FLIGHT = 1,
+	SUCCEEDED = 2,
+	FAILED = 3,
+}
 
 local action = {
 	target = {
@@ -75,6 +83,70 @@ end
 
 function action:update_chassis_vel(x, y)
 	api.update_chassis_vel(x, y)
+end
+
+--- 三模式共享：发起 → 轮询 → 终态。
+--- @return ok    boolean   是否被服务端 accept
+--- @return st    table?    末态 status（被 in-flight 拦截时为 nil）
+local function send_and_await(self, mode, fn, x, y, yaw)
+	if not fn(x, y, yaw) then
+		self:warn(string.format("reloc skip %s (in_flight)", mode))
+		return false, nil
+	end
+	while true do
+		local st = api.relocalize_status()
+		if st.state == RelocalizeState.SUCCEEDED then
+			self:info(string.format(
+				"reloc ok [%s] score=%.4f conf=%.3f", mode, st.fitness_score, st.confidence))
+			return true, st
+		end
+		if st.state ~= RelocalizeState.IN_FLIGHT then
+			self:warn(string.format(
+				"reloc fail [%s] score=%.4f conf=%.3f | %s",
+				mode, st.fitness_score, st.confidence, tostring(st.message)))
+			return false, st
+		end
+		request:sleep(0.1)
+	end
+end
+
+--- INITIAL 模式：x/y/yaw 是 GICP 起点（必须靠近真实位置）。开机/出生点重定位用。
+function action:relocalize_initial(x, y, yaw)
+	return send_and_await(self, "initial", api.relocalize_initial, x, y, yaw)
+end
+
+--- LOCAL 模式（SC-driven）：种子来自 ScanContext，不需要 GICP 起点。
+--- blackboard.user.{x,y,yaw} 仅作 validator 锚点（拦镜像错配）；
+function action:relocalize_local()
+	local user = blackboard.user
+	if util.check_nan(user.x, user.y, user.yaw) then
+		self:warn("reloc skip local (LIO/TF lost, no validator anchor)")
+		return false, nil
+	end
+	return send_and_await(self, "local_", api.relocalize_local, user.x, user.y, user.yaw)
+end
+
+--- WIDE 模式：blackboard.user 作 validator prior（NaN 时退化到原点 + 无 prior 验收）。
+function action:relocalize_wide()
+	local user = blackboard.user
+	local x, y, yaw = user.x, user.y, user.yaw
+	if util.check_nan(x, y, yaw) then x, y, yaw = 0.0, 0.0, 0.0 end
+	return send_and_await(self, "wide", api.relocalize_wide, x, y, yaw)
+end
+
+--- LOCAL 失败连续 2 次再降级 WIDE，防单帧抖动误触发全局重定位。
+--- 失败原因覆盖：SC 不可用 / 无匹配 / 错配被拦 / GICP 不收敛 / LIO 死。
+function action:try_relocalize_local_then_wide()
+	for attempt = 1, 2 do
+		if self:relocalize_local() then return true end
+		self:warn(string.format("local failed (attempt %d/2)", attempt))
+	end
+	self:warn("local failed twice, fallback wide")
+	return self:relocalize_wide()
+end
+
+function action:relocalize_status()
+	return api.relocalize_status()
 end
 
 function action:restart_navigation(config)
