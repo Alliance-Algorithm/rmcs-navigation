@@ -41,7 +41,7 @@ public:
 
     explicit Localization(Config config);
 
-    /// 唯一入口：mode + 三参 prior。返回 true=请求已挂起；false=被 in_flight / service 不可用拦截。
+    /// 唯一入口，返回 true=请求已挂起；false=被 in_flight / service 不可用拦截。
     auto relocalize(RelocalizeMode mode, double x, double y, double yaw) -> bool;
     auto relocalize_status() const -> RelocalizeStatus;
 };

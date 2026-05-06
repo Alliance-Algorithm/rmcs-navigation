@@ -68,7 +68,6 @@ constexpr auto mode_to_msg(RelocalizeMode mode) -> std::uint8_t {
 
 } // namespace
 
-/// 一次重定位请求的全生命周期。lambda 通过 shared_ptr 持有。
 struct Session {
     mutable std::mutex mutex;
     std::shared_ptr<RelocalizeClient> client;
