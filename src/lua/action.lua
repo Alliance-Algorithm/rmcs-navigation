@@ -19,6 +19,10 @@ local action = {
 	},
 }
 
+local function pose_unavailable(x, y, yaw)
+	return x == nil or y == nil or yaw == nil or util.check_nan(x, y, yaw)
+end
+
 --- 绑定 action 的后台任务。
 --- @param scheduler Scheduler
 function action:bind(scheduler)
@@ -115,34 +119,32 @@ function action:relocalize_initial(x, y, yaw)
 	return send_and_await(self, "initial", api.relocalize_initial, x, y, yaw)
 end
 
---- LOCAL 模式（SC-driven）：种子来自 ScanContext。
+--- LOCAL 模式（SC-driven）：持续重试直到成功。
 --- blackboard.user.{x,y,yaw} 仅作 validator 锚点（拦镜像错配，红蓝对称场地有双高峰现象）；
+--- LIO/TF 丢失（nil/NaN）时直接返回失败，不重试也不切 WIDE。
 function action:relocalize_local()
-	local user = blackboard.user
-	if util.check_nan(user.x, user.y, user.yaw) then
-		self:warn("reloc skip local (LIO/TF lost, no validator anchor)")
-		return false, nil
+	local attempt = 1
+	while true do
+		local user = blackboard.user
+		if pose_unavailable(user.x, user.y, user.yaw) then
+			self:warn("reloc skip local (LIO/TF lost, no validator anchor)")
+			return false, nil
+		end
+
+		local ok, st = send_and_await(self, "local_", api.relocalize_local, user.x, user.y, user.yaw)
+		if ok then return true, st end
+		self:warn(string.format("local failed, retrying (attempt %d)", attempt))
+		attempt = attempt + 1
+		request:yield()
 	end
-	return send_and_await(self, "local_", api.relocalize_local, user.x, user.y, user.yaw)
 end
 
 --- WIDE 模式：blackboard.user 作 validator prior（NaN 时退化到原点 + 无 prior 验收，pointlio崩了就和原点配）。
 function action:relocalize_wide()
 	local user = blackboard.user
 	local x, y, yaw = user.x, user.y, user.yaw
-	if util.check_nan(x, y, yaw) then x, y, yaw = 0.0, 0.0, 0.0 end
+	if pose_unavailable(x, y, yaw) then x, y, yaw = 0.0, 0.0, 0.0 end
 	return send_and_await(self, "wide", api.relocalize_wide, x, y, yaw)
-end
-
---- LOCAL 失败连续 2 次再降级 WIDE，防单帧抖动误触发全局重定位。
---- 失败原因覆盖：SC 不可用 / 无匹配 / 错配被拦 / GICP 不收敛 / LIO 死。
-function action:try_relocalize_local_then_wide()
-	for attempt = 1, 2 do
-		if self:relocalize_local() then return true end
-		self:warn(string.format("local failed (attempt %d/2)", attempt))
-	end
-	self:warn("local failed twice, fallback wide")
-	return self:relocalize_wide()
 end
 
 function action:relocalize_status()
