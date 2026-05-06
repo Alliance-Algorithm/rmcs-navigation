@@ -13,14 +13,14 @@
 #include <rclcpp/client.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/timer.hpp>
-#include <rmcs_msgs/srv/relocalize.hpp>
+#include <rmcs_relocation/srv/relocalize.hpp>
 #include <tf2/LinearMath/Quaternion.hpp>
 
 namespace rmcs::navigation {
 
 namespace {
 
-using Relocalize       = rmcs_msgs::srv::Relocalize;
+using Relocalize       = rmcs_relocation::srv::Relocalize;
 using RelocalizeClient = rclcpp::Client<Relocalize>;
 
 auto yaw_to_pose(double x, double y, double yaw) -> geometry_msgs::msg::Pose {
@@ -146,11 +146,12 @@ struct Localization::Impl : NodeMixin {
 
     auto get_logger() const { return node.get_logger(); }
 
-    auto arm_timeout(const std::shared_ptr<Session>& s) -> void {
+    auto arm_timeout(const std::shared_ptr<Session>& s, const std::shared_ptr<std::int64_t>& pending_id)
+        -> void {
         const auto timeout = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::duration<double>{std::max(0.1, config.request_timeout_sec)});
-        auto timer = node.create_wall_timer(timeout, [s]() {
-            if (s->end(failed_status("request timeout: " + s->service_name)))
+        auto timer = node.create_wall_timer(timeout, [s, pending_id]() {
+            if (s->end(failed_status("request timeout: " + s->service_name), *pending_id))
                 RCLCPP_WARN(s->logger, "relocalize request timeout: %s", s->service_name.c_str());
         });
         auto lock = std::scoped_lock{s->mutex};
@@ -176,10 +177,9 @@ struct Localization::Impl : NodeMixin {
         request->mode                      = mode_to_msg(mode);
         request->initial_guess_world_base  = yaw_to_pose(x, y, yaw);
 
-        arm_timeout(session);
-
         // executor 异步触发 callback。
         auto pending_id = std::make_shared<std::int64_t>(-1);
+        arm_timeout(session, pending_id);
         auto s          = session;
         auto result     = session->client->async_send_request(
             std::move(request), [s, pending_id](RelocalizeClient::SharedFuture future) {

@@ -110,13 +110,13 @@ local function send_and_await(self, mode, fn, x, y, yaw)
 	end
 end
 
---- INITIAL 模式：x/y/yaw 是 GICP 起点（必须靠近真实位置）。开机/出生点重定位用。
+--- INITIAL 模式：x/y/yaw 是 GICP 起点（建图原点，一般为（0,0,0））。开局重定位用。
 function action:relocalize_initial(x, y, yaw)
 	return send_and_await(self, "initial", api.relocalize_initial, x, y, yaw)
 end
 
---- LOCAL 模式（SC-driven）：种子来自 ScanContext，不需要 GICP 起点。
---- blackboard.user.{x,y,yaw} 仅作 validator 锚点（拦镜像错配）；
+--- LOCAL 模式（SC-driven）：种子来自 ScanContext。
+--- blackboard.user.{x,y,yaw} 仅作 validator 锚点（拦镜像错配，红蓝对称场地有双高峰现象）；
 function action:relocalize_local()
 	local user = blackboard.user
 	if util.check_nan(user.x, user.y, user.yaw) then
@@ -126,7 +126,7 @@ function action:relocalize_local()
 	return send_and_await(self, "local_", api.relocalize_local, user.x, user.y, user.yaw)
 end
 
---- WIDE 模式：blackboard.user 作 validator prior（NaN 时退化到原点 + 无 prior 验收）。
+--- WIDE 模式：blackboard.user 作 validator prior（NaN 时退化到原点 + 无 prior 验收，pointlio崩了就和原点配）。
 function action:relocalize_wide()
 	local user = blackboard.user
 	local x, y, yaw = user.x, user.y, user.yaw

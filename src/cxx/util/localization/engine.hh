@@ -36,7 +36,7 @@ public:
     struct Config {
         rclcpp::Node& rclcpp;
         std::string service_name = "/rmcs_relocation/relocalize";
-        double request_timeout_sec = 30.0;
+        double request_timeout_sec = 10.0;
     };
 
     explicit Localization(Config config);
