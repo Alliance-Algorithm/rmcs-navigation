@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.28)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -30,6 +30,7 @@ find_package(nav2_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rmcs_msgs REQUIRED)
+find_package(rmcs_relocation REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -64,6 +65,7 @@ target_include_directories(
         ${rmcs_executor_INCLUDE_DIRS}
         ${geometry_msgs_INCLUDE_DIRS}
         ${rmcs_msgs_INCLUDE_DIRS}
+        ${rmcs_relocation_INCLUDE_DIRS}
         ${std_srvs_INCLUDE_DIRS}
         ${ament_index_cpp_INCLUDE_DIRS}
         ${tf2_ros_INCLUDE_DIRS}
@@ -88,6 +90,7 @@ target_link_libraries(
         ${geometry_msgs_LIBRARIES}
         ${std_srvs_LIBRARIES}
         ${rmcs_msgs_LIBRARIES}
+        ${rmcs_relocation_LIBRARIES}
         ${tf2_ros_LIBRARIES}
         ${rclcpp_action_LIBRARIES}
         ${nav2_msgs_LIBRARIES}

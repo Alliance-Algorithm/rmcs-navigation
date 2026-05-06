@@ -29,7 +29,8 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>rmcs_local_map</exec_depend>
-
+  <depend>rmcs_relocation</depend>
+   
   <export>
     <build_type>ament_cmake</build_type>
   </export>

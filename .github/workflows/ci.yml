@@ -67,6 +67,14 @@ jobs:
           tar -C "${GITHUB_WORKSPACE}" --exclude=".git" -cf - . \
             | tar -C /tmp/RMCS/rmcs_ws/src/skills/rmcs-navigation -xf -
 
+      - name: Clone rmcs_relocation dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch main \
+            https://github.com/Alliance-Algorithm/rmcs_relocation.git \
+            /tmp/RMCS/rmcs_ws/src/skills/rmcs_relocation
+
       - name: Build rmcs-navigation with colcon
         shell: bash
         working-directory: /tmp/RMCS/rmcs_ws
