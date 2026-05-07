@@ -118,8 +118,19 @@ struct Context::Impl {
         make_input("/referee/remaining_gold_coin", context.remaining_gold_coin, mock);
         make_input("/referee/shooter/initial_speed", context.robot_initial_speed, mock);
         make_input("/referee/shooter/shoot_timestamp", context.robot_shoot_timestamp, mock);
+        make_input(
+            "/referee/map_command/event/target_position_x", context.map_command_event_x, mock);
+        make_input(
+            "/referee/map_command/event/target_position_y", context.map_command_event_y, mock);
+        make_input(
+            "/referee/map_command/event/keyboard", context.map_command_event_keyboard, mock);
+        make_input(
+            "/referee/map_command/event/target_robot_id",
+            context.map_command_event_target_robot_id, mock);
+        make_input("/referee/map_command/event/source", context.map_command_event_source, mock);
+        make_input(
+            "/referee/map_command/event/sequence", context.map_command_event_sequence, mock);
 
-        make_input("/referee/robots/hp", context.robots_hp, mock);
         make_input("/referee/ally/hero_hp", context.ally_hero_hp, mock);
         make_input("/referee/ally/engineer_hp", context.ally_engineer_hp, mock);
         make_input("/referee/ally/infantry_1_hp", context.ally_infantry_1_hp, mock);

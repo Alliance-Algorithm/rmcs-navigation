@@ -1,8 +1,6 @@
 #pragma once
 #include "util/pimpl.hh"
 
-#include "referee/status/field.hpp"
-
 #include <cstdint>
 #include <rclcpp/node.hpp>
 #include <rmcs_executor/component.hpp>
@@ -37,7 +35,6 @@ public:
     InputInterface<double> chassis_power_referee;
     InputInterface<double> chassis_buffer_energy_referee;
     InputInterface<bool> chassis_output_status;
-    InputInterface<rmcs_core::referee::status::GameRobotHp> robots_hp;
     InputInterface<std::uint16_t> ally_hero_hp;
     InputInterface<std::uint16_t> ally_engineer_hp;
     InputInterface<std::uint16_t> ally_infantry_1_hp;
@@ -59,6 +56,12 @@ public:
     InputInterface<std::uint16_t> remaining_gold_coin;
     InputInterface<float> robot_initial_speed;
     InputInterface<double> robot_shoot_timestamp;
+    InputInterface<double> map_command_event_x;
+    InputInterface<double> map_command_event_y;
+    InputInterface<std::uint8_t> map_command_event_keyboard;
+    InputInterface<std::uint8_t> map_command_event_target_robot_id;
+    InputInterface<std::uint16_t> map_command_event_source;
+    InputInterface<std::uint64_t> map_command_event_sequence;
     InputInterface<bool> sentry_can_confirm_free_revive;
     InputInterface<bool> sentry_can_exchange_instant_revive;
     InputInterface<std::uint16_t> sentry_instant_revive_cost;

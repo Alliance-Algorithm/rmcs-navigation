@@ -25,19 +25,18 @@ local function create_default_blackboard()
 			x = 0,
 			y = 0,
 			yaw = 0,
-
-			mode = "UNKNOWN",
 		},
 		game = {
 			stage = "UNKNOWN",
+			sync_timestamp = 0,
 
 			outpost_health = 0, -- 前哨站血量
 			base_health = 0, -- 基地血量
 
-			hero_health = 150,
-			infantry_1_health = 150,
-			infantry_2_health = 150,
-			engineer_health = 250,
+			hero_health = 0,
+			infantry_1_health = 0,
+			infantry_2_health = 0,
+			engineer_health = 0,
 
 			hero_position = { x = 0.0, y = 0.0 },
 			infantry_1_position = { x = 0.0, y = 0.0 },
@@ -48,10 +47,29 @@ local function create_default_blackboard()
 			gold_coin = 0,                   -- 队伍剩余金币数
 			exchangeable_ammunition_quantity = 0, -- 队伍 17mm 允许发弹量的剩余可兑换数
 
-			our_dart_nmber_of_hits = false,  -- 己方飞镖击中次数
+			our_dart_number_of_hits = 0,     -- 己方飞镖击中次数
+			our_dart_nmber_of_hits = 0,
 			fortress_occupied = false,       -- 己方堡垒是否被占领
 			big_energy_mechanism_activated = false, -- 大能量机关是否被激活
 			small_energy_mechanism_activated = false, -- 小能量机关是否被激活
+			red_score = 0,
+			blue_score = 0,
+			robot_id = 0,
+			can_confirm_free_revive = false,		-- 是否可以确认免费复活（读条结束时可确认）
+			can_exchange_instant_revive = false,
+			instant_revive_cost = 0,
+			exchanged_bullet = 0,
+			remote_bullet_exchange_count = 0,
+			sentry_mode = 0,                       	-- 1为进攻姿态 2为防御姿态 3为移动姿态
+			energy_mechanism_activatable = false,
+		},
+		map_command = {
+			x = 0,
+			y = 0,
+			keyboard = 0,
+			target_robot_id = 0,
+			source = 0,
+			sequence = 0,
 		},
 		play = {
 			rswitch = "UNKNOWN",
@@ -61,31 +79,6 @@ local function create_default_blackboard()
 			timestamp = 0, -- 秒
 			fsm_state = "unknown",
 			fsm_return_stage = "before_fluctuant",
-		},
-		referee = {
-			sync_timestamp = 0,
-			robot_id = 0,
-			robots_hp = {
-				ally_1 = 0,
-				ally_2 = 0,
-				ally_3 = 0,
-				ally_4 = 0,
-				reserved = 0,
-				ally_7 = 0,
-				outpost = 0,
-				base = 0,
-			},
-
-			can_confirm_free_revive = false,
-			can_exchange_instant_revive = false,
-			instant_revive_cost = 0,
-			exchanged_bullet = 0,
-			remote_bullet_exchange_count = 0,
-			sentry_mode = 0,
-			energy_mechanism_activatable = false,
-
-			red_score = 0,
-			blue_score = 0,
 		},
 
 		-- Static Information
@@ -98,7 +91,6 @@ local function create_default_blackboard()
 			health_ready = 400,
 			bullet_limit = 40,
 			bullet_ready = 160,
-			mode = "movement",
 
 			-- 其他状态类规则
 
@@ -183,12 +175,12 @@ local function create_default_blackboard()
 			return result.game.base_health <= result.rule.base_health_red_line
 		end,
 
-		oupost_survival = function()
+		outpost_survival = function()
 			return result.game.outpost_health > 0
 		end,
 
 		dart_hit_first_time = function()
-			local current = result.game.our_dart_nmber_of_hits
+			local current = result.game.our_dart_number_of_hits
 
 			if last_our_dart_nmber_of_hits == nil then
 				last_our_dart_nmber_of_hits = current
@@ -214,6 +206,10 @@ local function create_default_blackboard()
 
 		game_close_to_end = function()
 			return result.game.remaining_time <= result.rule.time_of_the_competition_red_line
+		end,
+
+		can_confirm_free_revive = function ()
+			return result.game.can_confirm_free_revive
 		end,
 
 		--- @param target {x: number, y: number}

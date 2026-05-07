@@ -13,8 +13,6 @@ function BlackboardLogger.attach(scheduler, blackboard)
 			local g = blackboard.game
 			local p = blackboard.play
 			local m = blackboard.meta
-			local r = blackboard.referee
-			local rhp = r.robots_hp
 
 			action:info(string.format(
 				"BB| user: hp=%d bullet=%d pwr_limit=%d pwr=%.0f buf=%.0f out=%s pos=(%.2f,%.2f) yaw=%.1f mode=%s cool=%d heat_lim=%d 42mm=%d 17mm=%d spd=%d shoot_ts=%.1f",
@@ -36,8 +34,9 @@ function BlackboardLogger.attach(scheduler, blackboard)
 			))
 
 			action:info(string.format(
-				"BB| game: stage=%s outpost=%d base=%d hero=%d eng=%d inf1=%d inf2=%d time=%d gold=%d ammo=%d dart=%s fort=%s bigE=%s smlE=%s pos_h=(%.1f,%.1f) pos_e=(%.1f,%.1f) pos_i1=(%.1f,%.1f) pos_i2=(%.1f,%.1f)",
+				"BB| game: stage=%s sync_ts=%d outpost=%d base=%d hero=%d eng=%d inf1=%d inf2=%d time=%d gold=%d ammo=%d dart=%s fort=%s bigE=%s smlE=%s red=%d blue=%d pos_h=(%.1f,%.1f) pos_e=(%.1f,%.1f) pos_i1=(%.1f,%.1f) pos_i2=(%.1f,%.1f)",
 				g.stage,
+				g.sync_timestamp,
 				g.outpost_health,
 				g.base_health,
 				g.hero_health,
@@ -51,6 +50,8 @@ function BlackboardLogger.attach(scheduler, blackboard)
 				tostring(g.fortress_occupied),
 				tostring(g.big_energy_mechanism_activated),
 				tostring(g.small_energy_mechanism_activated),
+				g.red_score,
+				g.blue_score,
 				g.hero_position.x, g.hero_position.y,
 				g.engineer_position.x, g.engineer_position.y,
 				g.infantry_1_position.x, g.infantry_1_position.y,
@@ -58,21 +59,15 @@ function BlackboardLogger.attach(scheduler, blackboard)
 			))
 
 			action:info(string.format(
-				"BB| referee: sync_ts=%d rid=%d rhp=(1=%d 2=%d 3=%d 4=%d 7=%d res=%d outpost=%d base=%d) free_rv=%s inst_rv=%s rv_cost=%d ex_bullet=%d ex_count=%d s_mode=%d e_activ=%s red=%d blue=%d",
-				r.sync_timestamp,
-				r.robot_id,
-				rhp.ally_1, rhp.ally_2, rhp.ally_3, rhp.ally_4,
-				rhp.ally_7, rhp.reserved,
-				rhp.outpost, rhp.base,
-				tostring(r.can_confirm_free_revive),
-				tostring(r.can_exchange_instant_revive),
-				r.instant_revive_cost,
-				r.exchanged_bullet,
-				r.remote_bullet_exchange_count,
-				r.sentry_mode,
-				tostring(r.energy_mechanism_activatable),
-				r.red_score,
-				r.blue_score
+				"BB| game_sentry: rid=%d free_rv=%s inst_rv=%s rv_cost=%d ex_bullet=%d ex_count=%d s_mode=%d e_activ=%s",
+				g.robot_id,
+				tostring(g.can_confirm_free_revive),
+				tostring(g.can_exchange_instant_revive),
+				g.instant_revive_cost,
+				g.exchanged_bullet,
+				g.remote_bullet_exchange_count,
+				g.sentry_mode,
+				tostring(g.energy_mechanism_activatable)
 			))
 
 			action:info(string.format(
