@@ -442,7 +442,10 @@ public:
     }
 
     auto update() -> void override {
-        command.update();
+        {
+            auto lock = std::scoped_lock{io_mutex};
+            command.update();
+        }
 
         if (lua_tick_count++ == 100) {
             lua_tick_count = 0;
