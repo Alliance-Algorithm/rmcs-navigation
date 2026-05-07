@@ -93,7 +93,7 @@ local function configure_test_rule()
 	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }
 	rule.one_step_final.ours = { x = 0.0, y = 0.0 }
 	rule.central_highland_near_fluctuant_road.ours = { x = 0.0, y = 0.0 }
-	rule.central_highland_middle = { x = 0.0, y = 0.0 }
+	rule.central_highland_middle.ours = { x = 0.0, y = 0.0 }
 	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }
 	rule.base_left_gain_point.ours = { x = 0.0, y = 0.0 }
 	rule.base_right_gain_point.ours = { x = 0.0, y = 0.0 }
@@ -231,22 +231,18 @@ local function guard_home_target()
 	return "occupy_fortress"
 end
 
-local last_double_damage_activated = false
 local last_big_energy_mechanism_activated = false
 local last_small_energy_mechanism_activated = false
 
 local function select_forward_press_mode()
 	local condition = blackboard.condition
 	local dart_hit_first_time = condition.dart_hit_first_time()
-	local double_damage_activated = condition.double_damage_activated()
 	local big_energy_mechanism_activated = condition.big_energy_mechanism_activated()
 	local small_energy_mechanism_activated = condition.small_energy_mechanism_activated()
-	local double_damage_rising = double_damage_activated and not last_double_damage_activated
 	local big_energy_rising = big_energy_mechanism_activated and not last_big_energy_mechanism_activated
 	local small_energy_rising =
 		small_energy_mechanism_activated and not last_small_energy_mechanism_activated
 
-	last_double_damage_activated = double_damage_activated
 	last_big_energy_mechanism_activated = big_energy_mechanism_activated
 	last_small_energy_mechanism_activated = small_energy_mechanism_activated
 
@@ -254,7 +250,7 @@ local function select_forward_press_mode()
 		return "two_step"
 	end
 
-	if dart_hit_first_time or double_damage_rising or big_energy_rising then
+	if dart_hit_first_time or big_energy_rising then
 		return "one_step"
 	end
 
