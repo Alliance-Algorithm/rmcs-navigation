@@ -4,8 +4,8 @@ return {
   height = 131,
   resolution = 0.1,
   origin = {
-    x = 0,
-    y = 0,
+    x = -13.0,
+    y = -7.1,
   },
   names = {
     [0] = "wall",
