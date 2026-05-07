@@ -77,6 +77,21 @@ function action:update_chassis_vel(x, y)
 	api.update_chassis_vel(x, y)
 end
 
+-- 注意exchange_17mm_bullet switch_mode confirm_revive 不能同时进行，保护策略（详见component.cc）会清空同时发出的其他命令
+function action:exchange_17mm_bullet(amount)
+	amount = blackboard.game.exchanged_bullet + amount
+	api.exchange_17mm_bullet(amount)
+end
+
+function action:switch_mode(mode)
+	api.switch_mode(mode)
+end
+
+-- 配合can_confirm_free_revive使用
+function action:confirm_revive()
+	api.confirm_revive()
+end
+
 function action:restart_navigation(config)
 	return api.restart_navigation(config)
 end

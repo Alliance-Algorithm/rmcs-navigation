@@ -13,10 +13,13 @@ local util = require("util.native")
 --- @field fuck fun(message: string)
 ---
 --- @field send_target fun(x: number, y: number)
---- @field update_gimbal_direction fun(angle: number)
+--- @field update_gimbal_direction fun(angle: number) 
 --- @field update_gimbal_dominator fun(name: string)
 --- @field update_chassis_mode fun(mode: string)
 --- @field update_chassis_vel fun(x: number, y: number)
+--- @field exchange_17mm_bullet fun(amount: integer)
+--- @field switch_mode fun(mode: number)
+--- @field confirm_revive fun()
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)
@@ -58,17 +61,18 @@ function api.restart_navigation(config)
 
 	-- FIXME: 存在调试用的进程(foxglove)，记得去掉
 	local command = [[
-        source %q
+source %q
 
-        screen -S rmcs-navigation -X quit
+screen -S rmcs-navigation -X quit
 
-        screen -dmS rmcs-navigation
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
+screen -dmS rmcs-navigation
+screen -S rmcs-navigation -X screen bash -lc "ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
 
-        configs=%q
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation motion.launch.yaml $configs"
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml $configs"
-    ]]
+configs=%q
+screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml $configs"
+sleep 1
+screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation motion.launch.yaml $configs"
+]]
 	local packed_command = string.format(command, filename, configs)
 
 	return util.run(string.format("(%s) >/dev/null 2>&1 &", packed_command))
