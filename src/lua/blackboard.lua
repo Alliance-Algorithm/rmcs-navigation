@@ -6,7 +6,7 @@ local function PointPair(points)
 end
 
 local function create_default_blackboard()
-	local last_our_dart_nmber_of_hits = nil
+	local last_our_dart_number_of_hits = nil
 	local result = {
 		-- Dynamic Information
 		user = {
@@ -48,7 +48,6 @@ local function create_default_blackboard()
 			exchangeable_ammunition_quantity = 0, -- 队伍 17mm 允许发弹量的剩余可兑换数
 
 			our_dart_number_of_hits = 0,     -- 己方飞镖击中次数
-			our_dart_nmber_of_hits = 0,
 			fortress_occupied = false,       -- 己方堡垒是否被占领
 			big_energy_mechanism_activated = false, -- 大能量机关是否被激活
 			small_energy_mechanism_activated = false, -- 小能量机关是否被激活
@@ -182,13 +181,13 @@ local function create_default_blackboard()
 		dart_hit_first_time = function()
 			local current = result.game.our_dart_number_of_hits
 
-			if last_our_dart_nmber_of_hits == nil then
-				last_our_dart_nmber_of_hits = current
+			if last_our_dart_number_of_hits == nil then
+				last_our_dart_number_of_hits = current
 				return false
 			end
 
-			local triggered = last_our_dart_nmber_of_hits == 0 and current == 1
-			last_our_dart_nmber_of_hits = current
+			local triggered = last_our_dart_number_of_hits == 0 and current == 1
+			last_our_dart_number_of_hits = current
 			return triggered
 		end,
 

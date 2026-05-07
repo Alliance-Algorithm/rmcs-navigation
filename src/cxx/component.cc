@@ -283,7 +283,6 @@ private:
         const auto our_dart_number_of_hits = static_cast<int>(
             read_context(context.dart_latest_hit_target_total_count, std::uint8_t{0}));
         game["our_dart_number_of_hits"] = our_dart_number_of_hits;
-        game["our_dart_nmber_of_hits"] = our_dart_number_of_hits;
         game["fortress_occupied"] =
             read_context(context.ally_fortress_occupation_status, std::uint8_t{0}) != 0;
         game["big_energy_mechanism_activated"] =
