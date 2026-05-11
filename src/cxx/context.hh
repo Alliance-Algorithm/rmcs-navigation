@@ -1,7 +1,9 @@
 #pragma once
 #include "util/pimpl.hh"
 
+#include <Eigen/Geometry>
 #include <rclcpp/node.hpp>
+#include <rmcs_description/sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
 #include <rmcs_msgs/robot_id.hpp>
@@ -29,6 +31,8 @@ public:
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
     InputInterface<double> chassis_power_limit_referee;
+    InputInterface<rmcs_description::SentryTf> tf;
+    InputInterface<Eigen::Vector3d> enemy_center;
 
     explicit Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
 

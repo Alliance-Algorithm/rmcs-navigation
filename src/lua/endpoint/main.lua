@@ -7,6 +7,7 @@ local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local fsm = require("util.fsm")
 local option = require("option")
+local order = require("util.order")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -34,6 +35,34 @@ on_init = function()
 		action:switch_topic_forward(true)
 	end
 
+	--- 操作事件注册与响应
+	scheduler:append_task(function()
+		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
+		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
+			action:info("导航即将重启")
+			action:restart_navigation {
+				global_map = "empty",
+				launch_livox = true,
+				launch_odin1 = false,
+				use_sim_time = false,
+			}
+		end)
+
+		while true do
+			switch_order:spin()
+			request:yield()
+		end
+	end)
+
+	--- 高优先级事件中断检测
+	scheduler:append_task(function()
+		while true do
+			action:switch_navigation(blackboard.play.rswitch == "UP")
+			request:yield()
+		end
+	end)
+
+	--- 核心意图事件循环
 	scheduler:append_task(function()
 		local Intent = {
 			nothing = "nothing",
@@ -59,31 +88,12 @@ on_init = function()
 		end
 	end)
 
-	edges:on(blackboard.getter.rswitch, "UP", function()
-		action:restart_navigation({
-			launch_livox = false,
-			launch_odin1 = false,
-			global_map = "rmul",
-			use_sim_time = false,
-		})
-	end)
-
 	action:info(ascii.banner)
 end
 
 on_tick = function()
 	clock:update(blackboard.meta.timestamp)
-
-	edges:spin()
 	scheduler:spin_once()
 end
 
-on_exit = function()
-	action:stop_navigation()
-end
-
---- 由 NAV2 发布的目标速度值，在此处理回调
-on_control = function(vx, vy, qx)
-	local _ = qx
-	action:update_chassis_vel(vx, vy)
-end
+on_exit = function() end

@@ -1,8 +1,13 @@
 local util = require("util.math")
+local clock = require("util.clock")
 local api = require("api")
 local request = require("util.scheduler").request
+local blackboard = require("blackboard").singleton()
 
 local NaN = 0 / 0
+local DEFAULT_RELOCALIZE_TIMEOUT_SEC = 30.0
+
+local RelocalizeState = { IDLE = 0, IN_FLIGHT = 1, SUCCEEDED = 2, FAILED = 3 }
 
 local action = {
 	target = {
@@ -10,6 +15,10 @@ local action = {
 		y = NaN,
 	},
 }
+
+local function pose_unavailable(x, y, yaw)
+	return x == nil or y == nil or yaw == nil or util.check_nan(x, y, yaw)
+end
 
 --- 绑定 action 的后台任务。
 --- @param scheduler Scheduler
@@ -74,12 +83,66 @@ function action:update_gimbal_dominator(name)
 	api.update_gimbal_dominator(name)
 end
 
-function action:update_chassis_mode(mode)
-	api.update_chassis_mode(mode)
+function action:switch_controller(mode)
+	api.switch_controller(mode)
 end
 
-function action:update_chassis_vel(x, y)
-	api.update_chassis_vel(x, y)
+--- @return ok boolean
+--- @return st table
+local function send_and_await(self, mode, fn, x, y, yaw, timeout_sec)
+	if not fn(x, y, yaw) then
+		local st = api.relocalize_status()
+		self:warn(string.format("reloc skip %s | state=%d msg=%s", mode, st.state, tostring(st.message)))
+		return false, st
+	end
+
+	local deadline = clock:now() + (timeout_sec or DEFAULT_RELOCALIZE_TIMEOUT_SEC)
+	while true do
+		local st = api.relocalize_status()
+		if st.state == RelocalizeState.SUCCEEDED then
+			self:info(string.format("reloc ok [%s] score=%.4f conf=%.3f", mode, st.fitness_score, st.confidence))
+			return true, st
+		end
+		if st.state ~= RelocalizeState.IN_FLIGHT then
+			self:warn(string.format("reloc fail [%s] score=%.4f conf=%.3f | %s", mode, st.fitness_score, st.confidence, tostring(st.message)))
+			return false, st
+		end
+		if clock:now() > deadline then
+			st.state = RelocalizeState.FAILED
+			st.success = false
+			st.message = "lua wait timeout"
+			self:warn(string.format("reloc fail [%s] | %s", mode, st.message))
+			return false, st
+		end
+		request:sleep(0.1)
+	end
+end
+
+function action:relocalize_initial(x, y, yaw, timeout_sec)
+	return send_and_await(self, "initial", api.relocalize_initial, x, y, yaw, timeout_sec)
+end
+
+function action:relocalize_local(timeout_sec)
+	local user = blackboard.user
+	if pose_unavailable(user.x, user.y, user.yaw) then
+		self:warn("reloc skip local (LIO/TF lost, no validator anchor)")
+		return false, nil
+	end
+
+	return send_and_await(self, "local", api.relocalize_local, user.x, user.y, user.yaw, timeout_sec)
+end
+
+function action:relocalize_wide(timeout_sec)
+	local user = blackboard.user
+	local x, y, yaw = user.x, user.y, user.yaw
+	if pose_unavailable(x, y, yaw) then
+		x, y, yaw = 0.0, 0.0, 0.0
+	end
+	return send_and_await(self, "wide", api.relocalize_wide, x, y, yaw, timeout_sec)
+end
+
+function action:relocalize_status()
+	return api.relocalize_status()
 end
 
 function action:restart_navigation(config)

@@ -6,7 +6,6 @@ get_filename_component(RMCS_NAVIGATION_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOL
 set(RMCS_NAVIGATION_LUA_TESTS
     clock
     fsm
-    runable
     scheduler
 )
 

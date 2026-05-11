@@ -47,8 +47,8 @@ struct NodeMixin {
 ///
 /// 用于非 NodeMixin 派生类的日志能力注入，通过组合方式持有目标对象引用并委托 get_logger()。
 template <class T>
-struct LoggerWrap : NodeMixin {
-    explicit LoggerWrap(T& node)
+struct NodeWrap : NodeMixin {
+    explicit NodeWrap(T& node)
         : node{node} {}
 
     auto get_logger() const -> rclcpp::Logger { return node.get_logger(); }

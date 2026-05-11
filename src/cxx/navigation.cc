@@ -1,4 +1,4 @@
-#include "cxx/util/navigation/navigation.hh"
+#include "cxx/navigation.hh"
 #include "cxx/util/node_mixin.hh"
 
 #include <chrono>
@@ -13,6 +13,7 @@
 #include <utility>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
@@ -34,6 +35,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
 
     using TfBuffer = tf2_ros::Buffer;
     using TfListener = tf2_ros::TransformListener;
+    using Twist = geometry_msgs::msg::Twist;
 
     static constexpr auto kPositionEpsilon = 1e-2;
     static constexpr auto kServerWaitTimeout = std::chrono::seconds{1};
@@ -81,6 +83,11 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     // Goal Runtime State
     std::shared_ptr<GoalHandle> current_goal_handle;
     std::optional<Target> active_goal;
+
+    // cmd_vel Subscription
+    std::shared_ptr<rclcpp::Subscription<Twist>> cmd_vel_subscription;
+    Eigen::Vector2d latest_cmd_vel = Eigen::Vector2d::Zero();
+    std::chrono::steady_clock::time_point latest_cmd_vel_time;
 
     std::uint64_t latest_request_id = 0;
 
@@ -172,7 +179,14 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
 
 public:
     explicit Impl(rclcpp::Node& node)
-        : node{node} {}
+        : node{node} {
+        auto cmd_vel_topic = node.get_parameter_or<std::string>("command_vel_name", "/cmd_vel");
+        cmd_vel_subscription = node.create_subscription<Twist>(
+            cmd_vel_topic, 10, [this](const std::unique_ptr<Twist>& msg) {
+                latest_cmd_vel = {msg->linear.x, msg->linear.y};
+                latest_cmd_vel_time = std::chrono::steady_clock::now();
+            });
+    }
 
     ~Impl() {
         auto current_handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
@@ -253,6 +267,10 @@ auto Navigation::switch_topic_forward(bool enable) -> void { pimpl->switch_topic
 
 auto Navigation::check_position() const -> std::tuple<double, double, double> {
     return pimpl->check_position();
+}
+
+auto Navigation::current_command() const -> Command {
+    return {.speed = pimpl->latest_cmd_vel, .timestamp = pimpl->latest_cmd_vel_time};
 }
 
 } // namespace rmcs::navigation::details

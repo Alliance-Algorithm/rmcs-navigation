@@ -85,13 +85,15 @@ struct Context::Impl {
 
     auto init(std::mutex& io_mutex, bool mock) {
         make_input("/referee/chassis/power_limit", context.chassis_power_limit_referee, mock);
-
-        make_input("/referee/id", context.robot_id, mock);
-        make_input("/remote/switch/right", context.switch_right, mock);
-        make_input("/remote/switch/left", context.switch_left, mock);
         make_input("/referee/game/stage", context.game_stage, mock);
         make_input("/referee/current_hp", context.robot_health, mock);
         make_input("/referee/shooter/bullet_allowance", context.robot_bullet, mock);
+        make_input("/referee/id", context.robot_id, mock);
+
+        make_input("/remote/switch/right", context.switch_right, mock);
+        make_input("/remote/switch/left", context.switch_left, mock);
+
+        make_input("/tf", context.tf, mock);
 
         if (mock) {
             constexpr auto topic = "/rmcs_navigation/context/mock";

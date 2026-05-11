@@ -46,8 +46,3 @@ end
 on_exit = function()
 	action:stop_navigation()
 end
-
---- 由 NAV2 发布的目标速度值，在此处理回调
-on_control = function(x, y, _)
-	action:update_chassis_vel(x, y)
-end

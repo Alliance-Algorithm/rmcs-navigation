@@ -2,13 +2,18 @@
 #include "cxx/util/pimpl.hh"
 #include <rclcpp/node.hpp>
 
-#include <tuple>
+#include <Eigen/Geometry>
 
 namespace rmcs::navigation::details {
 
 class Navigation {
     RMCS_PIMPL_DEFINITION(Navigation)
 public:
+    struct Command {
+        Eigen::Vector2d speed;
+        std::chrono::steady_clock::time_point timestamp;
+    };
+
     explicit Navigation(rclcpp::Node& node) noexcept;
 
     /// 向 NAV2 下发 2D 导航目标（world 坐标系）。
@@ -47,6 +52,9 @@ public:
     /// - navigation.switch_topic_forward(true);
     /// - navigation.switch_topic_forward(false);
     auto switch_topic_forward(bool enable) -> void;
+
+    /// 获取最近一次 cmd_vel 速度和时间戳。
+    auto current_command() const -> Command;
 };
 
 } // namespace rmcs::navigation::details

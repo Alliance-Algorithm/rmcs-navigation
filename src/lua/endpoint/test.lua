@@ -6,6 +6,7 @@ local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local order = require("util.order")
+local edges = require("util.edge")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -20,17 +21,11 @@ blackboard = require("blackboard").singleton()
 on_init = function()
 	action:bind(scheduler)
 	action:info(ascii.banner)
-	action:warn("⚠️ TEST 模式，别上场哦")
+	action:warn("⚠️ 重定位测试模式，别上场哦")
 
 	clock:reset(blackboard.meta.timestamp)
+	action:switch_navigation(true)
 	action:switch_topic_forward(true)
-
-	scheduler:append_task(function()
-		while true do
-			request:sleep(1)
-			-- action:info("limit: " .. blackboard.user.chassis_power_limit)
-		end
-	end)
 
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
@@ -41,7 +36,12 @@ on_init = function()
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,
+				launch_relocation = true,
 			}
+			scheduler:append_task(function()
+        		request:sleep(5.0)
+        		action:relocalize_initial(0.0, 0.0, 0.0)
+ 			 end)
 		end)
 
 		while true do
@@ -49,22 +49,21 @@ on_init = function()
 			request:yield()
 		end
 	end)
+
+	scheduler:append_task(function()
+		local _ = edges.new()
+
+		while true do
+			action:switch_navigation(blackboard.play.rswitch == "UP")
+			request:yield()
+		end
+	end)
 end
 
 on_tick = function()
 	clock:update(blackboard.meta.timestamp)
+
 	scheduler:spin_once()
 end
 
-on_exit = function()
-	-- action:stop_navigation()
-end
-
---- 由 NAV2 发布的目标速度值，在此处理回调
-on_control = function(x, y, _)
-	if blackboard.play.rswitch == "UP" then
-		action:update_chassis_vel(x, y)
-	else
-		action:update_chassis_vel(0, 0)
-	end
-end
+on_exit = function() end

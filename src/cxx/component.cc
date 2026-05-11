@@ -1,17 +1,23 @@
 #include "cxx/context.hh"
-#include "cxx/util/navigation/navigation.hh"
+#include "cxx/controller/normal.hh"
+#include "cxx/lua_context.hh"
+#include "cxx/navigation.hh"
+#include "cxx/util/localization/engine.hh"
 #include "cxx/util/node_mixin.hh"
 
-#include <filesystem>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <limits>
+#include <memory>
+#include <unordered_map>
 
 #include <Eigen/Geometry>
-#include <ament_index_cpp/get_package_share_directory.hpp>
-#include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
+#include <rmcs_description/sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/rmcs_msgs.hpp> // IWYU pragma: keep
-#include <sol/sol.hpp>
 
 namespace rmcs::navigation {
 
@@ -20,23 +26,26 @@ class Navigation
     , public rclcpp::Node
     , public rmcs::navigation::NodeMixin {
 private:
-    mutable std::mutex io_mutex;
+    static constexpr auto kCmdVelTimeout = std::chrono::milliseconds{500};
 
-    using Twist = geometry_msgs::msg::Twist;
-    std::shared_ptr<rclcpp::Subscription<Twist>> subscription_twist;
+    mutable std::mutex io_mutex;
 
     bool mock_context = false;
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
-    std::unique_ptr<sol::state> lua;
-    sol::table lua_blackboard;
-    sol::protected_function lua_on_init;
-    sol::protected_function lua_on_tick;
-    sol::protected_function lua_on_exit;
-    sol::protected_function lua_on_control;
 
-    details::Context context;
-    details::Navigation navigation;
+    details::LuaContext lua_context{*this};
+    details::Navigation navigation{*this};
+    details::Context context{*this, *this};
+    std::unique_ptr<Localization> localization;
+    bool relocalization_enabled = true;
+
+    // 控制器框架
+    IController* selected_controller = nullptr;
+    std::unordered_map<std::string, std::unique_ptr<IController>> controllers;
+
+    Eigen::Vector2d desired_direction = Eigen::Vector2d::Zero();
+    double current_world_yaw = std::numeric_limits<double>::quiet_NaN();
 
     struct Command {
         using ChassisMode = rmcs_msgs::ChassisMode;
@@ -64,96 +73,13 @@ private:
         return rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true);
     }
 
-    template <typename T>
-    auto unwrap_sol(T result, std::string_view message) -> T {
-        if (!result.valid()) {
-            auto error = result.template get<sol::error>();
-            logging::fuck("\n{}", error.what());
-            throw std::runtime_error(std::string{message});
-        }
-        return result;
-    }
-
-    auto make_api_injection() {
-        auto api_result = unwrap_sol(
-            lua->safe_script("return require('api')", sol::script_pass_on_error),
-            "failed to get lua api");
-
-        auto api = api_result.get<sol::table>();
-        api.set_function(
-            "info", [this](const std::string& text) { logging::info("Lua: {}", text); });
-        api.set_function(
-            "warn", [this](const std::string& text) { logging::warn("Lua: {}", text); });
-        api.set_function(
-            "fuck", [this](const std::string& text) { logging::fuck("Lua: {}", text); });
-
-        // @TODO:
-        //  补全这些实现
-        api.set_function(
-            "update_enable_control", [this](bool enable) { *command.enable_control = enable; });
-        api.set_function(
-            "send_target", [this](double x, double y) { navigation.send_target(x, y); });
-        api.set_function("switch_topic_forward", [this](bool enable) {
-            navigation.switch_topic_forward(enable);
-        });
-        api.set_function("update_gimbal_direction", [this](double angle) {
-            logging::warn("unimplement: update_gimbal_direction({})", angle);
-        });
-        api.set_function("update_chassis_mode", [this](const std::string& mode) {
-            logging::warn("unimplement: update_chassis_mode(\"{}\")", mode);
-        });
-        api.set_function("update_chassis_vel", [this](double x, double y) {
-            *command.chassis_speed = Eigen::Vector2d{x, y};
-        });
-    }
-
-    auto make_option_injection() {
-        auto option_result = unwrap_sol(
-            lua->safe_script("return require('option')", sol::script_pass_on_error),
-            "failed to get lua option");
-
-        auto option = option_result.get<sol::table>();
-
-        auto parameters = std::map<std::string, rclcpp::Parameter>{};
-        get_parameters("", parameters);
-
-        auto to_lua_array = [this]<typename T>(const std::vector<T>& values) {
-            auto array = lua->create_table(static_cast<int>(values.size()), 0);
-            for (auto index = std::size_t{0}; index < values.size(); ++index)
-                array[index + 1] = values[index];
-
-            return array;
-        };
-
-        for (const auto& [name, parameter] : parameters) {
-            switch (parameter.get_type()) {
-            case rclcpp::PARAMETER_BOOL: option[name] = parameter.as_bool(); break;
-            case rclcpp::PARAMETER_INTEGER: option[name] = parameter.as_int(); break;
-            case rclcpp::PARAMETER_DOUBLE: option[name] = parameter.as_double(); break;
-            case rclcpp::PARAMETER_STRING: option[name] = parameter.as_string(); break;
-            case rclcpp::PARAMETER_BOOL_ARRAY:
-                option[name] = to_lua_array(parameter.as_bool_array());
-                break;
-            case rclcpp::PARAMETER_INTEGER_ARRAY:
-                option[name] = to_lua_array(parameter.as_integer_array());
-                break;
-            case rclcpp::PARAMETER_DOUBLE_ARRAY:
-                option[name] = to_lua_array(parameter.as_double_array());
-                break;
-            case rclcpp::PARAMETER_STRING_ARRAY:
-                option[name] = to_lua_array(parameter.as_string_array());
-                break;
-            default: option[name] = sol::lua_nil; break;
-            }
-        }
-
-        logging::info("injected {} ros parameters into lua option", parameters.size());
-    }
-
-    auto lua_sync() {
+    auto sync_blackboard() {
         const auto [x, y, yaw] = navigation.check_position();
+        current_world_yaw = yaw; // 高频查询 TF 是不对的，所以应该先缓存一份
 
-        auto user = lua_blackboard["user"].get<sol::table>();
+        auto& blackboard = lua_context.blackboard();
+
+        auto user = blackboard["user"].get<sol::table>();
         user["health"] = *context.robot_health;
         user["bullet"] = *context.robot_bullet;
         user["chassis_power_limit"] = *context.chassis_power_limit_referee;
@@ -161,96 +87,95 @@ private:
         user["y"] = y;
         user["yaw"] = yaw;
 
-        auto game = lua_blackboard["game"].get<sol::table>();
+        auto game = blackboard["game"].get<sol::table>();
         game["stage"] = rmcs_msgs::to_string(*context.game_stage);
 
-        auto play = lua_blackboard["play"].get<sol::table>();
+        auto play = blackboard["play"].get<sol::table>();
         play["rswitch"] = rmcs_msgs::to_string(*context.switch_right);
         play["lswitch"] = rmcs_msgs::to_string(*context.switch_left);
 
-        auto meta = lua_blackboard["meta"].get<sol::table>();
+        auto meta = blackboard["meta"].get<sol::table>();
         meta["timestamp"] = this->now().seconds();
     }
 
-    auto lua_init() {
-        lua = std::make_unique<sol::state>();
-        lua->open_libraries(
-            sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::package,
-            sol::lib::string, sol::lib::table, sol::lib::debug, sol::lib::io);
-
-        // Load Lua Env Path
-        auto package_root =
-            std::filesystem::path{ament_index_cpp::get_package_share_directory("rmcs-navigation")};
-        auto lua_root = package_root / "lua";
-        auto package = (*lua)["package"].get<sol::table>();
-        auto package_path = package["path"].get_or(std::string{});
-        package["path"] = std::format(
-            "{};{}/?.lua;{}/?/init.lua", package_path, lua_root.string(), lua_root.string());
-
-        // Api Injection
-        make_api_injection();
-        make_option_injection();
-
-        // Load Function Binding
-        auto endpoint = param<std::string>("endpoint");
-        auto required = std::format("require('endpoint.{}')", endpoint);
-        auto load_result = unwrap_sol(
-            lua->safe_script(required, sol::script_pass_on_error), "failed to load lua main");
-
-        lua_blackboard = (*lua)["blackboard"];
-        lua_on_init = (*lua)["on_init"];
-        lua_on_tick = (*lua)["on_tick"];
-
-        const auto situation = std::array{
-            lua_on_init.valid(),
-            lua_on_tick.valid(),
-        };
-        if (!std::ranges::all_of(situation, std::identity{}))
-            throw std::runtime_error("lua main must define on_init() and on_tick()");
-
-        lua_on_exit = (*lua)["on_exit"];
-        if (lua_on_exit == sol::lua_nil) {
-            lua_on_exit = lua->safe_script("return function() end", sol::script_pass_on_error);
-            logging::warn("lua endpoint does not define optional on_exit(), fallback to no-op");
-        }
-        lua_on_control = (*lua)["on_control"];
-        if (lua_on_control == sol::lua_nil) {
-            lua_on_control =
-                lua->safe_script("return function(_, _, _) end", sol::script_pass_on_error);
-            logging::warn("lua endpoint does not define optional on_control(), fallback to no-op");
-        }
-
-        // Init Lua First
-        auto init_result = unwrap_sol(lua_on_init(), "lua on_init failed");
-
-        logging::info("Lua resource is loaded successfully");
-    }
-
-    auto lua_tick() { auto result = unwrap_sol(lua_on_tick(), "lua on_tick failed"); }
-
 public:
     explicit Navigation()
-        : rclcpp::Node{get_component_name(), option()}
-        , context{*this, *this}
-        , navigation{*this} {
+        : rclcpp::Node{get_component_name(), option()} {
 
         mock_context = param<bool>("mock_context");
+        relocalization_enabled = has_parameter("enable_relocalization")
+                                   ? get_parameter_or<bool>("enable_relocalization", true)
+                                   : true;
+        if (relocalization_enabled) {
+            auto config = Localization::Config{.rclcpp = *this};
+            if (has_parameter("localization.service_name"))
+                config.service_name = get_parameter("localization.service_name").as_string();
+            if (has_parameter("localization.request_timeout_sec"))
+                config.request_timeout_sec =
+                    get_parameter("localization.request_timeout_sec").as_double();
+            localization = std::make_unique<Localization>(std::move(config));
+        } else {
+            logging::warn("relocalization is disabled by parameter enable_relocalization=false");
+        }
 
         context.init(io_mutex, mock_context);
         command.init(*this);
 
-        lua_init();
+        lua_context.init({
+            .update_enable_control = [this](bool enable) { *command.enable_control = enable; },
+            .send_target = [this](double x, double y) { navigation.send_target(x, y); },
+            .switch_topic_forward =
+                [this](bool enable) { navigation.switch_topic_forward(enable); },
+            .update_gimbal_direction = [this](double angle) { desired_direction = {angle, 0.0}; },
+            .switch_controller =
+                [this](const std::string& mode) {
+                    if (!controllers.contains(mode)) {
+                        selected_controller = nullptr;
+                        logging::fuck("controller '{}' not found", mode);
+                        return;
+                    }
+                    selected_controller = controllers.at(mode).get();
+                    logging::info("switched to controller '{}'", mode);
+                },
+            .relocalize_initial =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_initial ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Initial, x, y, yaw);
+                },
+            .relocalize_local =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_local ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Local, x, y, yaw);
+                },
+            .relocalize_wide =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_wide ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Wide, x, y, yaw);
+                },
+            .relocalize_status =
+                [this] {
+                    if (!relocalization_enabled || !localization) {
+                        return RelocalizeStatus{
+                            .state = RelocalizeState::FAILED,
+                            .success = false,
+                            .message = "disabled",
+                        };
+                    }
+                    return localization->relocalize_status();
+                },
+        });
 
-        const auto command_vel_name = param<std::string>("command_vel_name");
-        subscription_twist = Node::create_subscription<Twist>(
-            command_vel_name, 10, [this](const std::unique_ptr<Twist>& msg) {
-                auto lock = std::scoped_lock{io_mutex};
-
-                auto vx = msg->linear.x;
-                auto vy = msg->linear.y;
-                auto qx = msg->angular.x;
-                unwrap_sol(lua_on_control(vx, vy, qx), "lua on_control failed");
-            });
+        controllers["normal"] = std::make_unique<NormalController>();
+        selected_controller = controllers["normal"].get();
 
         logging::info("Navigation is initialized");
     }
@@ -263,11 +188,44 @@ public:
     }
 
     auto update() -> void override {
-        if (lua_tick_count++ == 100) {
+        if (lua_tick_count++ == 100) [[unlikely]] {
             lua_tick_count = 0;
             auto lock = std::scoped_lock{io_mutex};
-            lua_sync();
-            lua_tick();
+            sync_blackboard();
+            lua_context.tick();
+        }
+
+        if (selected_controller && *command.enable_control) {
+            const auto nav_cmd = navigation.current_command();
+            const auto elapsed = std::chrono::steady_clock::now() - nav_cmd.timestamp;
+            const auto effective_vel =
+                (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
+
+            const auto direction = fast_tf::cast<rmcs_description::OdomImu>(
+                rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()},
+                *context.tf);
+            auto vector = *direction;
+            vector.z() = 0.0;
+            if (vector.norm() > 1e-9)
+                vector.normalize();
+            else
+                vector = Eigen::Vector3d::UnitX();
+            const auto current_local_yaw = std::atan2(vector.y(), vector.x());
+
+            selected_controller->update_context({
+                .target_chassis_speed = effective_vel,
+                .target_gimbal_toward = desired_direction,
+                .current_local_yaw = current_local_yaw,
+                .current_world_yaw = current_world_yaw,
+            });
+
+            auto cmd = selected_controller->generate_command();
+            *command.chassis_speed = cmd.chassis_speed;
+            *command.gimbal_speed = cmd.gimbal_toward;
+            *command.chassis_behavior = cmd.chassis_mode;
+        } else {
+            *command.chassis_speed = Eigen::Vector2d::Zero();
+            *command.gimbal_speed = Eigen::Vector2d::Zero();
         }
     }
 };
