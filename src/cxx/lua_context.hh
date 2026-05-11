@@ -1,4 +1,5 @@
 #pragma once
+#include "cxx/util/localization/engine.hh"
 #include "cxx/util/pimpl.hh"
 
 #include <functional>
@@ -19,6 +20,10 @@ public:
         std::function<void(bool)> switch_topic_forward;
         std::function<void(double)> update_gimbal_direction;
         std::function<void(const std::string&)> switch_controller;
+        std::function<bool(double, double, double)> relocalize_initial;
+        std::function<bool(double, double, double)> relocalize_local;
+        std::function<bool(double, double, double)> relocalize_wide;
+        std::function<RelocalizeStatus()> relocalize_status;
     };
 
     explicit LuaContext(rclcpp::Node& node) noexcept;

@@ -2,10 +2,14 @@
 #include "cxx/controller/normal.hh"
 #include "cxx/lua_context.hh"
 #include "cxx/navigation.hh"
+#include "cxx/util/localization/engine.hh"
 #include "cxx/util/node_mixin.hh"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <limits>
+#include <memory>
 #include <unordered_map>
 
 #include <Eigen/Geometry>
@@ -33,6 +37,8 @@ private:
     details::LuaContext lua_context{*this};
     details::Navigation navigation{*this};
     details::Context context{*this, *this};
+    std::unique_ptr<Localization> localization;
+    bool relocalization_enabled = true;
 
     // 控制器框架
     IController* selected_controller = nullptr;
@@ -97,6 +103,20 @@ public:
         : rclcpp::Node{get_component_name(), option()} {
 
         mock_context = param<bool>("mock_context");
+        relocalization_enabled = has_parameter("enable_relocalization")
+                                   ? get_parameter_or<bool>("enable_relocalization", true)
+                                   : true;
+        if (relocalization_enabled) {
+            auto config = Localization::Config{.rclcpp = *this};
+            if (has_parameter("localization.service_name"))
+                config.service_name = get_parameter("localization.service_name").as_string();
+            if (has_parameter("localization.request_timeout_sec"))
+                config.request_timeout_sec =
+                    get_parameter("localization.request_timeout_sec").as_double();
+            localization = std::make_unique<Localization>(std::move(config));
+        } else {
+            logging::warn("relocalization is disabled by parameter enable_relocalization=false");
+        }
 
         context.init(io_mutex, mock_context);
         command.init(*this);
@@ -116,6 +136,41 @@ public:
                     }
                     selected_controller = controllers.at(mode).get();
                     logging::info("switched to controller '{}'", mode);
+                },
+            .relocalize_initial =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_initial ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Initial, x, y, yaw);
+                },
+            .relocalize_local =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_local ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Local, x, y, yaw);
+                },
+            .relocalize_wide =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_wide ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Wide, x, y, yaw);
+                },
+            .relocalize_status =
+                [this] {
+                    if (!relocalization_enabled || !localization) {
+                        return RelocalizeStatus{
+                            .state = RelocalizeState::FAILED,
+                            .success = false,
+                            .message = "disabled",
+                        };
+                    }
+                    return localization->relocalize_status();
                 },
         });
 
