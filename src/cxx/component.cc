@@ -292,8 +292,6 @@ private:
             read_context(context.ally_big_energy_activation_status, std::uint8_t{0}) != 0;
         game["small_energy_mechanism_activated"] =
             read_context(context.ally_small_energy_activation_status, std::uint8_t{0}) != 0;
-        game["red_score"] = read_context(context.red_score, std::uint32_t{0});
-        game["blue_score"] = read_context(context.blue_score, std::uint32_t{0});
 
         auto set_position = [](sol::table position, double x, double y) {
             position["x"] = x;
