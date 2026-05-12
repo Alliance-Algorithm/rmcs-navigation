@@ -70,8 +70,6 @@ public:
     InputInterface<std::uint16_t> sentry_exchangeable_bullet;
     InputInterface<std::uint8_t> sentry_mode;
     InputInterface<bool> sentry_energy_mechanism_activatable;
-    InputInterface<std::uint32_t> red_score;
-    InputInterface<std::uint32_t> blue_score;
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
 

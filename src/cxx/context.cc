@@ -74,8 +74,6 @@ struct Context::Impl {
             try_sync(context.game_stage, root, "game_stage");
             try_sync(context.robot_health, root, "robot_health");
             try_sync(context.robot_bullet, root, "robot_bullet");
-            try_sync(context.red_score, root, "red_score");
-            try_sync(context.blue_score, root, "blue_score");
 
             return {};
         } catch (const std::exception& exception) {
@@ -171,8 +169,6 @@ struct Context::Impl {
         make_input(
             "/referee/sentry/energy_mechanism_activatable",
             context.sentry_energy_mechanism_activatable, mock);
-        make_input("/referee/game/red_score", context.red_score, mock);
-        make_input("/referee/game/blue_score", context.blue_score, mock);
 
         if (mock) {
             constexpr auto topic = "/rmcs_navigation/context/mock";

@@ -52,8 +52,6 @@ local function create_default_blackboard()
 			fortress_occupied = false,       -- 己方堡垒是否被占领
 			big_energy_mechanism_activated = false, -- 大能量机关是否被激活
 			small_energy_mechanism_activated = false, -- 小能量机关是否被激活
-			red_score = 0,
-			blue_score = 0,
 			robot_id = 0,
 			can_confirm_free_revive = false,		-- 是否可以确认免费复活（读条结束时可确认）
 			can_exchange_instant_revive = false,
