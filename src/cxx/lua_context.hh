@@ -19,6 +19,9 @@ public:
         std::function<void(bool)> switch_topic_forward;
         std::function<void(double)> update_gimbal_direction;
         std::function<void(const std::string&)> switch_controller;
+        std::function<void(int)> exchange_17mm_bullet;
+        std::function<void(int)> switch_mode;
+        std::function<void()> confirm_revive;
     };
 
     explicit LuaContext(rclcpp::Node& node) noexcept;

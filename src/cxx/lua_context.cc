@@ -50,6 +50,9 @@ struct LuaContext::Impl {
         api.set_function("switch_topic_forward", std::move(api_impl.switch_topic_forward));
         api.set_function("update_gimbal_direction", std::move(api_impl.update_gimbal_direction));
         api.set_function("switch_controller", std::move(api_impl.switch_controller));
+        api.set_function("exchange_17mm_bullet", std::move(api_impl.exchange_17mm_bullet));
+        api.set_function("switch_mode", std::move(api_impl.switch_mode));
+        api.set_function("confirm_revive", std::move(api_impl.confirm_revive));
     }
 
     auto make_option_injection() -> void {

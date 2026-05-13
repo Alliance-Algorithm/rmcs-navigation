@@ -17,6 +17,9 @@ local util = require("util.native")
 --- @field update_gimbal_direction fun(angle: number)
 --- @field update_gimbal_dominator fun(name: string)
 --- @field switch_controller fun(mode: "normal" | "road" | "step" | "slope")
+--- @field exchange_17mm_bullet fun(amount: integer)
+--- @field switch_mode fun(mode: number)
+--- @field confirm_revive fun()
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)

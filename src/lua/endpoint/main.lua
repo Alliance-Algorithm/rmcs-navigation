@@ -46,6 +46,40 @@ on_init = function()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
+			local target_mode = 1
+        action:switch_mode(target_mode)
+
+        local mode_timeout = request:wait_until {
+                monitor = function()
+                        return blackboard.game.sentry_mode == target_mode
+                end,
+                timeout = 8.0,
+        }
+        if mode_timeout then
+                action:warn(string.format(
+                        "切模式超时: current_mode=%d target_mode=%d",
+                        blackboard.game.sentry_mode,
+                        target_mode))
+                return
+        end
+
+        local target_exchanged_bullet = blackboard.game.exchanged_bullet + 100
+        action:exchange_17mm_bullet(100)
+
+        local buy_timeout = request:wait_until {
+                monitor = function()
+                        return blackboard.game.exchanged_bullet >= target_exchanged_bullet
+                end,
+                timeout = 8.0,
+        }
+        if buy_timeout then
+                action:warn(string.format(
+                        "买弹超时: current=%d target=%d exchangeable=%d gold=%d",
+                        blackboard.game.exchanged_bullet,
+                        target_exchanged_bullet,
+                        blackboard.game.exchangeable_ammunition_quantity,
+                        blackboard.game.gold_coin))
+        end
 		end)
 
 		while true do

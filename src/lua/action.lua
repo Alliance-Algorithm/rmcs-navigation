@@ -78,6 +78,19 @@ function action:switch_controller(mode)
 	api.switch_controller(mode)
 end
 
+function action:exchange_17mm_bullet(amount)
+	amount = blackboard.game.exchanged_bullet + amount
+	api.exchange_17mm_bullet(amount)
+end
+
+function action:switch_mode(mode)
+	api.switch_mode(mode)
+end
+
+function action:confirm_revive()
+	api.confirm_revive()
+end
+
 function action:restart_navigation(config)
 	return api.restart_navigation(config)
 end
