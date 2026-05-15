@@ -156,12 +156,7 @@ function action:relocalize_local(timeout_sec)
 end
 
 function action:relocalize_wide(timeout_sec)
-	local user = blackboard.user
-	local x, y, yaw = user.x, user.y, user.yaw
-	if pose_unavailable(x, y, yaw) then
-		x, y, yaw = 0.0, 0.0, 0.0
-	end
-	return send_and_await(self, "wide", api.relocalize_wide, x, y, yaw, timeout_sec)
+	return send_and_await(self, "wide", api.relocalize_wide, NaN, NaN, NaN, timeout_sec)
 end
 
 function action:relocalize_status()
