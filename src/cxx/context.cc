@@ -74,8 +74,6 @@ struct Context::Impl {
             try_sync(context.game_stage, root, "game_stage");
             try_sync(context.robot_health, root, "robot_health");
             try_sync(context.robot_bullet, root, "robot_bullet");
-            try_sync(context.red_score, root, "red_score");
-            try_sync(context.blue_score, root, "blue_score");
 
             return {};
         } catch (const std::exception& exception) {
@@ -92,6 +90,8 @@ struct Context::Impl {
 
         make_input("/remote/switch/right", context.switch_right, mock);
         make_input("/remote/switch/left", context.switch_left, mock);
+        make_input("/remote/joystick/right", context.rjoystick, mock);
+        make_input("/remote/joystick/left", context.ljoystick, mock);
 
         make_input("/tf", context.tf, mock);
 

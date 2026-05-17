@@ -17,8 +17,9 @@ public:
         std::function<void(bool)> update_enable_control;
         std::function<void(double, double)> send_target;
         std::function<void(bool)> switch_topic_forward;
-        std::function<void(double)> update_gimbal_direction;
-        std::function<void(const std::string&)> switch_controller;
+        std::function<void(double, double)> update_gimbal_direction;
+        std::function<void(const std::string&)> switch_motion_mode;
+        std::function<void(bool)> update_under_attack;
     };
 
     explicit LuaContext(rclcpp::Node& node) noexcept;

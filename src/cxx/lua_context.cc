@@ -33,7 +33,7 @@ struct LuaContext::Impl {
         return result;
     }
 
-    auto make_api_injection(LuaContext::Api api_impl) -> void {
+    auto make_api_injection(LuaContext::Api impl) -> void {
         auto api_result = unwrap_sol(
             lua->safe_script("return require('api')", sol::script_pass_on_error),
             "failed to get lua api");
@@ -45,11 +45,12 @@ struct LuaContext::Impl {
             "warn", [this](const std::string& text) { logging.warn("Lua: {}", text); });
         api.set_function(
             "fuck", [this](const std::string& text) { logging.fuck("Lua: {}", text); });
-        api.set_function("update_enable_control", std::move(api_impl.update_enable_control));
-        api.set_function("send_target", std::move(api_impl.send_target));
-        api.set_function("switch_topic_forward", std::move(api_impl.switch_topic_forward));
-        api.set_function("update_gimbal_direction", std::move(api_impl.update_gimbal_direction));
-        api.set_function("switch_controller", std::move(api_impl.switch_controller));
+        api.set_function("update_enable_control", std::move(impl.update_enable_control));
+        api.set_function("send_target", std::move(impl.send_target));
+        api.set_function("switch_topic_forward", std::move(impl.switch_topic_forward));
+        api.set_function("update_gimbal_direction", std::move(impl.update_gimbal_direction));
+        api.set_function("switch_motion_mode", std::move(impl.switch_motion_mode));
+        api.set_function("update_under_attack", std::move(impl.update_under_attack));
     }
 
     auto make_option_injection() -> void {

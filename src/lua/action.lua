@@ -74,8 +74,9 @@ function action:update_gimbal_dominator(name)
 	api.update_gimbal_dominator(name)
 end
 
-function action:switch_controller(mode)
-	api.switch_controller(mode)
+--- @param mode "normal" | "road" | "step" | "slope"
+function action:switch_motion_mode(mode)
+	api.switch_motion_mode(mode)
 end
 
 function action:restart_navigation(config)

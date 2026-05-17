@@ -16,3 +16,20 @@ foreach(test_name IN LISTS RMCS_NAVIGATION_LUA_TESTS)
         WORKING_DIRECTORY ${RMCS_NAVIGATION_ROOT}
     )
 endforeach()
+
+add_executable(scanning ${RMCS_NAVIGATION_ROOT}/test/cxx/scanning.cc)
+target_compile_features(scanning PRIVATE cxx_std_23)
+target_include_directories(
+    scanning
+    SYSTEM PRIVATE
+        ${LUA_INCLUDE_DIR}
+        ${visualization_msgs_INCLUDE_DIRS}
+)
+target_link_libraries(
+    scanning
+    PRIVATE
+        ${LUA_LIBRARIES}
+        sol2::sol2
+        rclcpp::rclcpp
+        ${visualization_msgs_LIBRARIES}
+)

@@ -26,6 +26,7 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 	action:switch_navigation(true)
 	action:switch_topic_forward(true)
+	action:switch_motion_mode("road")
 
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 0.5)

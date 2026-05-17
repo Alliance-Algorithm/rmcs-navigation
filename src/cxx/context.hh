@@ -26,13 +26,19 @@ public:
     InputInterface<rmcs_msgs::RobotId> robot_id;
     InputInterface<std::uint16_t> robot_health;
     InputInterface<std::uint16_t> robot_bullet;
-    InputInterface<std::uint32_t> red_score;
-    InputInterface<std::uint32_t> blue_score;
+
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
+    InputInterface<Eigen::Vector2d> rjoystick;
+    InputInterface<Eigen::Vector2d> ljoystick;
+
     InputInterface<double> chassis_power_limit_referee;
+
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
+
+    explicit Context(auto& node_and_component) noexcept
+        : Context{node_and_component, node_and_component} {}
 
     explicit Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
 
