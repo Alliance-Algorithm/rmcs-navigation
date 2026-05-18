@@ -56,6 +56,7 @@ target_sources(
         src/cxx/util/localization/engine.cc
         src/cxx/navigation.cc
         src/cxx/context.cc
+        src/cxx/controller/motion.cc
         src/cxx/lua_context.cc
         src/cxx/component.cc
 )

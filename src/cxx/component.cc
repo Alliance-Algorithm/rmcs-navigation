@@ -12,7 +12,7 @@
 
 namespace rmcs::navigation {
 
-class Navigation
+class Navigation final
     : public rmcs_executor::Component
     , public rclcpp::Node
     , public rmcs::navigation::NodeMixin {
@@ -31,6 +31,8 @@ private:
 
     MotionFsm motion{*this};
 
+    std::string gimbal_dominator = "navigation";
+
     struct Command {
         using ChassisMode = rmcs_msgs::ChassisMode;
 
@@ -38,7 +40,7 @@ private:
         OutputInterface<bool> enable_autoaim;
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
-        OutputInterface<Eigen::Vector2d> gimbal_speed;
+        OutputInterface<Eigen::Vector2d> gimbal_toward;
 
         auto init(Navigation& component) -> void {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
@@ -48,7 +50,7 @@ private:
             component.register_output(
                 "/rmcs_navigation/chassis_velocity", chassis_speed, Eigen::Vector2d::Zero());
             component.register_output(
-                "/rmcs_navigation/gimbal_velocity", gimbal_speed, Eigen::Vector2d::Zero());
+                "/rmcs_navigation/gimbal_toward", gimbal_toward, Eigen::Vector2d::Zero());
         }
     } command;
 
@@ -94,18 +96,19 @@ public:
         context.init(io_mutex, mock_context);
         command.init(*this);
 
-        lua_context.init({
-            .update_enable_control = [this](bool enable) { *command.enable_control = enable; },
-            .send_target = [this](double x, double y) { navigation.send_target(x, y); },
-            .switch_topic_forward =
-                [this](bool enable) { navigation.switch_topic_forward(enable); },
-            .update_gimbal_direction =
-                [this](double yaw, double pitch) {
-                    motion.context.target_gimbal_toward = {yaw, pitch};
-                },
-            .switch_motion_mode = [this](const std::string& mode) { motion.switch_mode(mode); },
-            .update_under_attack = [this](bool yes) { motion.context.under_attack = yes; },
-        });
+        auto api = details::LuaContext::Api{};
+        api.update_enable_control = [this](bool enable) { *command.enable_control = enable; };
+        api.send_target = [this](double x, double y) { navigation.send_target(x, y); };
+        api.switch_topic_forward = [this](bool enable) { navigation.switch_topic_forward(enable); };
+        api.update_gimbal_direction = [this](double yaw, double pitch) {
+            motion.context.target_gimbal_toward = {yaw, pitch};
+        };
+        api.update_gimbal_dominator = [this](const std::string& name) { gimbal_dominator = name; };
+        api.switch_motion_mode = [this](const std::string& mode) { motion.switch_mode(mode); };
+        api.update_under_attack = [this](bool yes) { motion.context.under_attack = yes; };
+
+        lua_context.init(std::move(api));
+
         motion.switch_mode("normal");
 
         logging::info("Navigation is initialized");
@@ -126,36 +129,27 @@ public:
             lua_context.tick();
         }
 
-        const auto use_command = [this](const MotionFsm::Command& cmd) {
-            *command.chassis_speed = cmd.chassis_speed;
-            *command.gimbal_speed = cmd.gimbal_toward;
-            *command.chassis_behavior = cmd.chassis_mode;
-        };
-        const auto use_fallback = [this] {
+        {
             *command.chassis_speed = Eigen::Vector2d::Zero();
-            *command.gimbal_speed = Eigen::Vector2d::Zero();
+            *command.gimbal_toward = Eigen::Vector2d::Zero();
             *command.chassis_behavior = rmcs_msgs::ChassisMode::SPIN_FAST;
-        };
+        }
+
+        const auto nav_cmd = navigation.current_command();
+        const auto elapsed = std::chrono::steady_clock::now() - nav_cmd.timestamp;
+        motion.context.target_chassis_speed =
+            (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
+
+        const auto direction = fast_tf::cast<rmcs_description::OdomImu>(
+            rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()},
+            *context.tf);
+        motion.context.current_local_yaw = std::atan2(direction->y(), direction->x());
+
+        const auto cmd = motion.spin_once();
         if (*command.enable_control) {
-            const auto nav_cmd = navigation.current_command();
-            const auto elapsed = std::chrono::steady_clock::now() - nav_cmd.timestamp;
-            motion.context.target_chassis_speed =
-                (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
-
-            const auto direction = fast_tf::cast<rmcs_description::OdomImu>(
-                rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()},
-                *context.tf);
-            auto vector = *direction;
-            vector.z() = 0.0;
-            if (vector.norm() > 1e-9)
-                vector.normalize();
-            else
-                vector = Eigen::Vector3d::UnitX();
-            motion.context.current_local_yaw = std::atan2(vector.y(), vector.x());
-
-            use_command(motion.spin_once());
-        } else {
-            use_fallback();
+            *command.chassis_speed = cmd.chassis_speed;
+            *command.gimbal_toward = cmd.gimbal_toward;
+            *command.chassis_behavior = cmd.chassis_mode;
         }
     }
 };

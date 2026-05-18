@@ -18,6 +18,7 @@ public:
         std::function<void(double, double)> send_target;
         std::function<void(bool)> switch_topic_forward;
         std::function<void(double, double)> update_gimbal_direction;
+        std::function<void(const std::string&)> update_gimbal_dominator;
         std::function<void(const std::string&)> switch_motion_mode;
         std::function<void(bool)> update_under_attack;
     };

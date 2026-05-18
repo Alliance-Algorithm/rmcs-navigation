@@ -49,6 +49,7 @@ struct LuaContext::Impl {
         api.set_function("send_target", std::move(impl.send_target));
         api.set_function("switch_topic_forward", std::move(impl.switch_topic_forward));
         api.set_function("update_gimbal_direction", std::move(impl.update_gimbal_direction));
+        api.set_function("update_gimbal_dominator", std::move(impl.update_gimbal_dominator));
         api.set_function("switch_motion_mode", std::move(impl.switch_motion_mode));
         api.set_function("update_under_attack", std::move(impl.update_under_attack));
     }

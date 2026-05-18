@@ -44,7 +44,7 @@ function M.scanning_signal(config)
 	local yaw = 0
 	if config.y1 == 0 and config.y2 == 0 then
 		local phase = (timestamp % config.yt) / config.yt
-		yaw = phase * tau
+		yaw = 2 * phase * tau
 	else
 		local span = (config.y2 - config.y1) % tau
 		yaw = (config.y1 + wave(timestamp, config.yt, 0, span)) % tau

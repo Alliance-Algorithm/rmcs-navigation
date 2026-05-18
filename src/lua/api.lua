@@ -14,9 +14,9 @@ local util = require("util.native")
 ---
 --- @field update_enable_control fun(enable: boolean)
 --- @field send_target fun(x: number, y: number)
---- @field update_gimbal_direction fun(angle: number)
+--- @field update_gimbal_direction fun(yaw: number, pitch: number)
 --- @field update_gimbal_dominator fun(name: string)
---- @field switch_motion_mode fun(mode: "normal" | "road" | "step" | "slope")
+--- @field switch_motion_mode fun(mode: "normal" | "attack" | "road" | "step" | "slope")
 --- @field update_under_attack fun(yes: boolean)
 ---
 local api = setmetatable({}, {

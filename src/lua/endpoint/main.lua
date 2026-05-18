@@ -13,7 +13,9 @@ local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
 local request = Scheduler.request
 
-local edges = require("util.edge").new()
+local task = {
+	robot_status = require("task.robot_status"),
+}
 
 ---
 --- Export Context
@@ -54,13 +56,7 @@ on_init = function()
 		end
 	end)
 
-	--- 高优先级事件中断检测
-	scheduler:append_task(function()
-		while true do
-			action:switch_navigation(blackboard.play.rswitch == "UP")
-			request:yield()
-		end
-	end)
+	scheduler:append_task(task.robot_status)
 
 	--- 核心意图事件循环
 	scheduler:append_task(function()
