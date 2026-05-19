@@ -31,6 +31,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(rmcs_msgs REQUIRED)
+find_package(rmcs_relocation REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -67,6 +68,7 @@ target_include_directories(
         ${rmcs_executor_INCLUDE_DIRS}
         ${geometry_msgs_INCLUDE_DIRS}
         ${rmcs_msgs_INCLUDE_DIRS}
+        ${rmcs_relocation_INCLUDE_DIRS}
         ${std_srvs_INCLUDE_DIRS}
         ${ament_index_cpp_INCLUDE_DIRS}
         ${tf2_ros_INCLUDE_DIRS}
@@ -89,6 +91,7 @@ target_link_libraries(
         Eigen3::Eigen
         ${rmcs_executor_LIBRARIES}
         ${geometry_msgs_LIBRARIES}
+        ${rmcs_relocation_LIBRARIES}
         ${std_srvs_LIBRARIES}
         ${rmcs_msgs_LIBRARIES}
         ${tf2_ros_LIBRARIES}

@@ -1,6 +1,8 @@
 #pragma once
 #include "cxx/util/pimpl.hh"
 
+#include "cxx/util/localization/engine.hh"
+
 #include <functional>
 #include <string>
 
@@ -21,6 +23,10 @@ public:
         std::function<void(const std::string&)> update_gimbal_dominator;
         std::function<void(const std::string&)> switch_motion_mode;
         std::function<void(bool)> update_under_attack;
+        std::function<bool(double, double, double)> relocalize_initial;
+        std::function<bool(double, double, double)> relocalize_local;
+        std::function<bool(double, double, double)> relocalize_wide;
+        std::function<RelocalizeStatus()> relocalize_status;
     };
 
     explicit LuaContext(rclcpp::Node& node) noexcept;

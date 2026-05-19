@@ -39,6 +39,8 @@ struct LuaContext::Impl {
             "failed to get lua api");
 
         auto api = api_result.get<sol::table>();
+        auto relocalize_status = std::move(impl.relocalize_status);
+
         api.set_function(
             "info", [this](const std::string& text) { logging.info("Lua: {}", text); });
         api.set_function(
@@ -52,6 +54,25 @@ struct LuaContext::Impl {
         api.set_function("update_gimbal_dominator", std::move(impl.update_gimbal_dominator));
         api.set_function("switch_motion_mode", std::move(impl.switch_motion_mode));
         api.set_function("update_under_attack", std::move(impl.update_under_attack));
+        api.set_function("relocalize_initial", std::move(impl.relocalize_initial));
+        api.set_function("relocalize_local", std::move(impl.relocalize_local));
+        api.set_function("relocalize_wide", std::move(impl.relocalize_wide));
+        api.set_function(
+            "relocalize_status", [this, relocalize_status = std::move(relocalize_status)] {
+                const auto status = relocalize_status ? relocalize_status()
+                                                      : RelocalizeStatus{
+                                                            .state = RelocalizeState::FAILED,
+                                                            .success = false,
+                                                            .message = "disabled",
+                                                        };
+                return lua->create_table_with(
+                    "state", static_cast<int>(status.state), "success", status.success, "message",
+                    status.message, "fitness_score", status.fitness_score, "confidence",
+                    status.confidence, "estimated_x", status.estimated_x, "estimated_y",
+                    status.estimated_y, "estimated_z", status.estimated_z, "estimated_qx",
+                    status.estimated_qx, "estimated_qy", status.estimated_qy, "estimated_qz",
+                    status.estimated_qz, "estimated_qw", status.estimated_qw);
+            });
     }
 
     auto make_option_injection() -> void {

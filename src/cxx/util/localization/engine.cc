@@ -1,164 +1,227 @@
 #include "cxx/util/localization/engine.hh"
 #include "cxx/util/node_mixin.hh"
 
-#include <pcl/io/pcd_io.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/registration/ndt.h>
-
-#include <pcl_conversions/pcl_conversions.h>
-#include <rclcpp/logging.hpp>
-#include <rclcpp/subscription.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-
-#include <atomic>
+#include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <memory>
 #include <mutex>
-#include <thread>
+#include <optional>
+#include <utility>
+
+#include <geometry_msgs/msg/pose.hpp>
+#include <rclcpp/client.hpp>
+#include <rclcpp/logging.hpp>
+#include <rclcpp/timer.hpp>
+#include <rmcs_relocation/srv/relocalize.hpp>
 
 namespace rmcs::navigation {
 
-struct Localization::Impl {
-    Config config;
-    NodeWrap<rclcpp::Node> logging;
+namespace {
 
-    struct Context {
-        using Point = pcl::PointXYZ;
-        using Cloud = pcl::PointCloud<Point>;
+using Relocalize = rmcs_relocation::srv::Relocalize;
+using RelocalizeClient = rclcpp::Client<Relocalize>;
 
-        std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::PointCloud2>> subscription;
-        std::atomic<bool> is_collecting = false;
-        std::mutex collected_mutex;
+auto yaw_to_pose(double x, double y, double yaw) -> geometry_msgs::msg::Pose {
+    auto pose = geometry_msgs::msg::Pose{};
+    pose.position.x = x;
+    pose.position.y = y;
+    pose.position.z = 0.0;
+    pose.orientation.x = 0.0;
+    pose.orientation.y = 0.0;
+    pose.orientation.z = std::sin(yaw * 0.5);
+    pose.orientation.w = std::cos(yaw * 0.5);
+    return pose;
+}
 
-        std::shared_ptr<Cloud> map = std::make_shared<Cloud>();
-        std::shared_ptr<Cloud> collected = std::make_shared<Cloud>();
+auto failed_status(std::string message) -> RelocalizeStatus {
+    return RelocalizeStatus{
+        .state = RelocalizeState::FAILED,
+        .success = false,
+        .message = std::move(message),
+    };
+}
 
-        explicit Context(Config& config) {
-            const auto& filename = config.map_filename;
-            if (pcl::io::loadPCDFile<Point>(filename, *map) != 0)
-                throw std::runtime_error{"Couldn't read " + filename};
+auto status_from_response(const Relocalize::Response& response, bool success) -> RelocalizeStatus {
+    const auto& pose = response.estimated_world_base;
+    return RelocalizeStatus{
+        .state = success ? RelocalizeState::SUCCEEDED : RelocalizeState::FAILED,
+        .success = success,
+        .message = response.message,
+        .fitness_score = response.fitness_score,
+        .confidence = response.confidence,
+        .estimated_x = pose.position.x,
+        .estimated_y = pose.position.y,
+        .estimated_z = pose.position.z,
+        .estimated_qx = pose.orientation.x,
+        .estimated_qy = pose.orientation.y,
+        .estimated_qz = pose.orientation.z,
+        .estimated_qw = pose.orientation.w,
+    };
+}
 
-            auto& rclcpp = config.rclcpp;
-            subscription = rclcpp.create_subscription<sensor_msgs::msg::PointCloud2>(
-                config.topic_registered, 10,
-                [this](const std::unique_ptr<sensor_msgs::msg::PointCloud2>& msg) {
-                    if (!is_collecting.load(std::memory_order_relaxed))
-                        return;
+constexpr auto mode_to_msg(RelocalizeMode mode) -> std::uint8_t {
+    switch (mode) {
+    case RelocalizeMode::Initial: return Relocalize::Request::MODE_INITIAL;
+    case RelocalizeMode::Local: return Relocalize::Request::MODE_LOCAL;
+    case RelocalizeMode::Wide: return Relocalize::Request::MODE_WIDE;
+    }
+    return Relocalize::Request::MODE_INITIAL;
+}
 
-                    auto received = Cloud{};
-                    pcl::fromROSMsg(*msg, received);
+} // namespace
 
-                    auto lock = std::scoped_lock{collected_mutex};
-                    *collected += received;
-                });
+struct Session {
+    mutable std::mutex mutex;
+    std::shared_ptr<RelocalizeClient> client;
+    rclcpp::Logger logger;
+    std::string service_name;
+
+    std::optional<std::int64_t> pending_id;
+    RelocalizeStatus last_status{};
+    rclcpp::TimerBase::SharedPtr timeout_timer;
+
+    Session(std::shared_ptr<RelocalizeClient> client, rclcpp::Logger logger, std::string name)
+        : client{std::move(client)}
+        , logger{std::move(logger)}
+        , service_name{std::move(name)} {}
+
+    auto begin() -> bool {
+        auto lock = std::scoped_lock{mutex};
+        if (last_status.state == RelocalizeState::IN_FLIGHT)
+            return false;
+
+        pending_id.reset();
+        last_status = RelocalizeStatus{
+            .state = RelocalizeState::IN_FLIGHT,
+            .message = "in_flight",
+        };
+        return true;
+    }
+
+    auto track(std::int64_t id) -> void {
+        auto lock = std::scoped_lock{mutex};
+        pending_id = id;
+    }
+
+    auto end(RelocalizeStatus status, std::optional<std::int64_t> expected_id = std::nullopt)
+        -> bool {
+        auto lock = std::scoped_lock{mutex};
+        if (expected_id && pending_id != *expected_id)
+            return false;
+
+        clear_locked();
+        last_status = std::move(status);
+        return true;
+    }
+
+    auto snapshot() const -> RelocalizeStatus {
+        auto lock = std::scoped_lock{mutex};
+        return last_status;
+    }
+
+    auto clear_locked() -> void {
+        if (timeout_timer) {
+            timeout_timer->cancel();
+            timeout_timer.reset();
         }
-    } context;
+        if (pending_id) {
+            client->remove_pending_request(*pending_id);
+            pending_id.reset();
+        }
+    }
+};
 
-    pcl::NormalDistributionsTransform<Context::Point, Context::Point> engine;
+struct Localization::Impl : NodeMixin {
+    Config config;
+    rclcpp::Node& node;
+    std::shared_ptr<Session> session;
 
     explicit Impl(Localization::Config config)
         : config{std::move(config)}
-        , logging{config.rclcpp}
-        , context{config} {
+        , node{this->config.rclcpp}
+        , session{std::make_shared<Session>(
+              node.create_client<Relocalize>(this->config.service_name), node.get_logger(),
+              this->config.service_name)} {}
 
-        engine.setTransformationEpsilon(config.ndt_result_epsilon); // 收敛判定阈值
-        engine.setStepSize(config.ndt_step_size);                   // More-Thuente 线搜索最大步长
-        engine.setResolution(config.ndt_resolution);                // NDT 网格分辨率
-        engine.setMaximumIterations(config.ndt_max_iterations);     // 最大迭代次数
+    ~Impl() {
+        auto lock = std::scoped_lock{session->mutex};
+        session->clear_locked();
     }
 
-    static auto
-        extract_submap(const Context::Cloud& map, const Eigen::Vector3d& center, double radius)
-            -> std::shared_ptr<Context::Cloud> {
-        auto map_shared = map.makeShared();
-        auto kd_tree = pcl::KdTreeFLANN<Context::Point>{};
-        kd_tree.setInputCloud(map_shared);
+    auto get_logger() const -> rclcpp::Logger { return node.get_logger(); }
 
-        auto indices = std::vector<int>{};
-        auto distances = std::vector<float>{};
-        const auto query = Context::Point{
-            static_cast<float>(center.x()),
-            static_cast<float>(center.y()),
-            static_cast<float>(center.z()),
-        };
-        kd_tree.radiusSearch(query, static_cast<float>(radius), indices, distances);
+    auto arm_timeout(
+        const std::shared_ptr<Session>& session, const std::shared_ptr<std::int64_t>& pending_id)
+        -> void {
+        const auto timeout = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::duration<double>{std::max(0.1, config.request_timeout_sec)});
+        auto timer_ref = std::make_shared<std::weak_ptr<rclcpp::TimerBase>>();
+        auto timer = node.create_wall_timer(timeout, [session, pending_id, timer_ref] {
+            if (auto timer = timer_ref->lock())
+                timer->cancel();
 
-        auto submap = std::make_shared<Context::Cloud>();
-        submap->reserve(indices.size());
-        for (const auto index : indices) {
-            submap->push_back(map[index]);
-        }
-        return submap;
-    }
-
-    auto start_collecting(std::chrono::seconds seconds) -> std::expected<void, std::string> {
-        if (context.is_collecting.exchange(true, std::memory_order_relaxed)) {
-            return std::unexpected{"already collecting point cloud"};
-        }
-
-        {
-            auto lock = std::scoped_lock{context.collected_mutex};
-            context.collected->clear();
-        }
-
-        std::thread{[this, seconds] {
-            std::this_thread::sleep_for(seconds);
-            context.is_collecting.store(false, std::memory_order_relaxed);
-        }}.detach();
-
-        return {};
-    }
-
-    auto start_localizing(const Eigen::Isometry3d& initial_solution)
-        -> std::future<std::expected<Eigen::Isometry3d, std::string>> {
-        return std::async(std::launch::async, [this, initial_solution] {
-            try {
-                auto scan = std::make_shared<Context::Cloud>();
-                {
-                    auto lock = std::scoped_lock{context.collected_mutex};
-                    *scan = *context.collected;
-                }
-
-                if (scan->empty()) {
-                    return std::expected<Eigen::Isometry3d, std::string>{
-                        std::unexpected{"collected cloud is empty"}};
-                }
-
-                constexpr auto submap_radius = 25.0;
-                auto submap =
-                    extract_submap(*context.map, initial_solution.translation(), submap_radius);
-                if (submap->empty()) {
-                    return std::expected<Eigen::Isometry3d, std::string>{
-                        std::unexpected{"extracted submap is empty"}};
-                }
-
-                engine.setInputTarget(submap);
-                engine.setInputSource(scan);
-
-                auto aligned = Context::Cloud{};
-                const auto initial_guess = initial_solution.matrix().cast<float>();
-                engine.align(aligned, initial_guess);
-
-                if (!engine.hasConverged()) {
-                    return std::expected<Eigen::Isometry3d, std::string>{
-                        std::unexpected{"ndt failed to converge"}};
-                }
-
-                const auto transform = engine.getFinalTransformation().cast<double>();
-                auto result = Eigen::Isometry3d::Identity();
-                result.matrix() = transform;
-
-                RCLCPP_INFO(
-                    config.rclcpp.get_logger(), "Localization converged, fitness score: %.6f",
-                    engine.getFitnessScore());
-
-                return std::expected<Eigen::Isometry3d, std::string>{result};
-            } catch (const std::exception& e) {
-                return std::expected<Eigen::Isometry3d, std::string>{
-                    std::unexpected{std::string{"localization exception: "} + e.what()}};
+            if (session->end(
+                    failed_status("request timeout: " + session->service_name), *pending_id)) {
+                RCLCPP_WARN(
+                    session->logger, "relocalize request timeout: %s",
+                    session->service_name.c_str());
             }
         });
+        *timer_ref = timer;
+
+        auto lock = std::scoped_lock{session->mutex};
+        if (session->timeout_timer)
+            session->timeout_timer->cancel();
+        session->timeout_timer = std::move(timer);
+    }
+
+    auto send(RelocalizeMode mode, double x, double y, double yaw) -> bool {
+        if (!session->begin()) {
+            warn("relocalize skipped: previous request is still in flight");
+            return false;
+        }
+
+        if (!session->client->service_is_ready()
+            && !session->client->wait_for_service(std::chrono::seconds{0})) {
+            warn("relocalize service unavailable: {}", config.service_name);
+            session->end(failed_status("service unavailable: " + config.service_name));
+            return false;
+        }
+
+        auto request = std::make_shared<Relocalize::Request>();
+        request->mode = mode_to_msg(mode);
+        request->initial_guess_world_base = yaw_to_pose(x, y, yaw);
+
+        auto pending_id = std::make_shared<std::int64_t>(-1);
+        auto session_ref = session;
+        auto result = session->client->async_send_request(
+            std::move(request), [session_ref, pending_id](RelocalizeClient::SharedFuture future) {
+                auto response = future.get();
+                if (!response) {
+                    RCLCPP_WARN(session_ref->logger, "relocalize response is null");
+                    session_ref->end(failed_status("response is null"), *pending_id);
+                    return;
+                }
+
+                if (!response->success) {
+                    RCLCPP_WARN(
+                        session_ref->logger, "relocalize failed: %s", response->message.c_str());
+                    session_ref->end(status_from_response(*response, false), *pending_id);
+                    return;
+                }
+
+                RCLCPP_INFO(
+                    session_ref->logger, "relocalize success: score=%.4f, confidence=%.3f",
+                    response->fitness_score, response->confidence);
+                session_ref->end(status_from_response(*response, true), *pending_id);
+            });
+
+        *pending_id = result.request_id;
+        session->track(result.request_id);
+        arm_timeout(session, pending_id);
+        return true;
     }
 };
 
@@ -167,14 +230,12 @@ Localization::Localization(Config config)
 
 Localization::~Localization() noexcept = default;
 
-auto Localization::start_collecting(std::chrono::seconds seconds)
-    -> std::expected<void, std::string> {
-    return pimpl->start_collecting(seconds);
+auto Localization::relocalize(RelocalizeMode mode, double x, double y, double yaw) -> bool {
+    return pimpl->send(mode, x, y, yaw);
 }
 
-auto Localization::start_localizing(const Eigen::Isometry3d& initial_solution)
-    -> std::future<std::expected<Eigen::Isometry3d, std::string>> {
-    return pimpl->start_localizing(initial_solution);
+auto Localization::relocalize_status() const -> RelocalizeStatus {
+    return pimpl->session->snapshot();
 }
 
 } // namespace rmcs::navigation

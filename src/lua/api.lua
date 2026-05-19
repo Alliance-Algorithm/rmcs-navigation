@@ -18,6 +18,10 @@ local util = require("util.native")
 --- @field update_gimbal_dominator fun(name: string)
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "road" | "step" | "slope")
 --- @field update_under_attack fun(yes: boolean)
+--- @field relocalize_initial fun(x: number, y: number, yaw: number): boolean
+--- @field relocalize_local fun(x: number, y: number, yaw: number): boolean
+--- @field relocalize_wide fun(x: number, y: number, yaw: number): boolean
+--- @field relocalize_status fun(): { state: integer, success: boolean, message: string, fitness_score: number, confidence: number, estimated_x: number, estimated_y: number, estimated_z: number, estimated_qx: number, estimated_qy: number, estimated_qz: number, estimated_qw: number }
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)
@@ -48,13 +52,15 @@ function api.restart_navigation(config)
 	local launch_odin1 = tostring(config.launch_odin1 or "false")
 	local global_map = tostring(config.global_map or "empty")
 	local use_sim_time = tostring(config.use_sim_time or "false")
+	local launch_relocation = tostring(config.launch_relocation or "false")
 
 	local configs = string.format(
-		"launch_livox:=%s launch_odin1:=%s global_map:=%s use_sim_time:=%s",
+		"launch_livox:=%s launch_odin1:=%s global_map:=%s use_sim_time:=%s launch_relocation:=%s",
 		launch_livox,
 		launch_odin1,
 		global_map,
-		use_sim_time
+		use_sim_time,
+		launch_relocation
 	)
 
 	local template = [[

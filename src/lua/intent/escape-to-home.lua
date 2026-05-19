@@ -1,25 +1,35 @@
-local Intent = function()
-	local fsm
+local action = require("action")
+local blackboard = require("blackboard").singleton()
+local Fsm = require("util.fsm")
+local request = require("util.scheduler").request
 
-	-- 1 从 enemy to road
-	-- 1 执行完就跳到 2
-	-- spin task
+local navigate_to = require("task.navigate-to")
 
-	-- 2
-	-- 2 执行完就跳到 3
+return function()
+	local State = { SUPPLY = "SUPPLY" }
+	local HOME = blackboard.rule.resupply_zone.ours
+	local DWELL = 5
 
-	-- 3
-	-- 3 执行完就跳到 1
+	local fsm = Fsm:new(State.SUPPLY)
 
-	-- Check State
-	if true then
-		local area = map:localize { x = 0, y = 0 }
-		fsm:strat_with("1")
+	fsm:use {
+		state = State.SUPPLY,
+		enter = function()
+			action:info("escape-to-home: 回补给区")
+			action:switch_motion_mode("normal")
+		end,
+		event = function(handle)
+			navigate_to(HOME, DWELL)
+			handle:set_next(State.SUPPLY)
+		end,
+	}
+
+	if not fsm:init_ready(State) then
+		error("escape-to-home FSM 没有初始化完全")
 	end
 
 	while true do
-		-- spin fsm
+		fsm:spin_once()
+		request:yield()
 	end
 end
-
-return Intent

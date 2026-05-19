@@ -2,9 +2,11 @@
 #include "cxx/controller/motion.hh"
 #include "cxx/lua_context.hh"
 #include "cxx/navigation.hh"
+#include "cxx/util/localization/engine.hh"
 #include "cxx/util/node_mixin.hh"
 
 #include <Eigen/Geometry>
+#include <memory>
 #include <rclcpp/node.hpp>
 #include <rmcs_description/sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
@@ -30,6 +32,8 @@ private:
     details::Context context{*this};
 
     MotionFsm motion{*this};
+    std::unique_ptr<Localization> localization;
+    bool relocalization_enabled = true;
 
     std::string gimbal_dominator = "navigation";
 
@@ -93,6 +97,21 @@ public:
 
         mock_context = param<bool>("mock_context");
 
+        relocalization_enabled = has_parameter("enable_relocalization")
+                                   ? get_parameter_or<bool>("enable_relocalization", true)
+                                   : true;
+        if (relocalization_enabled) {
+            auto config = Localization::Config{.rclcpp = *this};
+            if (has_parameter("localization.service_name"))
+                config.service_name = get_parameter("localization.service_name").as_string();
+            if (has_parameter("localization.request_timeout_sec"))
+                config.request_timeout_sec =
+                    get_parameter("localization.request_timeout_sec").as_double();
+            localization = std::make_unique<Localization>(std::move(config));
+        } else {
+            logging::warn("relocalization is disabled by parameter enable_relocalization=false");
+        }
+
         context.init(io_mutex, mock_context);
         command.init(*this);
 
@@ -106,6 +125,37 @@ public:
         api.update_gimbal_dominator = [this](const std::string& name) { gimbal_dominator = name; };
         api.switch_motion_mode = [this](const std::string& mode) { motion.switch_mode(mode); };
         api.update_under_attack = [this](bool yes) { motion.context.under_attack = yes; };
+        api.relocalize_initial = [this](double x, double y, double yaw) {
+            if (!relocalization_enabled || !localization) {
+                logging::warn("relocalize_initial ignored: disabled");
+                return false;
+            }
+            return localization->relocalize(RelocalizeMode::Initial, x, y, yaw);
+        };
+        api.relocalize_local = [this](double x, double y, double yaw) {
+            if (!relocalization_enabled || !localization) {
+                logging::warn("relocalize_local ignored: disabled");
+                return false;
+            }
+            return localization->relocalize(RelocalizeMode::Local, x, y, yaw);
+        };
+        api.relocalize_wide = [this](double x, double y, double yaw) {
+            if (!relocalization_enabled || !localization) {
+                logging::warn("relocalize_wide ignored: disabled");
+                return false;
+            }
+            return localization->relocalize(RelocalizeMode::Wide, x, y, yaw);
+        };
+        api.relocalize_status = [this] {
+            if (!relocalization_enabled || !localization) {
+                return RelocalizeStatus{
+                    .state = RelocalizeState::FAILED,
+                    .success = false,
+                    .message = "disabled",
+                };
+            }
+            return localization->relocalize_status();
+        };
 
         lua_context.init(std::move(api));
 
