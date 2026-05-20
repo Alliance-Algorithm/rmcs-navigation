@@ -23,28 +23,22 @@ local task = {
 blackboard = require("blackboard").singleton()
 
 on_init = function()
+	clock:reset(blackboard.meta.timestamp)
+
 	action:bind(scheduler)
 	action:info(ascii.banner)
-	action:warn("⚠️ TEST 模式，别上场哦")
+	action:warn("御宅模式♥️，守护你的基地")
 
-	clock:reset(blackboard.meta.timestamp)
 	action:switch_navigation(true)
-	action:switch_topic_forward(true)
-
-	action:info("导航即将重启")
-	action:restart_navigation {
-		global_map = "empty",
-		launch_livox = true,
-		launch_odin1 = false,
-		use_sim_time = false,
-	}
+	action:gimbal_scan(0, 0)
+	action:switch_motion_mode("attack")
 
 	scheduler:append_task(task.robot_status)
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
-			action:gimbal_scan(-1.0, 1.0)
-			action:switch_motion_mode("road")
+			action:info("切换录制状态")
+			action:toggle_record()
 		end)
 
 		while true do
@@ -74,7 +68,6 @@ end
 
 on_tick = function()
 	clock:update(blackboard.meta.timestamp)
-
 	scheduler:spin_once()
 end
 

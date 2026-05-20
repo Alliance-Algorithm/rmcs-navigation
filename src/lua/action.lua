@@ -5,8 +5,8 @@ local maths = require("util.math")
 local clock = require("util.clock")
 
 local NaN = 0 / 0
-local kYtPerRad = 1.2
-local kPtPerRad = 1.5
+local kYtPerRad = 2.0
+local kPtPerRad = 2.0
 
 local action = {
 	target = {
@@ -19,6 +19,8 @@ local action = {
 		y2 = 0,
 		p1 = 0 + 0.3,
 		p2 = 0 - 0.3,
+
+		nod_count = 0,
 	},
 }
 
@@ -54,6 +56,24 @@ function action:bind(scheduler)
 				yaw = context.y1
 				pitch = context.p1
 			end
+
+			local nod_count = self.gimbal.nod_count
+			if nod_count > 0 then
+				yaw = 0 / 0
+
+				pitch = 0 + 0.5
+				api.update_gimbal_direction(yaw, pitch)
+				request:sleep(0.5)
+
+				pitch = 0 - 0.5
+				api.update_gimbal_direction(yaw, pitch)
+				request:sleep(0.5)
+
+				pitch = 0
+				api.update_gimbal_direction(yaw, pitch)
+				self.gimbal.nod_count = nod_count - 1
+			end
+
 			api.update_gimbal_direction(yaw, pitch)
 
 			request:yield()
@@ -124,13 +144,13 @@ function action:gimbal_toward(yaw, pitch)
 	action:info("Set gimbal to toward mode")
 	self.gimbal.mode = "toward"
 	self.gimbal.y1 = yaw
-	self.gimbal.y1 = yaw
+	self.gimbal.y2 = yaw
 	self.gimbal.p1 = pitch
 	self.gimbal.p2 = pitch
 end
-
-function action:update_gimbal_dominator(name)
-	api.update_gimbal_dominator(name)
+--- @param times integer
+function action:gimbal_nod(times)
+	self.gimbal.nod_count = self.gimbal.nod_count + times
 end
 
 --- @param mode "normal" | "attack" | "road" | "step" | "slope"
@@ -151,8 +171,14 @@ function action:stop_navigation()
 	api.stop_navigation()
 end
 
+function action:toggle_record()
+	return api.toggle_record()
+end
+
 --- @param position {x: number, y: number}
 function action:navigate(position)
+	action:info("navigate to " .. position.x .. ", " .. position.y)
+
 	local x = position.x
 	local y = position.y
 	if util.check_nan(x, y) then

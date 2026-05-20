@@ -50,8 +50,7 @@ struct MotionFsm::Impl {
     auto current_position() const { return Eigen::Vector2d{context.x, context.y}; }
 
     auto update_gimbal_target() -> Eigen::Vector2d {
-        constexpr auto kYawBiasCorrectionGain = 0.05;
-        constexpr auto kYawUpdateEps = 1e-6;
+        constexpr auto kYawBiasCorrectionGain = 0.002;
 
         constexpr auto normalize_yaw = [](double yaw) -> double {
             return std::atan2(std::sin(yaw), std::cos(yaw));
@@ -62,17 +61,14 @@ struct MotionFsm::Impl {
         if (std::isfinite(wy) && std::isfinite(ly)) {
             const auto measured_bias = normalize_yaw(wy - ly);
 
-            if (!yaw_bias_initialized) {
+            if (!yaw_bias_initialized && std::isfinite(wy)) {
                 yaw_bias = measured_bias;
                 last_world_yaw = wy;
                 yaw_bias_initialized = true;
             } else {
-                const auto world_delta = normalize_yaw(wy - last_world_yaw);
-                if (std::abs(world_delta) > kYawUpdateEps) {
-                    const auto bias_error = normalize_yaw(measured_bias - yaw_bias);
-                    yaw_bias = normalize_yaw(yaw_bias + kYawBiasCorrectionGain * bias_error);
-                    last_world_yaw = wy;
-                }
+                const auto bias_error = normalize_yaw(measured_bias - yaw_bias);
+                yaw_bias = normalize_yaw(yaw_bias + kYawBiasCorrectionGain * bias_error);
+                last_world_yaw = wy;
             }
         }
 
@@ -80,7 +76,6 @@ struct MotionFsm::Impl {
         const auto pitch = context.target_gimbal_toward.y();
         const auto target_local_yaw = normalize_yaw(target_world_yaw - yaw_bias);
 
-        // wrap.info("bias: {:.4}", yaw_bias);
         return {target_local_yaw, pitch};
     }
 
@@ -173,7 +168,7 @@ struct MotionFsm::Impl {
             },
             [this] {
                 command.chassis_mode = ChassisMode::AUTO;
-                command.chassis_speed = road_filter.update(context.target_chassis_speed);
+                command.chassis_speed = slope_filter.update(context.target_chassis_speed);
                 command.gimbal_toward = update_gimbal_target();
                 return Status::SLOPE;
             });

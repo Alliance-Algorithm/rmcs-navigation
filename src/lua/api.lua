@@ -15,7 +15,6 @@ local util = require("util.native")
 --- @field update_enable_control fun(enable: boolean)
 --- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(yaw: number, pitch: number)
---- @field update_gimbal_dominator fun(name: string)
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "road" | "step" | "slope")
 --- @field update_under_attack fun(yes: boolean)
 ---
@@ -85,6 +84,66 @@ function api.stop_navigation()
         tmux kill-session -t navigation 2>/dev/null || true
     ]]
 	return util.run(string.format("(%s) >/dev/null 2>&1 &", command))
+end
+
+function api.start_record()
+	local filename, msg = util.search_setup_resource()
+	if not filename then
+		error(msg)
+	end
+
+	local template = [[
+        source %q
+
+        tmux kill-session -t record-livox 2>/dev/null || true
+
+        tmux new-session -d -s record-livox -n "bag" "bash -lc 'source %q
+
+        if [ -d /home/ubuntu ]; then
+            record_parent=/home/ubuntu
+        elif [ -d /home/root ]; then
+            record_parent=/home/root
+        else
+            echo \"record parent not found\"
+            exit 1
+        fi
+
+        mapfile -t topics < <(ros2 topic list | rg \"^/livox\")
+        if [ \${#topics[@]} -eq 0 ]; then
+            echo \"no /livox topics found\"
+            exit 1
+        fi
+
+        record_root=\$record_parent/record-livox
+        bag_dir=\$record_root/livox-$(date +%%Y%%m%%d-%%H%%M%%S)
+        mkdir -p \"\$record_root\"
+
+        ros2 bag record -o \"\$bag_dir\" \"\${topics[@]}\"'"
+    ]]
+	local command = string.format(template, filename, filename)
+
+	return util.run(string.format("(%s) >/dev/null 2>&1 &", command))
+end
+
+function api.abort_record()
+	local command = [[
+        if tmux has-session -t record-livox 2>/dev/null; then
+            tmux send-keys -t record-livox:bag C-c
+            sleep 2
+            tmux kill-session -t record-livox 2>/dev/null || true
+        fi
+    ]]
+	return util.run(string.format("(%s) >/dev/null 2>&1 &", command))
+end
+
+function api.toggle_record()
+	local command = [[tmux has-session -t record-livox 2>/dev/null]]
+	local ok = util.run(command)
+	if ok then
+		return api.abort_record()
+	end
+
+	return api.start_record()
 end
 
 return api

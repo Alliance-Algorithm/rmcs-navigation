@@ -31,8 +31,6 @@ private:
 
     MotionFsm motion{*this};
 
-    std::string gimbal_dominator = "navigation";
-
     struct Command {
         using ChassisMode = rmcs_msgs::ChassisMode;
 
@@ -103,13 +101,10 @@ public:
         api.update_gimbal_direction = [this](double yaw, double pitch) {
             motion.context.target_gimbal_toward = {yaw, pitch};
         };
-        api.update_gimbal_dominator = [this](const std::string& name) { gimbal_dominator = name; };
         api.switch_motion_mode = [this](const std::string& mode) { motion.switch_mode(mode); };
         api.update_under_attack = [this](bool yes) { motion.context.under_attack = yes; };
 
         lua_context.init(std::move(api));
-
-        motion.switch_mode("normal");
 
         logging::info("Navigation is initialized");
     }
@@ -140,7 +135,7 @@ public:
         motion.context.target_chassis_speed =
             (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
 
-        const auto direction = fast_tf::cast<rmcs_description::OdomImu>(
+        const auto direction = fast_tf::cast<rmcs_description::OdomGimbalImu>(
             rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()},
             *context.tf);
         motion.context.current_local_yaw = std::atan2(direction->y(), direction->x());

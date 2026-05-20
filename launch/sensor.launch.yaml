@@ -93,3 +93,7 @@ launch:
       pkg: "tf2_ros"
       exec: "static_transform_publisher"
       args: "0 0 0 0 0 0 odom base_link"
+
+  # 6. 重定位模块
+  - include:
+      file: "$(find-pkg-share rmcs_localization)/launch/launch.py"

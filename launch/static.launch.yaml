@@ -28,7 +28,7 @@ launch:
       default: "false"
   - arg:
       name: "global_map"
-      default: "map"
+      default: "rmuc"
 
   - arg:
       name: "configuration"

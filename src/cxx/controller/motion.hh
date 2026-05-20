@@ -12,6 +12,7 @@ namespace rmcs::navigation {
 
 class MotionFsm {
     RMCS_PIMPL_DEFINITION(MotionFsm)
+
 public:
     using ChassisMode = rmcs_msgs::ChassisMode;
 

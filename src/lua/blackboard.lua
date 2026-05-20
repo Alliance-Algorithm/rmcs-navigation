@@ -1,3 +1,13 @@
+GameStage = {
+	NOT_START = "NOT_START",
+	PREPARATION = "PREPARATION",
+	REFEREE_CHECK = "REFEREE_CHECK",
+	COUNTDOWN = "COUNTDOWN",
+	STARTED = "STARTED",
+	SETTLING = "SETTLING",
+	UNKNOWN = "UNKNOWN",
+}
+
 local function PointPair(points)
 	return {
 		ours = { x = points[1][1], y = points[1][2] },
@@ -17,7 +27,7 @@ local function create_default_blackboard()
 			yaw = 0,
 		},
 		game = {
-			stage = "UNKNOWN",
+			stage = GameStage.UNKNOWN,
 		},
 		play = {
 			rswitch = "UNKNOWN",
@@ -60,12 +70,22 @@ local function create_default_blackboard()
 			two_step_final = PointPair { { 0, 0 }, { 0, 0 } },
 			common_elevated_ground_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 普通高地（飞坡起点那个高地）
 			common_elevated_ground_final = PointPair { { 0, 0 }, { 0, 0 } },
+
+			-- 地刺巡逻点
+			spike_points = {
+				{ 5.5, -3.5 },
+				{ 6.8, 4.3 },
+			},
+			spike_interval = 8,
 		},
 	}
 
 	result.getter = {
 		rswitch = function()
 			return result.play.rswitch
+		end,
+		stage = function()
+			return result.game.stage
 		end,
 	}
 

@@ -104,6 +104,7 @@ struct Context::Impl {
                         RCLCPP_ERROR(
                             node.get_logger(), "Context mock failed: %s", result.error().c_str());
                 });
+            RCLCPP_INFO(node.get_logger(), "Mock server start on %s", topic);
         }
     }
 };
