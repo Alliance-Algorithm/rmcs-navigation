@@ -57,11 +57,11 @@ on_init = function()
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
 			-- FIXME:
 			-- scheduler:append_task(function()
-			-- 	restart_navigation()
-			-- 	request:sleep(3)
-			--
-			-- 	action:gimbal_nod(1)
-			-- 	request:sleep(2)
+			restart_navigation()
+			request:sleep(3)
+
+			action:gimbal_nod(1)
+			request:sleep(2)
 			--
 			-- 	blackboard.context.hint_intent = Intent.spikes
 			-- end)
