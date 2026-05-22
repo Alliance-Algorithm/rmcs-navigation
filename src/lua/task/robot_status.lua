@@ -7,8 +7,6 @@ return function()
 	local last_hp = 0
 
 	while true do
-		action:switch_navigation(blackboard.play.rswitch == "UP")
-
 		local hp = blackboard.user.health
 		if last_hp > hp then
 			action:info("Our robot(" .. hp .. ") is under attack")

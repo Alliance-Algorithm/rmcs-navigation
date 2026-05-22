@@ -61,13 +61,13 @@ function action:bind(scheduler)
 			if nod_count > 0 then
 				yaw = 0 / 0
 
-				pitch = 0 + 0.5
+				pitch = 0 + 0.3
 				api.update_gimbal_direction(yaw, pitch)
-				request:sleep(0.5)
+				request:sleep(0.3)
 
-				pitch = 0 - 0.5
+				pitch = 0 - 0.3
 				api.update_gimbal_direction(yaw, pitch)
-				request:sleep(0.5)
+				request:sleep(0.3)
 
 				pitch = 0
 				api.update_gimbal_direction(yaw, pitch)
@@ -150,6 +150,7 @@ function action:gimbal_toward(yaw, pitch)
 end
 --- @param times integer
 function action:gimbal_nod(times)
+	action:info("gimbal nod " .. times .. " times")
 	self.gimbal.nod_count = self.gimbal.nod_count + times
 end
 

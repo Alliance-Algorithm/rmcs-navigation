@@ -31,20 +31,11 @@ on_init = function()
 	action:switch_navigation(true)
 	action:switch_topic_forward(true)
 
-	action:info("导航即将重启")
-	action:restart_navigation {
-		global_map = "empty",
-		launch_livox = true,
-		launch_odin1 = false,
-		use_sim_time = false,
-	}
-
-	scheduler:append_task(task.robot_status)
 	scheduler:append_task(function()
-		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
+		local switch_order = order.new(blackboard.getter.rswitch, 1)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
-			action:gimbal_scan(-1.0, 1.0)
-			action:switch_motion_mode("road")
+			action:info("Nod event appended")
+			action:gimbal_nod(1)
 		end)
 
 		while true do
@@ -54,27 +45,14 @@ on_init = function()
 	end)
 
 	scheduler:append_task(function()
-		local _ = edges.new()
-
 		while true do
-			action:switch_navigation(blackboard.play.rswitch == "UP")
-			request:yield()
-		end
-	end)
-
-	scheduler:append_task(function()
-		while true do
-			-- local hp = blackboard.user.health
-			-- action:info("hp: " .. hp)
-
-			request:sleep(1)
+			request:sleep(0.1)
 		end
 	end)
 end
 
 on_tick = function()
 	clock:update(blackboard.meta.timestamp)
-
 	scheduler:spin_once()
 end
 

@@ -7,6 +7,11 @@ GameStage = {
 	SETTLING = "SETTLING",
 	UNKNOWN = "UNKNOWN",
 }
+Intent = {
+	nothing = "nothing",
+	spikes = "spikes",
+	supply = "supply",
+}
 
 local function PointPair(points)
 	return {
@@ -19,9 +24,9 @@ local function create_default_blackboard()
 	local result = {
 		-- Dynamic Information
 		user = {
-			health = 0,
-			bullet = 0,
-			chassis_power_limit = 0,
+			health = 400,
+			bullet = 300,
+			chassis_power_limit = 100,
 			x = 0,
 			y = 0,
 			yaw = 0,
@@ -39,19 +44,21 @@ local function create_default_blackboard()
 
 		-- Static Information
 		rule = {
-			decision = "auxiliary",
-
 			-- 状态类规则
 
-			health_limit = 0,
-			health_ready = 0,
-			bullet_limit = 0,
-			bullet_ready = 0,
+			health_limit = 200,
+			bullet_limit = 20,
+			health_ready = 350,
+			bullet_ready = 95,
+			supply_interval = 6, -- 返回补给区，只补充对应的秒数，防止因意外而阻塞其他机器人进出
 
 			-- 坐标类规则
 			-- 定义顺序：ours = 0，them = 1
 
 			-- 普通地形坐标
+			home = { x = -2, y = -4.8 },
+			-- home = { x = 0, y = 0 },
+
 			fortress = PointPair { { 0, 0 }, { 0, 0 } }, -- 堡垒
 			resupply_zone = PointPair { { 0, 0 }, { 0, 0 } }, -- 补给点
 			road_zone_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 公路区
@@ -73,10 +80,20 @@ local function create_default_blackboard()
 
 			-- 地刺巡逻点
 			spike_points = {
-				{ 5.5, -3.5 },
-				{ 6.8, 4.3 },
+				{ 5.4, -2.6 },
+				{ 6.3, -3.7 },
+				-- { 1.0, 0.0 },
+				-- { 2.0, 0.0 },
 			},
 			spike_interval = 8,
+		},
+
+		-- context
+		context = {
+			last_intent = Intent.nothing,
+			hint_intent = Intent.nothing,
+
+			intent_to_return = Intent.nothing,
 		},
 	}
 
@@ -95,12 +112,6 @@ local function create_default_blackboard()
 		end,
 		low_bullet = function()
 			return result.user.bullet < result.rule.bullet_limit
-		end,
-		health_ready = function()
-			return result.user.health >= result.rule.health_ready
-		end,
-		bullet_ready = function()
-			return result.user.bullet >= result.rule.bullet_ready
 		end,
 
 		--- @param target {x: number, y: number}

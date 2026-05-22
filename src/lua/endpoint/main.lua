@@ -8,7 +8,6 @@ local clock = require("util.clock")
 local fsm = require("util.fsm")
 local option = require("option")
 local order = require("util.order")
-local edges = require("util.edge")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -17,13 +16,6 @@ local request = Scheduler.request
 local task = {
 	robot_status = require("task.robot_status"),
 }
-
-local Intent = {
-	nothing = "nothing",
-	otaku = "otaku",
-	spikes = "spikes",
-}
-local hint_intent = Intent.nothing
 
 ---
 --- Export Context
@@ -35,7 +27,7 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
 	action:bind(scheduler)
-	action:info("use decision: '" .. option.decision .. "'")
+	action:gimbal_toward(0 / 0, 0 / 0)
 
 	option:set_handler(function(error)
 		action:fuck("while fetch option: " .. error)
@@ -45,36 +37,71 @@ on_init = function()
 		action:switch_topic_forward(true)
 	end
 
+	local restart_navigation = function()
+		action:info("导航即将重启")
+		action:restart_navigation {
+			global_map = "rmuc",
+			launch_livox = true,
+			launch_odin1 = false,
+			use_sim_time = false,
+		}
+	end
+
+	scheduler:append_task(function()
+		action:gimbal_nod(1)
+	end)
+
 	--- 操作事件注册与响应
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
-			action:info("导航即将重启")
-			action:restart_navigation {
-				global_map = "empty",
-				launch_livox = true,
-				launch_odin1 = false,
-				use_sim_time = false,
-			}
+			-- FIXME:
+			-- scheduler:append_task(function()
+			-- 	restart_navigation()
+			-- 	request:sleep(3)
+			--
+			-- 	action:gimbal_nod(1)
+			-- 	request:sleep(2)
+			--
+			-- 	blackboard.context.hint_intent = Intent.spikes
+			-- end)
 		end)
 
 		local last_stage = blackboard.game.stage
+		blackboard.context.intent_to_return = Intent.spikes
 
 		while true do
+			action:switch_navigation(blackboard.play.rswitch == "UP")
+
+			-- 比赛阶段检测
+			-- @NOTE: 不要检测比赛结束喵，referee 有脏东西喵
 			local stage = blackboard.game.stage
-			if last_stage == GameStage.NOT_START and stage ~= GameStage.NOT_START then
-				action:info("导航即将重启")
-				action:restart_navigation {
-					global_map = "empty",
-					launch_livox = true,
-					launch_odin1 = false,
-					use_sim_time = false,
-				}
+			if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
+				action:info("准备阶段结束喵")
+				action:gimbal_nod(1)
+				restart_navigation()
 			end
 			if last_stage ~= GameStage.STARTED and stage == GameStage.STARTED then
-				hint_intent = Intent.otaku
+				action:info("比赛开始喵")
+				blackboard.context.hint_intent = Intent.spikes
 			end
 			last_stage = stage
+
+			if stage == GameStage.STARTED then
+				-- 血量检测
+				local health = blackboard.user.health
+				local health_limit = blackboard.rule.health_limit
+				if health < health_limit then
+					blackboard.context.hint_intent = Intent.supply
+				end
+
+				-- 弹药检测
+				local bullet = blackboard.user.bullet
+				local bullet_limit = blackboard.rule.bullet_limit
+				if bullet < bullet_limit then
+					blackboard.context.hint_intent = Intent.supply
+				end
+			end
 
 			switch_order:spin()
 			request:yield()
@@ -85,8 +112,7 @@ on_init = function()
 
 	--- 核心意图事件循环
 	scheduler:append_task(function()
-		local intent_fsm = fsm:new(hint_intent)
-		local last_intent = nil
+		local intent_fsm = fsm:new(blackboard.context.hint_intent)
 		local last_handle = nil
 
 		local switch_intent = function(name)
@@ -100,23 +126,14 @@ on_init = function()
 			else
 				last_handle = nil
 			end
-			last_intent = name
+			blackboard.context.last_intent = name
 		end
-
-		intent_fsm:use {
-			state = Intent.otaku,
-			enter = function()
-				action:info("进入 otaku 模式，请坐好放宽，哨兵会守护你的基地")
-				action:switch_motion_mode("attack")
-				action:gimbal_scan(0, 0)
-			end,
-			event = function() end,
-		}
 
 		intent_fsm:use {
 			state = Intent.nothing,
 			enter = function()
 				action:warn("⚠️你来到了没有意图的荒原")
+				switch_intent(Intent.nothing)
 			end,
 			event = function(_) end,
 		}
@@ -126,16 +143,25 @@ on_init = function()
 				action:info("进入 Spikes 模式，随机攻击路过的 Robot")
 				switch_intent(Intent.spikes)
 			end,
-			event = function() end,
+			event = function(_) end,
 		}
+		intent_fsm:use {
+			state = Intent.supply,
+			enter = function()
+				action:warn("补给模式，速速回家")
+				switch_intent(Intent.supply)
+			end,
+			event = function(_) end,
+		}
+
 		if not intent_fsm:init_ready(Intent) then
 			error("意图状态机没有初始化完全，有未使用的意图")
 		end
 
 		while true do
-			if hint_intent ~= last_intent then
-				intent_fsm:start_on(hint_intent)
-				last_intent = hint_intent
+			if blackboard.context.hint_intent ~= blackboard.context.last_intent then
+				intent_fsm:start_on(blackboard.context.hint_intent)
+				blackboard.context.last_intent = blackboard.context.hint_intent
 			end
 
 			intent_fsm:spin_once()

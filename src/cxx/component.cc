@@ -18,6 +18,8 @@ class Navigation final
     , public rmcs::navigation::NodeMixin {
 private:
     static constexpr auto kCmdVelTimeout = std::chrono::milliseconds{500};
+    static constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
+    static inline auto kVecNaN = Eigen::Vector2d{kNan, kNan};
 
     mutable std::mutex io_mutex;
 
@@ -45,10 +47,8 @@ private:
             component.register_output("/rmcs_navigation/enable_autoaim", enable_autoaim, true);
             component.register_output(
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
-            component.register_output(
-                "/rmcs_navigation/chassis_velocity", chassis_speed, Eigen::Vector2d::Zero());
-            component.register_output(
-                "/rmcs_navigation/gimbal_toward", gimbal_toward, Eigen::Vector2d::Zero());
+            component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
+            component.register_output("/rmcs_navigation/gimbal_toward", gimbal_toward, kVecNaN);
         }
     } command;
 
