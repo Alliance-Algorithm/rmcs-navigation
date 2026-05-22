@@ -47,21 +47,17 @@ on_init = function()
 		}
 	end
 
-	scheduler:append_task(function()
-		action:gimbal_nod(1)
-	end)
-
 	--- 操作事件注册与响应
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
 			-- FIXME:
 			-- scheduler:append_task(function()
-			restart_navigation()
-			request:sleep(3)
-
-			action:gimbal_nod(1)
-			request:sleep(2)
+			-- 	restart_navigation()
+			-- 	request:sleep(1)
+			--
+			-- 	action:gimbal_nod(1)
+			-- 	request:sleep(5)
 			--
 			-- 	blackboard.context.hint_intent = Intent.spikes
 			-- end)
@@ -71,7 +67,7 @@ on_init = function()
 		blackboard.context.intent_to_return = Intent.spikes
 
 		while true do
-			action:switch_navigation(blackboard.play.rswitch == "UP")
+			action:update_enable_control(blackboard.play.rswitch == "UP")
 
 			-- 比赛阶段检测
 			-- @NOTE: 不要检测比赛结束喵，referee 有脏东西喵

@@ -21,8 +21,6 @@ private:
     static constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
     static inline auto kVecNaN = Eigen::Vector2d{kNan, kNan};
 
-    mutable std::mutex io_mutex;
-
     bool mock_context = false;
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
@@ -91,7 +89,7 @@ public:
 
         mock_context = param<bool>("mock_context");
 
-        context.init(io_mutex, mock_context);
+        context.init(mock_context);
         command.init(*this);
 
         auto api = details::LuaContext::Api{};
@@ -119,7 +117,6 @@ public:
     auto update() -> void override {
         if (lua_tick_count++ == 10) [[unlikely]] {
             lua_tick_count = 0;
-            auto lock = std::scoped_lock{io_mutex};
             sync_blackboard();
             lua_context.tick();
         }

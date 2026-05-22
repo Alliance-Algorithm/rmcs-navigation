@@ -21,6 +21,9 @@ local action = {
 		p2 = 0 - 0.3,
 
 		nod_count = 0,
+
+		yt_per_rad = kYtPerRad,
+		pt_per_rad = kPtPerRad,
 	},
 }
 
@@ -36,12 +39,12 @@ function action:bind(scheduler)
 			if context.mode == "scanning" then
 				local yt, pt
 				if context.y1 == 0 and context.y2 == 0 then
-					yt = 2 * math.pi * kYtPerRad
+					yt = 2 * math.pi * self.gimbal.yt_per_rad
 				else
-					yt = math.abs(context.y1 - context.y2) * kYtPerRad
+					yt = math.abs(context.y1 - context.y2) * self.gimbal.yt_per_rad
 				end
 
-				pt = math.abs(context.p1 - context.p2) * kPtPerRad
+				pt = math.abs(context.p1 - context.p2) * self.gimbal.pt_per_rad
 
 				yaw, pitch = maths.scanning_signal {
 					timestamp = timestamp,
@@ -112,7 +115,7 @@ function action:bind(scheduler)
 end
 
 --- @param enable boolean
-function action:switch_navigation(enable)
+function action:update_enable_control(enable)
 	api.update_enable_control(enable)
 end
 
@@ -152,6 +155,19 @@ end
 function action:gimbal_nod(times)
 	action:info("gimbal nod " .. times .. " times")
 	self.gimbal.nod_count = self.gimbal.nod_count + times
+end
+
+--- @param speed number
+function action:set_gimbal_pt(speed)
+	self.gimbal.pt_per_rad = speed
+end
+--- @param speed number
+function action:set_gimbal_yt(speed)
+	self.gimbal.yt_per_rad = speed
+end
+function action:reset_gimbal_speed()
+	self.gimbal.pt_per_rad = kPtPerRad
+	self.gimbal.yt_per_rad = kYtPerRad
 end
 
 --- @param mode "normal" | "attack" | "road" | "step" | "slope"

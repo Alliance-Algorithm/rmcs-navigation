@@ -28,7 +28,7 @@ on_init = function()
 	action:warn("⚠️ TEST 模式，别上场哦")
 
 	clock:reset(blackboard.meta.timestamp)
-	action:switch_navigation(true)
+	action:update_enable_control(true)
 	action:switch_topic_forward(true)
 
 	scheduler:append_task(function()

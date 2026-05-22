@@ -29,7 +29,7 @@ on_init = function()
 	action:info(ascii.banner)
 	action:warn("御宅模式♥️，守护你的基地")
 
-	action:switch_navigation(true)
+	action:update_enable_control(true)
 	action:gimbal_scan(0, 0)
 	action:switch_motion_mode("attack")
 
@@ -51,7 +51,7 @@ on_init = function()
 		local _ = edges.new()
 
 		while true do
-			action:switch_navigation(blackboard.play.rswitch == "UP")
+			action:update_enable_control(blackboard.play.rswitch == "UP")
 			request:yield()
 		end
 	end)

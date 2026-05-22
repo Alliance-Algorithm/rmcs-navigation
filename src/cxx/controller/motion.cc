@@ -58,6 +58,9 @@ struct MotionFsm::Impl {
 
         const auto wy = context.current_world_yaw;
         const auto ly = context.current_local_yaw;
+        if (!std::isfinite(wy)) {
+            return {command.gimbal_toward.x(), command.gimbal_toward.y()};
+        }
         if (std::isfinite(wy) && std::isfinite(ly)) {
             const auto measured_bias = normalize_yaw(wy - ly);
 

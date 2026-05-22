@@ -38,12 +38,12 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     using Twist = geometry_msgs::msg::Twist;
 
     static constexpr auto kPositionEpsilon = 1e-2;
-    static constexpr auto kServerWaitTimeout = std::chrono::seconds{1};
     static constexpr auto kNavigateToPoseActionName = "/navigate_to_pose";
     static constexpr auto kWorldFrame = "world";
     static constexpr auto kBaseFrame = "base_link";
     static constexpr auto kMoveBaseGoalTopic = "/move_base_simple/goal";
     static constexpr auto kGoalPoseTopic = "/goal_pose";
+    static constexpr auto kServerNotReadyWarnInterval = std::chrono::seconds{5};
 
     struct Target final {
         double x = std::numeric_limits<double>::quiet_NaN();
@@ -90,6 +90,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     std::chrono::steady_clock::time_point latest_cmd_vel_time;
 
     std::uint64_t latest_request_id = 0;
+    std::chrono::steady_clock::time_point last_server_not_ready_warn_time{};
 
     auto has_same_goal(const Target& goal) const -> bool {
         return active_goal.has_value() && *active_goal == goal;
@@ -99,10 +100,11 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
         if (client->action_server_is_ready())
             return true;
 
-        if (client->wait_for_action_server(kServerWaitTimeout))
-            return true;
-
-        warn("{} action server is not available", kNavigateToPoseActionName);
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_server_not_ready_warn_time >= kServerNotReadyWarnInterval) {
+            warn("{} action server is not available", kNavigateToPoseActionName);
+            last_server_not_ready_warn_time = now;
+        }
         return false;
     }
 

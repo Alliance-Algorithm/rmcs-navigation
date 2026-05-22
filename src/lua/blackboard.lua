@@ -80,12 +80,14 @@ local function create_default_blackboard()
 
 			-- 地刺巡逻点
 			spike_points = {
-				{ 5.4, -2.6 },
-				{ 6.3, -3.7 },
+				{ x = 5.4, y = -2.6 },
+				{ x = 6.3, y = -3.7 },
 				-- { 1.0, 0.0 },
 				-- { 2.0, 0.0 },
 			},
 			spike_interval = 8,
+
+			outpost_attack_point = { x = 7.0, y = 4.8 },
 		},
 
 		-- context

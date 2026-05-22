@@ -81,7 +81,7 @@ struct Context::Impl {
         }
     }
 
-    auto init(std::mutex& io_mutex, bool mock) {
+    auto init(bool mock) {
         make_input("/referee/chassis/power_limit", context.chassis_power_limit_referee, mock);
         make_input("/referee/game/stage", context.game_stage, mock);
         make_input("/referee/current_hp", context.robot_health, mock);
@@ -99,7 +99,6 @@ struct Context::Impl {
             constexpr auto topic = "/rmcs_navigation/context/mock";
             subscription = node.create_subscription<std_msgs::msg::String>(
                 topic, 10, [&, this](const std::unique_ptr<std_msgs::msg::String>& msg) {
-                    auto lock = std::scoped_lock{io_mutex};
                     if (auto result = from(msg->data); !result)
                         RCLCPP_ERROR(
                             node.get_logger(), "Context mock failed: %s", result.error().c_str());
@@ -114,7 +113,7 @@ Context::Context(rclcpp::Node& node, rmcs_executor::Component& component) noexce
 
 Context::~Context() noexcept = default;
 
-auto Context::init(std::mutex& io_mutex, bool mock) -> void { pimpl->init(io_mutex, mock); }
+auto Context::init(bool mock) -> void { pimpl->init(mock); }
 
 auto Context::from(const std::string& raw) noexcept -> std::expected<void, std::string> {
     return pimpl->from(raw);

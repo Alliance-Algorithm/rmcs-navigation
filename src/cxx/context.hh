@@ -11,7 +11,6 @@
 #include <std_msgs/msg/string.hpp>
 
 #include <expected>
-#include <mutex>
 #include <string>
 
 namespace rmcs::navigation::details {
@@ -42,7 +41,7 @@ public:
 
     explicit Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
 
-    auto init(std::mutex& io_mutex, bool mock = false) -> void;
+    auto init(bool mock = false) -> void;
     auto from(const std::string& raw) noexcept -> std::expected<void, std::string>;
 
     auto health() const noexcept -> std::expected<void, std::string>;
