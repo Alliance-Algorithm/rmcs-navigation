@@ -95,6 +95,10 @@ struct Context::Impl {
 
         make_input("/tf", context.tf, mock);
 
+        // make_input("/chassis/climber/auto_climb_active", context.climb_active, mock);
+        // make_input("/chassis/climber/result", context.climb_result, mock);
+        // make_input("/chassis/climber/state", context.climb_state, mock);
+
         if (mock) {
             constexpr auto topic = "/rmcs_navigation/context/mock";
             subscription = node.create_subscription<std_msgs::msg::String>(

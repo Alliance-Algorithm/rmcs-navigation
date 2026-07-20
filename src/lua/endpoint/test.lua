@@ -36,6 +36,10 @@ on_init = function()
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
 			action:info("Nod event appended")
 			action:gimbal_nod(1)
+			action:request_chassis_climb("START_ONE_STEP")
+			action:info(string.format("start climb"))
+			request:sleep(10)
+			action:request_chassis_climb("IDLE")
 		end)
 
 		while true do
@@ -46,7 +50,11 @@ on_init = function()
 
 	scheduler:append_task(function()
 		while true do
-			request:sleep(0.1)
+			action:info(string.format("climb active=%s result=%s state=%s",
+            blackboard.user.climb_active,
+           	blackboard.user.climb_result,
+            blackboard.user.climb_state))
+			request:sleep(1)
 		end
 	end)
 end

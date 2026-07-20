@@ -17,6 +17,7 @@ local util = require("util.native")
 --- @field update_gimbal_direction fun(yaw: number, pitch: number)
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "road" | "step" | "slope")
 --- @field update_under_attack fun(yes: boolean)
+--- @field request_chassis_climb fun(command: "IDLE" | "START_ONE_STEP" | "ABORT")
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)

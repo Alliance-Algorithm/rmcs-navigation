@@ -30,6 +30,9 @@ local function create_default_blackboard()
 			x = 0,
 			y = 0,
 			yaw = 0,
+			climb_active = false,
+			climb_state = "UNKNOWN",
+			climb_result = "UNKNOWN",
 		},
 		game = {
 			stage = GameStage.UNKNOWN,

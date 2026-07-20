@@ -39,6 +39,7 @@ private:
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
+        OutputInterface<int> chassis_climb_request;
 
         auto init(Navigation& component) -> void {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
@@ -47,6 +48,7 @@ private:
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
             component.register_output("/rmcs_navigation/gimbal_toward", gimbal_toward, kVecNaN);
+            component.register_output("/rmcs_navigation/chassis_climb_request", chassis_climb_request, 0);
         }
     } command;
 
@@ -68,6 +70,24 @@ private:
         user["health"] = *context.robot_health;
         user["bullet"] = *context.robot_bullet;
         user["chassis_power_limit"] = *context.chassis_power_limit_referee;
+        // user["climb_active"] = *context.climb_active;
+        // switch (*context.climb_result) {
+        //     case 0: user["climb_result"] = "IDLE"; break;
+        //     case 1: user["climb_result"] = "RUNNING"; break;
+        //     case 2: user["climb_result"] = "SUCCEEDED"; break;
+        //     case 3: user["climb_result"] = "ABORTED"; break;
+        //     default: user["climb_result"] = "FAILED"; break;
+        // }
+        // switch (*context.climb_state) {
+        //     case 0: user["climb_state"] = "IDLE"; break;
+        //     case 1: user["climb_state"] = "ALIGN"; break;
+        //     case 2: user["climb_state"] = "APPROACH"; break;
+        //     case 3: user["climb_state"] = "SUPPORT_DEPLOY"; break;
+        //     case 4: user["climb_state"] = "DASH"; break;
+        //     case 5: user["climb_state"] = "SUPPORT_RETRACT"; break;
+        //     default: user["climb_state"] = "UNKNOWN"; break;
+        // }
+
         user["x"] = x;
         user["y"] = y;
         user["yaw"] = yaw;
@@ -101,6 +121,15 @@ public:
         };
         api.switch_motion_mode = [this](const std::string& mode) { motion.switch_mode(mode); };
         api.update_under_attack = [this](bool yes) { motion.context.under_attack = yes; };
+        api.request_chassis_climb = [this](const std::string& request) {
+            if (request == "START_ONE_STEP") {
+                *command.chassis_climb_request = 1;
+            } else if (request == "ABORT") {
+                *command.chassis_climb_request = 2;
+            } else {
+                *command.chassis_climb_request = 0;
+            }
+        };
 
         lua_context.init(std::move(api));
 

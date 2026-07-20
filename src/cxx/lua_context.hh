@@ -20,6 +20,7 @@ public:
         std::function<void(double, double)> update_gimbal_direction;
         std::function<void(const std::string&)> switch_motion_mode;
         std::function<void(bool)> update_under_attack;
+        std::function<void(const std::string&)> request_chassis_climb;
     };
 
     explicit LuaContext(rclcpp::Node& node) noexcept;

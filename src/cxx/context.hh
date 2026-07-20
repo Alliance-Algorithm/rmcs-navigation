@@ -36,6 +36,10 @@ public:
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 
+    // InputInterface<bool> climb_active;
+    // InputInterface<int> climb_result;
+    // InputInterface<int> climb_state;
+
     explicit Context(auto& node_and_component) noexcept
         : Context{node_and_component, node_and_component} {}
 

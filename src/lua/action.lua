@@ -180,6 +180,11 @@ function action:update_under_attack(yes)
 	api.update_under_attack(yes)
 end
 
+--- @param command "IDLE" | "START_ONE_STEP" | "ABORT"
+function action:request_chassis_climb(command)
+    api.request_chassis_climb(command)
+end
+
 function action:restart_navigation(config)
 	return api.restart_navigation(config)
 end
