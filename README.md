@@ -33,7 +33,6 @@ rmcs_navigation:
     # - kill-robots "杀伤优先"
     decision: "fast-push-output"
     command_vel_name: "/cmd_vel_smoothed"
-    mock_context: true
     endpoint: "main"
     enable_goal_topic_forward: true
 ```
@@ -41,6 +40,14 @@ rmcs_navigation:
 构建使用如下指令在本机启动：
 ```zsh
 ros2 launch rmcs_bringup rmcs.launch.py robot:=navigation
+```
+
+本地注入裁判上下文（FIFO，无需 ROS topic）：
+```zsh
+local-context game_stage started
+local-context robot_health 350
+local-context robot_bullet 200
+# → /tmp/rmcs-navigation/context/{game_stage,robot_health,robot_bullet}
 ```
 
 ### Decision (Lua 侧)

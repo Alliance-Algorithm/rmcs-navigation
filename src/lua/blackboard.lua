@@ -13,13 +13,6 @@ Intent = {
 	supply = "supply",
 }
 
-local function PointPair(points)
-	return {
-		ours = { x = points[1][1], y = points[1][2] },
-		them = { x = points[2][1], y = points[2][2] },
-	}
-end
-
 local function create_default_blackboard()
 	local result = {
 		-- Dynamic Information
@@ -38,6 +31,9 @@ local function create_default_blackboard()
 			rswitch = "UNKNOWN",
 			lswitch = "UNKNOWN",
 		},
+		autoaim = {
+			should_control = false,
+		},
 		meta = {
 			timestamp = 0, -- 秒
 		},
@@ -45,49 +41,11 @@ local function create_default_blackboard()
 		-- Static Information
 		rule = {
 			-- 状态类规则
-
 			health_limit = 200,
 			bullet_limit = 20,
 			health_ready = 350,
 			bullet_ready = 95,
 			supply_interval = 6, -- 返回补给区，只补充对应的秒数，防止因意外而阻塞其他机器人进出
-
-			-- 坐标类规则
-			-- 定义顺序：ours = 0，them = 1
-
-			-- 普通地形坐标
-			home = { x = -2, y = -4.8 },
-			-- home = { x = 0, y = 0 },
-
-			fortress = PointPair { { 0, 0 }, { 0, 0 } }, -- 堡垒
-			resupply_zone = PointPair { { 0, 0 }, { 0, 0 } }, -- 补给点
-			road_zone_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 公路区
-			road_zone_final = PointPair { { 0, 0 }, { 0, 0 } },
-			launch_ramp_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 飞坡
-			launch_ramp_final = PointPair { { 0, 0 }, { 0, 0 } },
-			outpost_resupply = PointPair { { 0, 0 }, { 0, 0 } }, -- 前哨站补给点
-			assembly_zone = PointPair { { 0, 0 }, { 0, 0 } },
-
-			-- 特殊跨越地形坐标
-			road_tunnel_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 公路隧道
-			road_tunnel_final = PointPair { { 0, 0 }, { 0, 0 } },
-			one_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 一级台阶
-			one_step_final = PointPair { { 0, 0 }, { 0, 0 } },
-			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 二级台阶
-			two_step_final = PointPair { { 0, 0 }, { 0, 0 } },
-			common_elevated_ground_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 普通高地（飞坡起点那个高地）
-			common_elevated_ground_final = PointPair { { 0, 0 }, { 0, 0 } },
-
-			-- 地刺巡逻点
-			spike_points = {
-				{ x = 5.4, y = -2.6 },
-				{ x = 6.3, y = -3.7 },
-				-- { 1.0, 0.0 },
-				-- { 2.0, 0.0 },
-			},
-			spike_interval = 8,
-
-			outpost_attack_point = { x = 7.0, y = 4.8 },
 		},
 
 		-- context
@@ -96,6 +54,8 @@ local function create_default_blackboard()
 			hint_intent = Intent.nothing,
 
 			intent_to_return = Intent.nothing,
+
+			current = nil, -- 当前地图节点，由 Map 边 Task 成功后推进
 		},
 	}
 

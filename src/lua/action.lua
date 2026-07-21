@@ -24,6 +24,8 @@ local action = {
 
 		yt_per_rad = kYtPerRad,
 		pt_per_rad = kPtPerRad,
+
+		suspend_timeline = 0,
 	},
 }
 
@@ -35,50 +37,53 @@ function action:bind(scheduler)
 
 		while true do
 			local timestamp = clock:now()
-			local yaw, pitch
-			if context.mode == "scanning" then
-				local yt, pt
-				if context.y1 == 0 and context.y2 == 0 then
-					yt = 2 * math.pi * self.gimbal.yt_per_rad
-				else
-					yt = math.abs(context.y1 - context.y2) * self.gimbal.yt_per_rad
+			if timestamp < self.gimbal.suspend_timeline then
+				api.update_gimbal_direction(0 / 0, 0 / 0)
+			else
+				local yaw, pitch
+				if context.mode == "scanning" then
+					local yt, pt
+					if context.y1 == 0 and context.y2 == 0 then
+						yt = 2 * math.pi * self.gimbal.yt_per_rad
+					else
+						yt = math.abs(context.y1 - context.y2) * self.gimbal.yt_per_rad
+					end
+
+					pt = math.abs(context.p1 - context.p2) * self.gimbal.pt_per_rad
+
+					yaw, pitch = maths.scanning_signal {
+						timestamp = timestamp,
+						yt = yt,
+						y1 = context.y1,
+						y2 = context.y2,
+						pt = pt,
+						p1 = context.p1,
+						p2 = context.p2,
+					}
+				elseif context.mode == "toward" then
+					yaw = context.y1
+					pitch = context.p1
 				end
 
-				pt = math.abs(context.p1 - context.p2) * self.gimbal.pt_per_rad
+				local nod_count = self.gimbal.nod_count
+				if nod_count > 0 then
+					yaw = 0 / 0
 
-				yaw, pitch = maths.scanning_signal {
-					timestamp = timestamp,
-					yt = yt,
-					y1 = context.y1,
-					y2 = context.y2,
-					pt = pt,
-					p1 = context.p1,
-					p2 = context.p2,
-				}
-			elseif context.mode == "toward" then
-				yaw = context.y1
-				pitch = context.p1
+					pitch = 0 + 0.3
+					api.update_gimbal_direction(yaw, pitch)
+					request:sleep(0.3)
+
+					pitch = 0 - 0.3
+					api.update_gimbal_direction(yaw, pitch)
+					request:sleep(0.3)
+
+					pitch = 0
+					api.update_gimbal_direction(yaw, pitch)
+					self.gimbal.nod_count = nod_count - 1
+				end
+
+				api.update_gimbal_direction(yaw, pitch)
 			end
-
-			local nod_count = self.gimbal.nod_count
-			if nod_count > 0 then
-				yaw = 0 / 0
-
-				pitch = 0 + 0.3
-				api.update_gimbal_direction(yaw, pitch)
-				request:sleep(0.3)
-
-				pitch = 0 - 0.3
-				api.update_gimbal_direction(yaw, pitch)
-				request:sleep(0.3)
-
-				pitch = 0
-				api.update_gimbal_direction(yaw, pitch)
-				self.gimbal.nod_count = nod_count - 1
-			end
-
-			api.update_gimbal_direction(yaw, pitch)
-
 			request:yield()
 		end
 	end)
@@ -157,17 +162,21 @@ function action:gimbal_nod(times)
 	self.gimbal.nod_count = self.gimbal.nod_count + times
 end
 
---- @param speed number
-function action:set_gimbal_pt(speed)
-	self.gimbal.pt_per_rad = speed
+--- @param t number
+function action:set_gimbal_pt(t)
+	self.gimbal.pt_per_rad = t
 end
---- @param speed number
-function action:set_gimbal_yt(speed)
-	self.gimbal.yt_per_rad = speed
+--- @param t number
+function action:set_gimbal_yt(t)
+	self.gimbal.yt_per_rad = t
 end
 function action:reset_gimbal_speed()
 	self.gimbal.pt_per_rad = kPtPerRad
 	self.gimbal.yt_per_rad = kYtPerRad
+end
+-- @param interval number
+function action:suspend_gimbal(interval)
+	self.gimbal.suspend_timeline = clock:now() + interval
 end
 
 --- @param mode "normal" | "attack" | "road" | "step" | "slope"

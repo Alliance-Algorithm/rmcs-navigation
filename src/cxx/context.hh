@@ -8,10 +8,6 @@
 #include <rmcs_msgs/game_stage.hpp>
 #include <rmcs_msgs/robot_id.hpp>
 #include <rmcs_msgs/switch.hpp>
-#include <std_msgs/msg/string.hpp>
-
-#include <expected>
-#include <string>
 
 namespace rmcs::navigation::details {
 
@@ -32,19 +28,18 @@ public:
     InputInterface<Eigen::Vector2d> ljoystick;
 
     InputInterface<double> chassis_power_limit_referee;
+    InputInterface<bool> auto_aim_should_control;
 
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 
     explicit Context(auto& node_and_component) noexcept
-        : Context{node_and_component, node_and_component} {}
+        : Context { node_and_component, node_and_component } { }
 
     explicit Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
 
-    auto init(bool mock = false) -> void;
-    auto from(const std::string& raw) noexcept -> std::expected<void, std::string>;
-
-    auto health() const noexcept -> std::expected<void, std::string>;
+    auto init() -> void;
+    auto ensure_defaults() -> void;
 };
 
 } // namespace rmcs::navigation::details

@@ -16,6 +16,16 @@ local task = {
 	robot_status = require("task.robot_status"),
 }
 
+local restart_navigation = function()
+	action:info("导航即将重启")
+	action:restart_navigation {
+		global_map = "rmuc",
+		launch_livox = true,
+		launch_odin1 = false,
+		use_sim_time = false,
+	}
+end
+
 ---
 --- Export Context
 ---
@@ -31,6 +41,15 @@ on_init = function()
 	action:update_enable_control(true)
 	action:switch_topic_forward(true)
 
+	restart_navigation()
+	-- action:gimbal_scan(-0.2, 0.2)
+	-- action:set_gimbal_yt(20)
+	-- action:set_gimbal_pt(10)
+	action:set_gimbal_yt(10)
+	action:set_gimbal_pt(5)
+	action:gimbal_scan(-0.4, 0)
+
+	scheduler:append_task(task.robot_status)
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 1)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
@@ -39,6 +58,8 @@ on_init = function()
 		end)
 
 		while true do
+			action:update_enable_control(blackboard.play.rswitch == "UP")
+
 			switch_order:spin()
 			request:yield()
 		end

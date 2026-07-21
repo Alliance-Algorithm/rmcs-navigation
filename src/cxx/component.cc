@@ -8,7 +8,7 @@
 #include <rclcpp/node.hpp>
 #include <rmcs_description/sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
-#include <rmcs_msgs/rmcs_msgs.hpp> // IWYU pragma: keep
+#include <rmcs_msgs/rmcs_msgs.hpp>
 
 namespace rmcs::navigation {
 
@@ -20,8 +20,6 @@ private:
     static constexpr auto kCmdVelTimeout = std::chrono::milliseconds{500};
     static constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
     static inline auto kVecNaN = Eigen::Vector2d{kNan, kNan};
-
-    bool mock_context = false;
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
 
@@ -79,6 +77,9 @@ private:
         play["rswitch"] = rmcs_msgs::to_string(*context.switch_right);
         play["lswitch"] = rmcs_msgs::to_string(*context.switch_left);
 
+        auto autoaim = blackboard["autoaim"].get<sol::table>();
+        autoaim["should_control"] = *context.auto_aim_should_control;
+
         auto meta = blackboard["meta"].get<sol::table>();
         meta["timestamp"] = this->now().seconds();
     }
@@ -87,9 +88,7 @@ public:
     explicit Navigation()
         : rclcpp::Node{get_component_name(), option()} {
 
-        mock_context = param<bool>("mock_context");
-
-        context.init(mock_context);
+        context.init();
         command.init(*this);
 
         auto api = details::LuaContext::Api{};
@@ -107,12 +106,7 @@ public:
         logging::info("Navigation is initialized");
     }
 
-    auto before_updating() -> void override {
-        if (auto ok = context.health(); !ok) {
-            logging::fuck("{}", ok.error());
-            throw std::runtime_error{"Context Error"};
-        }
-    }
+    auto before_updating() -> void override { context.ensure_defaults(); }
 
     auto update() -> void override {
         if (lua_tick_count++ == 10) [[unlikely]] {

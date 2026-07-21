@@ -4,6 +4,8 @@
 local clock = {
 	_timestamp = 0,
 	_ready = false,
+
+	_start_timestamp = 0,
 }
 
 --- @param timestamp number
@@ -38,6 +40,19 @@ function clock:reset(timestamp)
 
 	self._timestamp = timestamp
 	self._ready = true
+end
+
+function clock:start_game_once()
+	if self._start_timestamp == 0 then
+		self._start_timestamp = self:now()
+	end
+end
+
+function clock:game_time()
+	if self._start_timestamp == 0 then
+		return 0
+	end
+	return self:now() - self._start_timestamp
 end
 
 return clock

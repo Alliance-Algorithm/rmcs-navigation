@@ -1,110 +1,107 @@
 #include "cxx/context.hh"
+#include "cxx/util/service.hpp"
 
-#include <exception>
-#include <type_traits>
-
-#include <yaml-cpp/yaml.h>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <optional>
+#include <thread>
+#include <utility>
+#include <vector>
 
 namespace rmcs::navigation::details {
 
-namespace {} // namespace
-
 struct Context::Impl {
     Context& context;
-
     rclcpp::Node& node;
     rmcs_executor::Component& component;
-    std::shared_ptr<rclcpp::Subscription<std_msgs::msg::String>> subscription;
 
-    std::vector<std::function<std::optional<std::string>()>> healths;
+    std::vector<std::function<void()>> default_binders;
+    std::vector<std::function<std::optional<std::string>()>> readiness_checks;
+
+    std::atomic<bool> stop_service{false};
+    std::thread service_thread;
 
     template <typename T>
-    auto make_input(const std::string& name, InputInterface<T>& input, bool mock) -> void {
-        if (mock) {
-            input.make_and_bind_directly();
-        } else {
-            component.register_input(name, input, false);
-        }
+    auto make_input(const std::string& name, InputInterface<T>& input, T default_value) -> void {
+        component.register_input(name, input, false);
 
-        healths.emplace_back([&, name = name] -> std::optional<std::string> {
-            if (input.ready()) {
+        readiness_checks.emplace_back([&, name]() -> std::optional<std::string> {
+            if (input.ready())
                 return std::nullopt;
-            } else {
-                return name;
+            return name;
+        });
+
+        default_binders.emplace_back([&, default_value = std::move(default_value)]() mutable {
+            if (!input.ready()) {
+                input.make_and_bind_directly(std::move(default_value));
             }
         });
     }
 
-    auto health() const noexcept -> std::expected<void, std::string> {
-        auto result = std::string{"Following items are unhealthy\n"};
-        if (!std::ranges::all_of(healths, [&](auto& f) {
-                auto name = f();
-                if (name == std::nullopt)
-                    return true;
-                result += std::format(" : {}\n", *name);
-                return false;
-            })) {
-            return std::unexpected{result};
+    auto ensure_defaults() -> void {
+        for (const auto& check : readiness_checks) {
+            if (auto name = check()) {
+                RCLCPP_WARN(
+                    node.get_logger(), "Context input not ready, binding default: %s",
+                    name->c_str());
+            }
         }
-        return {};
+        for (auto& binder : default_binders) {
+            binder();
+        }
     }
 
     template <typename T>
-    auto try_sync(InputInterface<T>& input, const YAML::Node& root, const std::string& name)
-        -> void {
-        if (const auto data = root[name]) {
-            auto& to_sync = const_cast<T&>(*input);
-            /*^^*/ if constexpr (std::is_enum_v<T>) {
-                using U = std::underlying_type_t<T>;
-                to_sync = static_cast<T>(data.as<U>());
-            } else if constexpr (std::is_constructible_v<T, std::uint16_t>) {
-                to_sync = T{data.as<std::uint16_t>()};
-            } else {
-                to_sync = data.as<T>();
-            }
+    static auto write_input(InputInterface<T>& input, T value) -> void {
+        if (!input.ready())
+            return;
+        const_cast<T&>(*input) = std::move(value);
+    }
+
+    auto service_main() -> void {
+        auto service = util::make_service<"context">(
+            util::make_action<"game_stage", int>([this](int value) {
+                write_input(context.game_stage, static_cast<rmcs_msgs::GameStage>(value));
+            }),
+            util::make_action<"robot_health", int>([this](int value) {
+                write_input(context.robot_health, static_cast<std::uint16_t>(value));
+            }),
+            util::make_action<"robot_bullet", int>([this](int value) {
+                write_input(context.robot_bullet, static_cast<std::uint16_t>(value));
+            }));
+
+        while (!stop_service.load(std::memory_order::relaxed)) {
+            service.spin_once();
+            std::this_thread::sleep_for(std::chrono::milliseconds{100});
         }
     }
 
-    auto from(const std::string& raw) noexcept -> std::expected<void, std::string> {
-        try {
-            auto root = YAML::Load(raw);
-            if (!root.IsMap())
-                return std::unexpected{"context yaml root must be a map"};
+    auto init() {
+        make_input("/auto_aim/should_control", context.auto_aim_should_control, false);
 
-            try_sync(context.game_stage, root, "game_stage");
-            try_sync(context.robot_health, root, "robot_health");
-            try_sync(context.robot_bullet, root, "robot_bullet");
+        make_input("/referee/chassis/power_limit", context.chassis_power_limit_referee, 100.0);
+        make_input("/referee/game/stage", context.game_stage, rmcs_msgs::GameStage::UNKNOWN);
+        make_input("/referee/current_hp", context.robot_health, std::uint16_t{400});
+        make_input("/referee/shooter/bullet_allowance", context.robot_bullet, std::uint16_t{300});
+        make_input("/referee/id", context.robot_id, rmcs_msgs::RobotId{});
 
-            return {};
-        } catch (const std::exception& exception) {
-            return std::unexpected{exception.what()};
-        }
+        make_input("/remote/switch/right", context.switch_right, rmcs_msgs::Switch::UNKNOWN);
+        make_input("/remote/switch/left", context.switch_left, rmcs_msgs::Switch::UNKNOWN);
+        make_input("/remote/joystick/right", context.rjoystick, Eigen::Vector2d{0.0, 0.0});
+        make_input("/remote/joystick/left", context.ljoystick, Eigen::Vector2d{0.0, 0.0});
+
+        make_input("/tf", context.tf, rmcs_description::SentryTf{});
+        make_input("/auto_aim/robot_center", context.enemy_center, Eigen::Vector3d{0.0, 0.0, 0.0});
+
+        service_thread = std::thread{[this] { service_main(); }};
+        RCLCPP_INFO(node.get_logger(), "Context service at /tmp/rmcs-navigation/context/");
     }
 
-    auto init(bool mock) {
-        make_input("/referee/chassis/power_limit", context.chassis_power_limit_referee, mock);
-        make_input("/referee/game/stage", context.game_stage, mock);
-        make_input("/referee/current_hp", context.robot_health, mock);
-        make_input("/referee/shooter/bullet_allowance", context.robot_bullet, mock);
-        make_input("/referee/id", context.robot_id, mock);
-
-        make_input("/remote/switch/right", context.switch_right, mock);
-        make_input("/remote/switch/left", context.switch_left, mock);
-        make_input("/remote/joystick/right", context.rjoystick, mock);
-        make_input("/remote/joystick/left", context.ljoystick, mock);
-
-        make_input("/tf", context.tf, mock);
-
-        if (mock) {
-            constexpr auto topic = "/rmcs_navigation/context/mock";
-            subscription = node.create_subscription<std_msgs::msg::String>(
-                topic, 10, [&, this](const std::unique_ptr<std_msgs::msg::String>& msg) {
-                    if (auto result = from(msg->data); !result)
-                        RCLCPP_ERROR(
-                            node.get_logger(), "Context mock failed: %s", result.error().c_str());
-                });
-            RCLCPP_INFO(node.get_logger(), "Mock server start on %s", topic);
-        }
+    ~Impl() {
+        stop_service.store(true, std::memory_order::relaxed);
+        if (service_thread.joinable())
+            service_thread.join();
     }
 };
 
@@ -113,14 +110,8 @@ Context::Context(rclcpp::Node& node, rmcs_executor::Component& component) noexce
 
 Context::~Context() noexcept = default;
 
-auto Context::init(bool mock) -> void { pimpl->init(mock); }
+auto Context::init() -> void { pimpl->init(); }
 
-auto Context::from(const std::string& raw) noexcept -> std::expected<void, std::string> {
-    return pimpl->from(raw);
-}
-
-auto Context::health() const noexcept -> std::expected<void, std::string> {
-    return pimpl->health();
-}
+auto Context::ensure_defaults() -> void { pimpl->ensure_defaults(); }
 
 } // namespace rmcs::navigation::details

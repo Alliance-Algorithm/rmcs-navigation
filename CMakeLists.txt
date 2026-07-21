@@ -53,7 +53,6 @@ target_compile_features(
 target_sources(
     ${PROJECT_NAME}
     PRIVATE
-        src/cxx/util/localization/engine.cc
         src/cxx/navigation.cc
         src/cxx/context.cc
         src/cxx/controller/motion.cc

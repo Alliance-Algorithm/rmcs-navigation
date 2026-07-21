@@ -46,6 +46,7 @@ on_init = function()
 			use_sim_time = false,
 		}
 	end
+	action:stop_navigation()
 
 	--- 操作事件注册与响应
 	scheduler:append_task(function()
@@ -54,12 +55,13 @@ on_init = function()
 			-- FIXME:
 			-- scheduler:append_task(function()
 			-- 	restart_navigation()
-			-- 	request:sleep(1)
+			-- 	request:sleep(5)
 			--
 			-- 	action:gimbal_nod(1)
 			-- 	request:sleep(5)
 			--
 			-- 	blackboard.context.hint_intent = Intent.spikes
+			-- 	clock:start_game_once()
 			-- end)
 		end)
 
@@ -79,6 +81,7 @@ on_init = function()
 			end
 			if last_stage ~= GameStage.STARTED and stage == GameStage.STARTED then
 				action:info("比赛开始喵")
+				clock:start_game_once()
 				blackboard.context.hint_intent = Intent.spikes
 			end
 			last_stage = stage
@@ -162,6 +165,13 @@ on_init = function()
 
 			intent_fsm:spin_once()
 			request:yield()
+		end
+	end)
+
+	scheduler:append_task(function()
+		while true do
+			action:info("当前比赛时间： " .. clock:game_time())
+			request:sleep(5)
 		end
 	end)
 

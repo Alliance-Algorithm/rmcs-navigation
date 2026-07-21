@@ -17,6 +17,10 @@ return function()
 		local under_attack = clock:now() - last_attack_timestamp < 5
 		action:update_under_attack(under_attack)
 
+		if blackboard.autoaim.should_control then
+			action:suspend_gimbal(2)
+		end
+
 		request:yield()
 	end
 end
