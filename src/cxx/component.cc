@@ -8,7 +8,10 @@
 #include <rclcpp/node.hpp>
 #include <rmcs_description/sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
-#include <rmcs_msgs/rmcs_msgs.hpp>
+#include <rmcs_msgs/rmcs_msgs.hpp> // IWYU pragma: keep
+#include <rmcs_msgs/sentry_event.hpp>
+
+#include <unordered_map>
 
 namespace rmcs::navigation {
 
@@ -31,12 +34,14 @@ private:
 
     struct Command {
         using ChassisMode = rmcs_msgs::ChassisMode;
+        using SentryEvent = rmcs_msgs::SentryEvent;
 
         OutputInterface<bool> enable_control;
         OutputInterface<bool> enable_autoaim;
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
+        OutputInterface<std::unordered_map<SentryEvent, std::uint16_t>> sentry_events;
 
         explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
@@ -45,6 +50,7 @@ private:
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
             component.register_output("/rmcs_navigation/gimbal_toward", gimbal_toward, kVecNaN);
+            component.register_output("/rmcs_navigation/sentry_events", sentry_events);
         }
     } command{*this};
 
@@ -66,7 +72,10 @@ private:
         user["health"] = *rmcs.robot_health;
         user["bullet"] = *rmcs.robot_bullet;
         user["chassis_power_limit"] = *rmcs.chassis_power_limit_referee;
+        user["should_shoot"] = *rmcs.should_shoot;
         user["x"] = x;
+        user["enemy_visible"] = rmcs.enemy_center.ready() && (*rmcs.enemy_center).allFinite()
+                             && !(*rmcs.enemy_center).isZero();
         user["y"] = y;
         user["yaw"] = yaw;
 
@@ -101,6 +110,10 @@ public:
         lua.inject(
             "switch_motion_mode", [this](const std::string& mode) { motion.switch_mode(mode); });
         lua.inject("update_under_attack", [this](bool yes) { motion.context.under_attack = yes; });
+        lua.inject("push_sentry_event", [this](uint8_t event) {
+            auto e = static_cast<rmcs_msgs::SentryEvent>(event);
+            (*command.sentry_events)[e] += 1;
+        });
         lua.inject("relocalize", [this] {
             const auto robot_id = *rmcs.robot_id;
             nav.relocalize(
@@ -123,7 +136,9 @@ public:
         {
             *command.chassis_speed = Eigen::Vector2d::Zero();
             *command.gimbal_toward = Eigen::Vector2d::Zero();
-            *command.chassis_behavior = rmcs_msgs::ChassisMode::SPIN_FAST;
+            *command.chassis_behavior = motion.context.under_attack
+                ? rmcs_msgs::ChassisMode::SPIN_FAST
+                : rmcs_msgs::ChassisMode::SPIN_SLOW;
         }
 
         const auto nav_cmd = nav.current_command();

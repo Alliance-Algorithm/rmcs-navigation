@@ -74,6 +74,7 @@ struct RmcsContext::Impl {
         make_input("/remote/joystick/left", context.ljoystick, Eigen::Vector2d{0.0, 0.0});
 
         make_input("/tf", context.tf, rmcs_description::SentryTf{});
+        make_input("/auto_aim/should_shoot", context.should_shoot, false);
         make_input("/auto_aim/robot_center", context.enemy_center, Eigen::Vector3d{0.0, 0.0, 0.0});
 
         service_thread = std::thread{[this] {

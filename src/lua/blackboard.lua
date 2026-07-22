@@ -12,6 +12,20 @@ Intent = {
 	spikes = "spikes",
 	supply = "supply",
 }
+SentryEvent = {
+	SWITCH_POSE_ATTACK = 0,
+	SWITCH_POSE_DEFENSE = 1,
+	SWITCH_POSE_MOVE = 2,
+	SWITCH_POSE_POWERED_ATTACK = 3,
+	SWITCH_POSE_POWERED_DEFENSE = 4,
+	SWITCH_POSE_POWERED_MOVE = 5,
+	CONFIRM_REBIRTH = 6,
+	CONFIRM_INSTANT_REBIRTH = 7,
+	EXCHANGE_AMMO_SUPPLY_POINT = 8,
+	EXCHANGE_AMMO_REMOTE = 9,
+	EXCHANGE_HP_REMOTE = 10,
+	ACTIVATE_ENERGY_CORE = 11,
+}
 
 local function create_default_blackboard()
 	local result = {
@@ -20,6 +34,8 @@ local function create_default_blackboard()
 			health = 400,
 			bullet = 300,
 			chassis_power_limit = 100,
+			should_shoot = false,
+			enemy_visible = false,
 			x = 0,
 			y = 0,
 			yaw = 0,

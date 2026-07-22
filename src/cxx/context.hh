@@ -30,6 +30,8 @@ public:
     InputInterface<double> chassis_power_limit_referee;
     InputInterface<bool> auto_aim_should_control;
 
+    InputInterface<bool> should_shoot;
+
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 

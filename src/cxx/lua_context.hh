@@ -3,6 +3,7 @@
 
 #include <string>
 
+#include <cstdint>
 #include <rclcpp/node.hpp>
 #include <sol/sol.hpp>
 

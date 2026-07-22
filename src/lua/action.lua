@@ -6,8 +6,9 @@ local clock = require("util.clock")
 local bb = require("blackboard").singleton()
 
 local NaN = 0 / 0
-local kYtPerRad = 2.0
-local kPtPerRad = 2.0
+local kYtPerRad = 2.5
+local kPtPerRad = 2.5
+-- 与 C++ std::numeric_limits<double>::min() 一致，表示云台完全 free
 local kGimbalFree = 2.2250738585072014e-308
 
 local action = {
@@ -209,12 +210,18 @@ end
 
 --- @param mode "normal" | "attack" | "road" | "step" | "slope"
 function action:switch_motion_mode(mode)
+	action:info("switch_motion_mode: " .. mode)
 	api.switch_motion_mode(mode)
 end
 
 --- @param yes boolean
 function action:update_under_attack(yes)
 	api.update_under_attack(yes)
+end
+
+--- @param event integer SentryEvent enum value
+function action:push_sentry_event(event)
+	api.push_sentry_event(event)
 end
 
 --- 触发一次重定位，红/蓝方由 referee robot_id 自动派生；
