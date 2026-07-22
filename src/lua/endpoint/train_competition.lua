@@ -92,8 +92,7 @@ on_init = function()
 		do_scan(kSpinDuration)
 
 		action:switch_motion_mode("normal")
-		request:sleep(2.0)
-		action:gimbal_toward(0, 0)
+		request:sleep(1.0)
 		local kPathD = Map:search(blackboard.context.current, Points.kF)
 			for index, path_task in ipairs(kPathD) do
 				action:info("execute kPathD task: " .. index)
