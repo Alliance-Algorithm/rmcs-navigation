@@ -36,6 +36,7 @@ local function create_default_blackboard()
 			chassis_power_limit = 100,
 			should_shoot = false,
 			enemy_visible = false,
+			motion_mode = "normal",
 			x = 0,
 			y = 0,
 			yaw = 0,

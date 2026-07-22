@@ -18,6 +18,8 @@ struct MotionFsm::Impl {
         ATTACK,
         STEP,
         SLOPE,
+        CLIMB,
+        SUPPORT_ARM,
         END,
     };
     Fsm<Status> fsm{Status::NORMAL};
@@ -187,6 +189,26 @@ struct MotionFsm::Impl {
                 return Status::SLOPE;
             });
 
+        /// 爬升模式
+        fsm.use<Status::CLIMB>(
+            [this] { wrap.info("MotionFsm::Enter | CLIMB"); },
+            [this] {
+                command.chassis_mode = ChassisMode::CLIMB;
+                command.chassis_speed = Eigen::Vector2d::Zero();
+                command.gimbal_toward = update_gimbal_target();
+                return Status::CLIMB;
+            });
+
+        /// 支撑臂模式
+        fsm.use<Status::SUPPORT_ARM>(
+            [this] { wrap.info("MotionFsm::Enter | SUPPORT_ARM"); },
+            [this] {
+                command.chassis_mode = ChassisMode::SUPPORT_ARM;
+                command.chassis_speed = Eigen::Vector2d::Zero();
+                command.gimbal_toward = update_gimbal_target();
+                return Status::SUPPORT_ARM;
+            });
+
         if (!fsm.fully_registered())
             throw std::runtime_error{"MotionFsm is not fully registered"};
     }
@@ -202,6 +224,10 @@ struct MotionFsm::Impl {
             fsm.start_on(Status::STEP);
         } else if (mode == "slope") {
             fsm.start_on(Status::SLOPE);
+        } else if (mode == "climb") {
+            fsm.start_on(Status::CLIMB);
+        } else if (mode == "support_arm") {
+            fsm.start_on(Status::SUPPORT_ARM);
         }
     }
 

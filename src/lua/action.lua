@@ -208,10 +208,16 @@ function action:reset_gimbal_speed()
 	self.gimbal.yt_per_rad = kYtPerRad
 end
 
---- @param mode "normal" | "attack" | "road" | "step" | "slope"
+--- @param enable boolean
+function action:update_enable_autoaim(enable)
+	api.update_enable_autoaim(enable)
+end
+
+--- @param mode "normal" | "attack" | "road" | "step" | "slope" | "climb" | "support_arm"
 function action:switch_motion_mode(mode)
 	action:info("switch_motion_mode: " .. mode)
 	api.switch_motion_mode(mode)
+	bb.user.motion_mode = mode
 end
 
 --- @param yes boolean
