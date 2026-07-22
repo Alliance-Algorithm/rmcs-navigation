@@ -70,12 +70,14 @@ on_init = function()
 				path_task()
 			end
 
-			action:gimbal_scan(0, 0)
-			action:switch_motion_mode("attack")
-			request:sleep(kSpinDuration)
+		action:gimbal_scan(0, 0)
+		action:switch_motion_mode("attack")
+		request:sleep(kSpinDuration)
 
-			action:gimbal_toward(0, 0)
-			local kPathD = Map:search(blackboard.context.current, Points.kF)
+		action:switch_motion_mode("normal")
+		request:sleep(2.0)
+		action:gimbal_toward(0, 0)
+		local kPathD = Map:search(blackboard.context.current, Points.kF)
 			for index, path_task in ipairs(kPathD) do
 				action:info("execute kPathD task: " .. index)
 				path_task()

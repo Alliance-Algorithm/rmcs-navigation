@@ -34,8 +34,6 @@ local kClimbMaxRetries = 2
 
 local function climb_with_retry(from, to)
 	for attempt = 1, kClimbMaxRetries do
-		action:switch_motion_mode("normal")
-		request:sleep(1.0)
 		face_direction(from, to)
 		action:switch_motion_mode("climb")
 		local timed_out = request:wait_until {
@@ -83,8 +81,6 @@ Map:connect(Points.kE, Points.kF) {
 		climb_with_retry(Points.kE, to)
 	end,
 	function(_, to)
-		action:switch_motion_mode("normal")
-		request:sleep(1.0)
 		face_direction(Points.kF, Points.kE)
 		action:switch_motion_mode("support_arm")
 		local timed_out = request:wait_until {

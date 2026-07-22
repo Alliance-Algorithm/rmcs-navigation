@@ -56,6 +56,8 @@ on_init = function()
 			while blackboard.game.stage ~= GameStage.STARTED or blackboard.user.health <= 0 do
 				request:yield()
 			end
+			action:update_enable_control(true)
+
 
 			if blackboard.user.climb_failed then
 				action:warn("climb failed, continuing from current position")
@@ -87,10 +89,12 @@ on_init = function()
 				path_task()
 			end
 
-			do_scan(kSpinDuration)
+		do_scan(kSpinDuration)
 
-			action:gimbal_toward(0, 0)
-			local kPathD = Map:search(blackboard.context.current, Points.kF)
+		action:switch_motion_mode("normal")
+		request:sleep(2.0)
+		action:gimbal_toward(0, 0)
+		local kPathD = Map:search(blackboard.context.current, Points.kF)
 			for index, path_task in ipairs(kPathD) do
 				action:info("execute kPathD task: " .. index)
 				path_task()
@@ -131,11 +135,7 @@ on_init = function()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
-
-			request:sleep(2)
-			action:switch_topic_forward(true)
-			action:switch_motion_mode("attack")
-			action:gimbal_scan(0, 0)
+			action:update_enable_control(false)
 
 			intent_handler = scheduler:append_task(intent)
 
@@ -147,34 +147,29 @@ on_init = function()
 
 	scheduler:append_task(function()
 		action:push_sentry_event(SentryEvent.SWITCH_POSE_DEFENSE)
-
-		while true do
-			local mode = blackboard.user.motion_mode
-			if mode == "climb" or mode == "support_arm" then
-			elseif blackboard.user.health < 80 then
-				action:push_sentry_event(SentryEvent.SWITCH_POSE_POWERED_DEFENSE)
-			elseif blackboard.user.enemy_visible then
-				action:push_sentry_event(SentryEvent.SWITCH_POSE_ATTACK)
-			else
-				action:push_sentry_event(SentryEvent.SWITCH_POSE_DEFENSE)
-			end
-			request:yield()
-		end
-	end)
-
-	scheduler:append_task(function()
+		local prev_event = SentryEvent.SWITCH_POSE_DEFENSE
 		local prev_enable = true
 
 		while true do
 			local mode = blackboard.user.motion_mode
 			local climbing = mode == "climb" or mode == "support_arm"
 
+			local event
 			if climbing then
-				if prev_enable then
-					action:update_enable_autoaim(false)
-					prev_enable = false
-				end
+				event = prev_event
+			elseif blackboard.user.health < 80 then
+				event = SentryEvent.SWITCH_POSE_POWERED_DEFENSE
+			elseif blackboard.user.enemy_visible then
+				event = SentryEvent.SWITCH_POSE_ATTACK
 			else
+				event = SentryEvent.SWITCH_POSE_DEFENSE
+			end
+			if event ~= prev_event then
+				action:push_sentry_event(event)
+				prev_event = event
+			end
+
+			if not climbing then
 				local enable = blackboard.user.health > 0
 				if enable ~= prev_enable then
 					action:update_enable_autoaim(enable)
