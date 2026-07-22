@@ -47,6 +47,8 @@ function action:bind(scheduler)
 				api.update_gimbal_direction(kGimbalFree, kGimbalFree)
 			elseif timestamp < self.gimbal.suspend_timeline then
 				api.update_gimbal_direction(0 / 0, 0 / 0)
+			elseif context.mode == "suspended" then
+				api.update_gimbal_direction(0 / 0, 0 / 0)
 			else
 				local yaw, pitch
 				if context.mode == "scanning" then
@@ -171,6 +173,15 @@ function action:gimbal_free()
 	action:info("Set gimbal to free mode")
 	self.gimbal.mode = "free"
 end
+function action:gimbal_suspend()
+	action:info("Set gimbal to suspended mode")
+	self.gimbal.mode = "suspended"
+end
+-- @param interval number
+function action:gimbal_suspend_during(interval)
+	self.gimbal.suspend_timeline = clock:now() + interval
+end
+
 --- @param times integer
 function action:gimbal_nod(times)
 	action:info("gimbal nod " .. times .. " times")
@@ -188,10 +199,6 @@ end
 function action:reset_gimbal_speed()
 	self.gimbal.pt_per_rad = kPtPerRad
 	self.gimbal.yt_per_rad = kYtPerRad
-end
--- @param interval number
-function action:suspend_gimbal(interval)
-	self.gimbal.suspend_timeline = clock:now() + interval
 end
 
 --- @param mode "normal" | "attack" | "road" | "step" | "slope"

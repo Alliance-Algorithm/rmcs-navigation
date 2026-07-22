@@ -36,7 +36,7 @@ on_init = function()
 
 		local kSpinDuration = 5
 		while true do
-			action:gimbal_toward(0, 0)
+			action:gimbal_suspend()
 			local kPathA = Map:search(blackboard.context.current, Points.kB)
 			for index, path_task in ipairs(kPathA) do
 				action:info("execute kPathA task: " .. index)
@@ -46,7 +46,7 @@ on_init = function()
 			action:gimbal_scan(0, 0)
 			request:sleep(kSpinDuration)
 
-			action:gimbal_toward(0, 0)
+			action:gimbal_suspend()
 			local kPathB = Map:search(blackboard.context.current, Points.kC)
 			for index, path_task in ipairs(kPathB) do
 				action:info("execute kPathB task: " .. index)
@@ -56,7 +56,7 @@ on_init = function()
 			action:gimbal_scan(0, 0)
 			request:sleep(kSpinDuration)
 
-			action:gimbal_toward(0, 0)
+			action:gimbal_suspend()
 			local kPathC = Map:search(blackboard.context.current, Points.kE)
 			for index, path_task in ipairs(kPathC) do
 				action:info("execute kPathC task: " .. index)
@@ -73,13 +73,13 @@ on_init = function()
 			action:info("导航关闭")
 
 			action:switch_motion_mode("normal")
-			action:gimbal_toward(0, 0)
+			action:gimbal_suspend()
 
-			action:stop_navigation()
-
-			request:sleep(2)
+			request:sleep(0.5)
 			action:update_enable_control(false)
 			action:switch_topic_forward(false)
+
+			action:stop_navigation()
 
 			if intent_handler ~= nil then
 				intent_handler.cancel()
