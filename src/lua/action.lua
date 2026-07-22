@@ -3,10 +3,13 @@ local api = require("api")
 local request = require("util.scheduler").request
 local maths = require("util.math")
 local clock = require("util.clock")
+local bb = require("blackboard").singleton()
 
 local NaN = 0 / 0
 local kYtPerRad = 2.0
 local kPtPerRad = 2.0
+-- 与 C++ std::numeric_limits<double>::min() 一致，表示云台完全 free
+local kGimbalFree = 2.2250738585072014e-308
 
 local action = {
 	target = {
@@ -26,6 +29,9 @@ local action = {
 		pt_per_rad = kPtPerRad,
 
 		suspend_timeline = 0,
+
+		full_scan_start = 0,
+		full_scan_stamp = 0,
 	},
 }
 
@@ -37,7 +43,9 @@ function action:bind(scheduler)
 
 		while true do
 			local timestamp = clock:now()
-			if timestamp < self.gimbal.suspend_timeline then
+			if context.mode == "free" then
+				api.update_gimbal_direction(kGimbalFree, kGimbalFree)
+			elseif timestamp < self.gimbal.suspend_timeline then
 				api.update_gimbal_direction(0 / 0, 0 / 0)
 			else
 				local yaw, pitch
@@ -52,7 +60,7 @@ function action:bind(scheduler)
 					pt = math.abs(context.p1 - context.p2) * self.gimbal.pt_per_rad
 
 					yaw, pitch = maths.scanning_signal {
-						timestamp = timestamp,
+						timestamp = timestamp - context.full_scan_stamp,
 						yt = yt,
 						y1 = context.y1,
 						y2 = context.y2,
@@ -60,6 +68,7 @@ function action:bind(scheduler)
 						p1 = context.p1,
 						p2 = context.p2,
 					}
+					yaw = yaw + context.full_scan_start
 				elseif context.mode == "toward" then
 					yaw = context.y1
 					pitch = context.p1
@@ -147,6 +156,8 @@ function action:gimbal_scan(y1, y2)
 	self.gimbal.y2 = y2
 	self.gimbal.p1 = 0 + 0.2
 	self.gimbal.p2 = 0 - 0.2
+	self.gimbal.full_scan_start = bb.user.yaw
+	self.gimbal.full_scan_stamp = clock:now()
 end
 function action:gimbal_toward(yaw, pitch)
 	action:info("Set gimbal to toward mode")
@@ -155,6 +166,10 @@ function action:gimbal_toward(yaw, pitch)
 	self.gimbal.y2 = yaw
 	self.gimbal.p1 = pitch
 	self.gimbal.p2 = pitch
+end
+function action:gimbal_free()
+	action:info("Set gimbal to free mode")
+	self.gimbal.mode = "free"
 end
 --- @param times integer
 function action:gimbal_nod(times)
