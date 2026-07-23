@@ -128,4 +128,154 @@ value = "MIDDLE"
 event:spin()
 assert_eq(triggered, 5, "new start after interruption should work")
 
+do
+	local short_count = 0
+	local long_count = 0
+	local v = "DOWN"
+	local multi = order.new(function()
+		return v
+	end, 0.5)
+
+	multi:on({ "MIDDLE", "UP", "MIDDLE" }, function()
+		short_count = short_count + 1
+	end)
+	multi:on({ "MIDDLE", "UP", "MIDDLE", "UP", "MIDDLE" }, function()
+		long_count = long_count + 1
+	end)
+
+	clock:reset(0)
+	multi:reset()
+
+	clock:update(1.0)
+	v = "MIDDLE"
+	multi:spin()
+	clock:update(1.2)
+	v = "UP"
+	multi:spin()
+	clock:update(1.4)
+	v = "MIDDLE"
+	multi:spin()
+	assert_eq(short_count, 0, "short prefix should wait for longer contender")
+	assert_eq(long_count, 0, "long sequence not finished yet")
+
+	clock:update(2.0)
+	multi:spin()
+	assert_eq(short_count, 1, "short should fire after longer times out")
+	assert_eq(long_count, 0, "long should not fire after timeout")
+end
+
+do
+	local short_count = 0
+	local long_count = 0
+	local v = "DOWN"
+	local multi = order.new(function()
+		return v
+	end, 0.5)
+
+	multi:on({ "MIDDLE", "UP", "MIDDLE" }, function()
+		short_count = short_count + 1
+	end)
+	multi:on({ "MIDDLE", "UP", "MIDDLE", "UP", "MIDDLE" }, function()
+		long_count = long_count + 1
+	end)
+
+	clock:reset(0)
+	multi:reset()
+
+	clock:update(1.0)
+	v = "MIDDLE"
+	multi:spin()
+	clock:update(1.2)
+	v = "UP"
+	multi:spin()
+	clock:update(1.4)
+	v = "MIDDLE"
+	multi:spin()
+	clock:update(1.6)
+	v = "UP"
+	multi:spin()
+	clock:update(1.8)
+	v = "MIDDLE"
+	multi:spin()
+	assert_eq(short_count, 0, "short should be suppressed when long completes")
+	assert_eq(long_count, 1, "only long sequence should fire")
+end
+
+do
+	local short_count = 0
+	local long_count = 0
+	local v = "DOWN"
+	local multi = order.new(function()
+		return v
+	end, 0.5)
+
+	multi:on({ "MIDDLE", "UP", "MIDDLE" }, function()
+		short_count = short_count + 1
+	end)
+	multi:on({ "MIDDLE", "UP", "MIDDLE", "UP", "MIDDLE" }, function()
+		long_count = long_count + 1
+	end)
+
+	clock:reset(0)
+	multi:reset()
+
+	clock:update(1.0)
+	v = "MIDDLE"
+	multi:spin()
+	clock:update(1.2)
+	v = "UP"
+	multi:spin()
+	clock:update(1.4)
+	v = "MIDDLE"
+	multi:spin()
+	clock:update(1.6)
+	v = "DOWN"
+	multi:spin()
+	assert_eq(short_count, 1, "short should fire when longer diverges")
+	assert_eq(long_count, 0, "long should not fire after diverge")
+end
+
+do
+	local a_count = 0
+	local b_count = 0
+	local v = "DOWN"
+	local multi = order.new(function()
+		return v
+	end, 0.5)
+
+	multi:on({ "MIDDLE", "UP", "MIDDLE" }, function()
+		a_count = a_count + 1
+	end)
+	multi:on({ "DOWN", "UP", "DOWN" }, function()
+		b_count = b_count + 1
+	end)
+
+	clock:reset(0)
+	multi:reset()
+
+	clock:update(1.0)
+	v = "MIDDLE"
+	multi:spin()
+	clock:update(1.2)
+	v = "UP"
+	multi:spin()
+	clock:update(1.4)
+	v = "MIDDLE"
+	multi:spin()
+	assert_eq(a_count, 1, "unrelated sequence A should fire immediately")
+	assert_eq(b_count, 0, "unrelated sequence B should not fire")
+
+	clock:update(2.0)
+	v = "DOWN"
+	multi:spin()
+	clock:update(2.2)
+	v = "UP"
+	multi:spin()
+	clock:update(2.4)
+	v = "DOWN"
+	multi:spin()
+	assert_eq(a_count, 1, "unrelated A should stay")
+	assert_eq(b_count, 1, "unrelated sequence B should fire independently")
+end
+
 print("order.lua: ok")

@@ -11,8 +11,8 @@
 
 namespace rmcs::navigation::details {
 
-struct Context {
-    RMCS_PIMPL_DEFINITION(Context)
+struct RmcsContext {
+    RMCS_PIMPL_DEFINITION(RmcsContext)
 public:
     template <typename T>
     using InputInterface = rmcs_executor::Component::InputInterface<T>;
@@ -33,10 +33,10 @@ public:
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 
-    explicit Context(auto& node_and_component) noexcept
-        : Context { node_and_component, node_and_component } { }
+    explicit RmcsContext(auto& node_and_component) noexcept
+        : RmcsContext{node_and_component, node_and_component} {}
 
-    explicit Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
+    explicit RmcsContext(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
 
     auto init() -> void;
     auto ensure_defaults() -> void;

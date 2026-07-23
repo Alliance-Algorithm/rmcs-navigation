@@ -8,10 +8,10 @@ local bb = require("blackboard").singleton()
 local NaN = 0 / 0
 local kYtPerRad = 2.0
 local kPtPerRad = 2.0
--- 与 C++ std::numeric_limits<double>::min() 一致，表示云台完全 free
 local kGimbalFree = 2.2250738585072014e-308
 
 local action = {
+	last_enable = false,
 	target = {
 		x = NaN,
 		y = NaN,
@@ -45,11 +45,13 @@ function action:bind(scheduler)
 			local timestamp = clock:now()
 			if context.mode == "free" then
 				api.update_gimbal_direction(kGimbalFree, kGimbalFree)
-			elseif timestamp < self.gimbal.suspend_timeline then
+				self.gimbal.full_scan_start = bb.user.yaw
+				self.gimbal.full_scan_stamp = clock:now()
+			elseif context.mode == "suspended" or timestamp < self.gimbal.suspend_timeline then
 				api.update_gimbal_direction(0 / 0, 0 / 0)
-			elseif context.mode == "suspended" then
-				api.update_gimbal_direction(0 / 0, 0 / 0)
-			else
+				self.gimbal.full_scan_start = bb.user.yaw
+				self.gimbal.full_scan_stamp = clock:now()
+			else -- Need Yaw Pitch Control
 				local yaw, pitch
 				if context.mode == "scanning" then
 					local yt, pt
@@ -133,6 +135,12 @@ end
 --- @param enable boolean
 function action:update_enable_control(enable)
 	api.update_enable_control(enable)
+
+	if enable == true and self.last_enable ~= true then
+		self.gimbal.full_scan_start = bb.user.yaw
+		self.gimbal.full_scan_stamp = clock:now()
+	end
+	self.last_enable = enable
 end
 
 function action:switch_topic_forward(enable)
@@ -158,8 +166,6 @@ function action:gimbal_scan(y1, y2)
 	self.gimbal.y2 = y2
 	self.gimbal.p1 = 0 + 0.2
 	self.gimbal.p2 = 0 - 0.2
-	self.gimbal.full_scan_start = bb.user.yaw
-	self.gimbal.full_scan_stamp = clock:now()
 end
 function action:gimbal_toward(yaw, pitch)
 	action:info("Set gimbal to toward mode")
@@ -209,6 +215,12 @@ end
 --- @param yes boolean
 function action:update_under_attack(yes)
 	api.update_under_attack(yes)
+end
+
+--- 触发一次重定位，红/蓝方由 referee robot_id 自动派生；
+--- 服务未就绪或 robot_id 未知时本次调用被丢弃并打 WARN，不抛错。
+function action:relocalize()
+	api.relocalize()
 end
 
 function action:restart_navigation(config)

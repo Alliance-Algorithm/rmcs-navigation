@@ -12,13 +12,11 @@ planner_server:
   ros__parameters:
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_theta_star_planner::ThetaStarPlanner"
-      allow_unknown: true # 允许在未知空间中进行搜索与通行
-      tolerance: 0.1 # 若无法找到精确终点，可接受的终点偏差（米）
-      how_many_corners: 8 # 邻域连接数（8 为八连通）
-      w_euc_cost: 1.0 # 欧氏距离代价权重
-      w_traversal_cost: 4.0 # 代价地图穿越代价权重
-      use_final_approach_orientation: false # 终点不强制对齐朝向
+      plugin: "nav2_navfn_planner::NavfnPlanner"
+      tolerance: 0.5
+      use_astar: true
+      allow_unknown: true
+      use_final_approach_orientation: false
 
 global_costmap:
   global_costmap:
@@ -40,7 +38,7 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.3
+        inflation_radius: 0.5
         cost_scaling_factor: 0.5
 
 # 局部地图 + 局部规划
@@ -62,7 +60,7 @@ controller_server:
     current_goal_checker: "general_goal_checker"
     general_goal_checker:
       plugin: "nav2_controller::PositionGoalChecker"
-      xy_goal_tolerance: 0.2
+      xy_goal_tolerance: 0.5
 
     # 布局规划核心
     controller_plugins: ["FollowPath"]

@@ -17,6 +17,7 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <tf2/exceptions.h>
 #include <tf2/time.h>
 #include <tf2_ros/buffer.h>
@@ -32,6 +33,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     using GoalClient = rclcpp_action::Client<GoalAction>;
     using GoalSubscription = rclcpp::Subscription<geometry_msgs::msg::PoseStamped>;
     using PoseStamped = geometry_msgs::msg::PoseStamped;
+    using TriggerClient = rclcpp::Client<std_srvs::srv::Trigger>;
 
     using TfBuffer = tf2_ros::Buffer;
     using TfListener = tf2_ros::TransformListener;
@@ -43,6 +45,8 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     static constexpr auto kBaseFrame = "base_link";
     static constexpr auto kMoveBaseGoalTopic = "/move_base_simple/goal";
     static constexpr auto kGoalPoseTopic = "/goal_pose";
+    static constexpr auto kRelocalizeRedService = "/rmcs_localization/relocalize/red";
+    static constexpr auto kRelocalizeBlueService = "/rmcs_localization/relocalize/blue";
     static constexpr auto kServerNotReadyWarnInterval = std::chrono::seconds{5};
 
     struct Target final {
@@ -79,6 +83,12 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     std::shared_ptr<GoalSubscription> move_base_goal_subscription;
     std::shared_ptr<GoalSubscription> goal_pose_subscription;
     bool topic_forward_enabled = false;
+
+    // Localization Trigger
+    std::shared_ptr<TriggerClient> relocalize_red_client =
+        node.create_client<std_srvs::srv::Trigger>(kRelocalizeRedService);
+    std::shared_ptr<TriggerClient> relocalize_blue_client =
+        node.create_client<std_srvs::srv::Trigger>(kRelocalizeBlueService);
 
     // Goal Runtime State
     std::shared_ptr<GoalHandle> current_goal_handle;
@@ -222,6 +232,30 @@ public:
         send_target(goal, request_id);
     }
 
+    auto relocalize(rmcs_msgs::RobotColor color) -> void {
+        if (color == rmcs_msgs::RobotColor::UNKNOWN) {
+            warn("relocalize ignored: robot color is unknown");
+            return;
+        }
+
+        const auto& client =
+            color == rmcs_msgs::RobotColor::BLUE ? relocalize_blue_client : relocalize_red_client;
+        if (!client->service_is_ready()) {
+            warn("relocalize ignored: service {} is not available", client->get_service_name());
+            return;
+        }
+
+        client->async_send_request(
+            std::make_shared<std_srvs::srv::Trigger::Request>(),
+            [this](TriggerClient::SharedFuture future) { // NOLINT
+                const auto& response = *future.get();
+                if (response.success)
+                    info("relocalize: {}", response.message);
+                else
+                    warn("relocalize rejected: {}", response.message);
+            });
+    }
+
     auto switch_topic_forward(bool enable) -> void {
         if (topic_forward_enabled == enable)
             return;
@@ -264,6 +298,8 @@ Navigation::Navigation(rclcpp::Node& node) noexcept
 Navigation::~Navigation() noexcept = default;
 
 auto Navigation::send_target(double x, double y) -> void { pimpl->send_target(x, y); }
+
+auto Navigation::relocalize(rmcs_msgs::RobotColor color) -> void { pimpl->relocalize(color); }
 
 auto Navigation::switch_topic_forward(bool enable) -> void { pimpl->switch_topic_forward(enable); }
 

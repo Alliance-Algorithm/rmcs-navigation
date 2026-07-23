@@ -11,8 +11,8 @@
 
 namespace rmcs::navigation::details {
 
-struct Context::Impl {
-    Context& context;
+struct RmcsContext::Impl {
+    RmcsContext& context;
     rclcpp::Node& node;
     rmcs_executor::Component& component;
 
@@ -59,24 +59,6 @@ struct Context::Impl {
         const_cast<T&>(*input) = std::move(value);
     }
 
-    auto service_main() -> void {
-        auto service = util::make_service<"context">(
-            util::make_action<"game_stage", int>([this](int value) {
-                write_input(context.game_stage, static_cast<rmcs_msgs::GameStage>(value));
-            }),
-            util::make_action<"robot_health", int>([this](int value) {
-                write_input(context.robot_health, static_cast<std::uint16_t>(value));
-            }),
-            util::make_action<"robot_bullet", int>([this](int value) {
-                write_input(context.robot_bullet, static_cast<std::uint16_t>(value));
-            }));
-
-        while (!stop_service.load(std::memory_order::relaxed)) {
-            service.spin_once();
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        }
-    }
-
     auto init() {
         make_input("/auto_aim/should_control", context.auto_aim_should_control, false);
 
@@ -94,7 +76,23 @@ struct Context::Impl {
         make_input("/tf", context.tf, rmcs_description::SentryTf{});
         make_input("/auto_aim/robot_center", context.enemy_center, Eigen::Vector3d{0.0, 0.0, 0.0});
 
-        service_thread = std::thread{[this] { service_main(); }};
+        service_thread = std::thread{[this] {
+            auto service = util::make_service<"context">(
+                util::make_action<"game_stage", int>([this](int value) {
+                    write_input(context.game_stage, static_cast<rmcs_msgs::GameStage>(value));
+                }),
+                util::make_action<"robot_health", int>([this](int value) {
+                    write_input(context.robot_health, static_cast<std::uint16_t>(value));
+                }),
+                util::make_action<"robot_bullet", int>([this](int value) {
+                    write_input(context.robot_bullet, static_cast<std::uint16_t>(value));
+                }));
+
+            while (!stop_service.load(std::memory_order::relaxed)) {
+                service.spin_once();
+                std::this_thread::sleep_for(std::chrono::milliseconds{100});
+            }
+        }};
         RCLCPP_INFO(node.get_logger(), "Context service at /tmp/rmcs-navigation/context/");
     }
 
@@ -105,13 +103,13 @@ struct Context::Impl {
     }
 };
 
-Context::Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept
+RmcsContext::RmcsContext(rclcpp::Node& node, rmcs_executor::Component& component) noexcept
     : pimpl{std::make_unique<Impl>(*this, node, component)} {}
 
-Context::~Context() noexcept = default;
+RmcsContext::~RmcsContext() noexcept = default;
 
-auto Context::init() -> void { pimpl->init(); }
+auto RmcsContext::init() -> void { pimpl->init(); }
 
-auto Context::ensure_defaults() -> void { pimpl->ensure_defaults(); }
+auto RmcsContext::ensure_defaults() -> void { pimpl->ensure_defaults(); }
 
 } // namespace rmcs::navigation::details

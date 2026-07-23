@@ -62,15 +62,23 @@ struct MotionFsm::Impl {
             return std::atan2(std::sin(yaw), std::cos(yaw));
         };
 
+        const auto target_yaw = context.target_gimbal_toward.x();
+        const auto pitch = context.target_gimbal_toward.y();
         const auto wy = context.current_world_yaw;
         const auto ly = context.current_local_yaw;
+
+        // world 不可用：目标按 OdomGimbalImu 绝对角直通（与 current_local_yaw 同源）
         if (!std::isfinite(wy)) {
-            return {command.gimbal_toward.x(), command.gimbal_toward.y()};
+            if (!std::isfinite(target_yaw)) {
+                return {command.gimbal_toward.x(), command.gimbal_toward.y()};
+            }
+            return {normalize_yaw(target_yaw), pitch};
         }
-        if (std::isfinite(wy) && std::isfinite(ly)) {
+
+        if (std::isfinite(ly)) {
             const auto measured_bias = normalize_yaw(wy - ly);
 
-            if (!yaw_bias_initialized && std::isfinite(wy)) {
+            if (!yaw_bias_initialized) {
                 yaw_bias = measured_bias;
                 last_world_yaw = wy;
                 yaw_bias_initialized = true;
@@ -81,10 +89,7 @@ struct MotionFsm::Impl {
             }
         }
 
-        const auto target_world_yaw = context.target_gimbal_toward.x();
-        const auto pitch = context.target_gimbal_toward.y();
-        const auto target_local_yaw = normalize_yaw(target_world_yaw - yaw_bias);
-
+        const auto target_local_yaw = normalize_yaw(target_yaw - yaw_bias);
         return {target_local_yaw, pitch};
     }
 

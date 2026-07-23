@@ -18,7 +18,7 @@ return function()
 		action:update_under_attack(under_attack)
 
 		if blackboard.autoaim.should_control then
-			action:gimbal_suspend_during(2)
+			action:gimbal_suspend_during(1)
 		end
 
 		request:yield()

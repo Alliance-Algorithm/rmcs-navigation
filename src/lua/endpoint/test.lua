@@ -39,12 +39,9 @@ on_init = function()
 
 	clock:reset(blackboard.meta.timestamp)
 	action:update_enable_control(true)
-	action:switch_topic_forward(true)
 
 	restart_navigation()
-	-- action:gimbal_scan(-0.2, 0.2)
-	-- action:set_gimbal_yt(20)
-	-- action:set_gimbal_pt(10)
+
 	action:set_gimbal_yt(10)
 	action:set_gimbal_pt(5)
 	action:gimbal_scan(-0.4, 0)

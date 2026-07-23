@@ -17,6 +17,7 @@ local util = require("util.native")
 --- @field update_gimbal_direction fun(yaw: number, pitch: number)
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "road" | "step" | "slope")
 --- @field update_under_attack fun(yes: boolean)
+--- @field relocalize fun() 触发重定位，红/蓝方由 referee robot_id 自动派生
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)
@@ -62,16 +63,13 @@ function api.restart_navigation(config)
         # 杀死已存在的 navigation 会话（忽略错误）
         tmux kill-session -t navigation 2>/dev/null
 
-        # 创建后台会话并启动 foxglove (窗口 0)
-        tmux new-session -d -s navigation -n "foxglove" "bash -lc 'ros2 launch foxglove_bridge foxglove_bridge_launch.xml'"
-
         # 传入配置参数
         configs=%q
 
-        # 创建新窗口启动 motion (窗口 1)
-        tmux new-window -t navigation -n "motion" "bash -lc 'ros2 launch rmcs-navigation motion.launch.yaml $configs'"
+        # 创建后台会话并启动 motion (窗口 0)
+        tmux new-session -d -s navigation -n "motion" "bash -lc 'ros2 launch rmcs-navigation motion.launch.yaml $configs'"
 
-        # 创建新窗口启动 sensor (窗口 2)
+        # 创建新窗口启动 sensor (窗口 1)
         tmux new-window -t navigation -n "sensor" "bash -lc 'ros2 launch rmcs-navigation sensor.launch.yaml $configs'"
     ]]
 	local command = string.format(template, filename, configs)
@@ -101,21 +99,22 @@ function api.start_record()
 
         if [ -d /home/ubuntu ]; then
             record_parent=/home/ubuntu
-        elif [ -d /home/root ]; then
-            record_parent=/home/root
+        elif [ -d /root ]; then
+            record_parent=/root
         else
             echo \"record parent not found\"
             exit 1
         fi
+        echo \"Bag will be saved to ${record_parent}\"
 
-        mapfile -t topics < <(ros2 topic list | rg \"^/livox\")
+        mapfile -t topics < <(ros2 topic list | rg \"^/livox/(lidar|imu)_[^/]+$\")
         if [ \${#topics[@]} -eq 0 ]; then
-            echo \"no /livox topics found\"
+            echo \"no /livox lidar/imu topics found\"
             exit 1
         fi
 
         record_root=\$record_parent/record-livox
-        bag_dir=\$record_root/livox-$(date +%%Y%%m%%d-%%H%%M%%S)
+        bag_dir=\$record_root/livox-$(TZ=Asia/Shanghai date +%%Y_%%m_%%d-%%H_%%M_%%S)
         mkdir -p \"\$record_root\"
 
         ros2 bag record -o \"\$bag_dir\" \"\${topics[@]}\"'"

@@ -1,7 +1,6 @@
 #pragma once
 #include "cxx/util/pimpl.hh"
 
-#include <functional>
 #include <string>
 
 #include <rclcpp/node.hpp>
@@ -13,20 +12,18 @@ class LuaContext {
     RMCS_PIMPL_DEFINITION(LuaContext)
 
 public:
-    struct Api {
-        std::function<void(bool)> update_enable_control;
-        std::function<void(double, double)> send_target;
-        std::function<void(bool)> switch_topic_forward;
-        std::function<void(double, double)> update_gimbal_direction;
-        std::function<void(const std::string&)> switch_motion_mode;
-        std::function<void(bool)> update_under_attack;
-    };
+    explicit LuaContext(rclcpp::Node& node);
 
-    explicit LuaContext(rclcpp::Node& node) noexcept;
+    template <typename T>
+    auto inject(std::string name, T&& func) -> void {
+        api().set_function(std::move(name), std::forward<T>(func));
+    }
 
-    auto init(Api api) -> void;
     auto tick() -> void;
     auto blackboard() -> sol::table&;
+
+private:
+    auto api() -> sol::table&;
 };
 
 } // namespace rmcs::navigation::details

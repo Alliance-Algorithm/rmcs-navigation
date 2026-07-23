@@ -1,6 +1,7 @@
 #pragma once
 #include "cxx/util/pimpl.hh"
 #include <rclcpp/node.hpp>
+#include <rmcs_msgs/robot_color.hpp>
 
 #include <Eigen/Geometry>
 
@@ -26,6 +27,18 @@ public:
     /// 用法示例：
     /// - navigation.send_target(1.5, -2.0);
     auto send_target(double x, double y) -> void;
+
+    /// 触发 rmcs_localization 重定位。
+    ///
+    /// 行为说明：
+    /// - color 为 RED/BLUE 时，分别调用
+    ///   /rmcs_localization/relocalize/{red,blue}（std_srvs/Trigger）；
+    /// - color 为 UNKNOWN 时直接拒绝并告警，不做兜底；
+    /// - 服务不可用时，本次请求不会发送。
+    ///
+    /// 用法示例：
+    /// - navigation.relocalize(rmcs_msgs::RobotColor::RED);
+    auto relocalize(rmcs_msgs::RobotColor color) -> void;
 
     /// 查询当前位姿（world -> base_link）。
     ///

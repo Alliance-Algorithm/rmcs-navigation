@@ -6,7 +6,6 @@ local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local order = require("util.order")
-local edges = require("util.edge")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -27,36 +26,47 @@ on_init = function()
 
 	action:bind(scheduler)
 	action:info(ascii.banner)
-	action:warn("什么也不动的固定炮台模式")
+	action:warn("录制模式，rswitch 中→上→中 切换录制")
+	action:update_enable_control(false)
 
-	action:update_enable_control(true)
+	action:info("开启导航中......")
+	action:restart_navigation {
+		global_map = "empty",
+		launch_livox = true,
+		launch_odin1 = false,
+		use_sim_time = false,
+	}
 
-	action:set_gimbal_pt(2)
-	action:set_gimbal_yt(2)
-	action:gimbal_scan(0, 0)
-	action:switch_motion_mode("attack")
+	local recording = false
 
 	scheduler:append_task(task.robot_status)
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
-		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function() end)
+		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
+			local ok = action:toggle_record()
+			if not ok then
+				action:warn("录制切换失败")
+				return
+			end
+
+			action:update_enable_control(true)
+			if recording then
+				action:info("关闭录制")
+				action:gimbal_nod(2)
+				recording = false
+			else
+				action:info("开始录制")
+				action:gimbal_nod(1)
+				recording = true
+			end
+
+			request:sleep(2)
+			action:update_enable_control(false)
+		end)
 
 		while true do
 			switch_order:spin()
 			request:yield()
-		end
-	end)
-
-	scheduler:append_task(function()
-		while true do
-			action:update_enable_control(blackboard.play.rswitch == "UP")
-			request:yield()
-		end
-	end)
-
-	scheduler:append_task(function()
-		while true do
-			request:sleep(0.1)
 		end
 	end)
 end
@@ -66,4 +76,6 @@ on_tick = function()
 	scheduler:spin_once()
 end
 
-on_exit = function() end
+on_exit = function()
+	action:abort_record()
+end

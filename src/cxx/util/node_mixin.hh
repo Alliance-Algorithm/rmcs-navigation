@@ -4,6 +4,7 @@
 #include <utility>
 
 #include <rclcpp/logging.hpp>
+#include <rclcpp/node_options.hpp>
 
 namespace rmcs::navigation {
 
@@ -13,7 +14,11 @@ namespace rmcs::navigation {
 /// 通过 using logging = NodeMixin 使派生类内可用 logging::info(...) 形式调用日志，
 /// 编译器自动将派生类实例作为隐式对象参数传入，无额外运行时开销。
 struct NodeMixin {
-    using logging = NodeMixin;
+    using node = NodeMixin;
+
+    static constexpr auto option() noexcept {
+        return rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true);
+    }
 
     template <typename Self, typename... Args>
     auto info(this const Self& self, std::format_string<Args...> fmt, Args&&... args) -> void {

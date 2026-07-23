@@ -23,9 +23,9 @@ private:
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
 
-    details::LuaContext lua_context{*this};
-    details::Navigation navigation{*this};
-    details::Context context{*this};
+    details::LuaContext lua{*this};
+    details::Navigation nav{*this};
+    details::RmcsContext rmcs{*this};
 
     MotionFsm motion{*this};
 
@@ -38,7 +38,7 @@ private:
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
 
-        auto init(Navigation& component) -> void {
+        explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
             component.register_output("/rmcs_navigation/enable_autoaim", enable_autoaim, true);
             component.register_output(
@@ -46,39 +46,39 @@ private:
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
             component.register_output("/rmcs_navigation/gimbal_toward", gimbal_toward, kVecNaN);
         }
-    } command;
-
-    static auto option() noexcept {
-        return rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true);
-    }
+    } command{*this};
 
     auto sync_blackboard() {
-        const auto [x, y, yaw] = navigation.check_position();
+        auto [x, y, yaw] = nav.check_position();
+
+        if (std::isnan(yaw)) {
+            yaw = motion.context.current_local_yaw;
+        }
 
         // 高频查询 TF 是不对的，所以应该先缓存一份
         motion.context.current_world_yaw = yaw;
         motion.context.x = x;
         motion.context.y = y;
 
-        auto& blackboard = lua_context.blackboard();
+        auto& blackboard = lua.blackboard();
 
         auto user = blackboard["user"].get<sol::table>();
-        user["health"] = *context.robot_health;
-        user["bullet"] = *context.robot_bullet;
-        user["chassis_power_limit"] = *context.chassis_power_limit_referee;
+        user["health"] = *rmcs.robot_health;
+        user["bullet"] = *rmcs.robot_bullet;
+        user["chassis_power_limit"] = *rmcs.chassis_power_limit_referee;
         user["x"] = x;
         user["y"] = y;
         user["yaw"] = yaw;
 
         auto game = blackboard["game"].get<sol::table>();
-        game["stage"] = rmcs_msgs::to_string(*context.game_stage);
+        game["stage"] = rmcs_msgs::to_string(*rmcs.game_stage);
 
         auto play = blackboard["play"].get<sol::table>();
-        play["rswitch"] = rmcs_msgs::to_string(*context.switch_right);
-        play["lswitch"] = rmcs_msgs::to_string(*context.switch_left);
+        play["rswitch"] = rmcs_msgs::to_string(*rmcs.switch_right);
+        play["lswitch"] = rmcs_msgs::to_string(*rmcs.switch_left);
 
         auto autoaim = blackboard["autoaim"].get<sol::table>();
-        autoaim["should_control"] = *context.auto_aim_should_control;
+        autoaim["should_control"] = *rmcs.auto_aim_should_control;
 
         auto meta = blackboard["meta"].get<sol::table>();
         meta["timestamp"] = this->now().seconds();
@@ -86,33 +86,38 @@ private:
 
 public:
     explicit Navigation()
-        : rclcpp::Node{get_component_name(), option()} {
+        : rclcpp::Node{get_component_name(), node::option()} {
 
-        context.init();
-        command.init(*this);
+        rmcs.init();
 
-        auto api = details::LuaContext::Api{};
-        api.update_enable_control = [this](bool enable) { *command.enable_control = enable; };
-        api.send_target = [this](double x, double y) { navigation.send_target(x, y); };
-        api.switch_topic_forward = [this](bool enable) { navigation.switch_topic_forward(enable); };
-        api.update_gimbal_direction = [this](double yaw, double pitch) {
+        lua.inject(
+            "update_enable_control", [this](bool enable) { *command.enable_control = enable; });
+        lua.inject("send_target", [this](double x, double y) { nav.send_target(x, y); });
+        lua.inject(
+            "switch_topic_forward", [this](bool enable) { nav.switch_topic_forward(enable); });
+        lua.inject("update_gimbal_direction", [this](double yaw, double pitch) {
             motion.context.target_gimbal_toward = {yaw, pitch};
-        };
-        api.switch_motion_mode = [this](const std::string& mode) { motion.switch_mode(mode); };
-        api.update_under_attack = [this](bool yes) { motion.context.under_attack = yes; };
+        });
+        lua.inject(
+            "switch_motion_mode", [this](const std::string& mode) { motion.switch_mode(mode); });
+        lua.inject("update_under_attack", [this](bool yes) { motion.context.under_attack = yes; });
+        lua.inject("relocalize", [this] {
+            const auto robot_id = *rmcs.robot_id;
+            nav.relocalize(
+                robot_id == rmcs_msgs::RobotId::UNKNOWN ? rmcs_msgs::RobotColor::UNKNOWN
+                                                        : robot_id.color());
+        });
 
-        lua_context.init(std::move(api));
-
-        logging::info("Navigation is initialized");
+        node::info("Navigation is initialized");
     }
 
-    auto before_updating() -> void override { context.ensure_defaults(); }
+    auto before_updating() -> void override { rmcs.ensure_defaults(); }
 
     auto update() -> void override {
         if (lua_tick_count++ == 10) [[unlikely]] {
             lua_tick_count = 0;
             sync_blackboard();
-            lua_context.tick();
+            lua.tick();
         }
 
         {
@@ -121,14 +126,13 @@ public:
             *command.chassis_behavior = rmcs_msgs::ChassisMode::SPIN_FAST;
         }
 
-        const auto nav_cmd = navigation.current_command();
+        const auto nav_cmd = nav.current_command();
         const auto elapsed = std::chrono::steady_clock::now() - nav_cmd.timestamp;
         motion.context.target_chassis_speed =
             (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
 
         const auto direction = fast_tf::cast<rmcs_description::OdomGimbalImu>(
-            rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()},
-            *context.tf);
+            rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
         motion.context.current_local_yaw = std::atan2(direction->y(), direction->x());
 
         const auto cmd = motion.spin_once();
