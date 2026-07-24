@@ -34,6 +34,10 @@ local action = {
 		full_scan_start = 0,
 		full_scan_stamp = 0,
 	},
+	chassis = {
+		direction_active = false,
+		direction_yaw = NaN,
+	},
 }
 
 --- 绑定 action 的后台任务。
@@ -97,6 +101,17 @@ function action:bind(scheduler)
 				end
 
 				api.update_gimbal_direction(yaw, pitch)
+			end
+			request:yield()
+		end
+	end)
+
+	scheduler:append_task(function()
+		while true do
+			if self.chassis.direction_active and not util.check_nan(self.chassis.direction_yaw) then
+				api.update_chassis_direction(self.chassis.direction_yaw)
+			else
+				api.update_chassis_direction(NaN)
 			end
 			request:yield()
 		end
@@ -175,6 +190,16 @@ function action:gimbal_toward(yaw, pitch)
 	self.gimbal.y2 = yaw
 	self.gimbal.p1 = pitch
 	self.gimbal.p2 = pitch
+end
+function action:chassis_direction(yaw)
+	action:info("Set chassis direction to " .. tostring(yaw))
+	self.chassis.direction_active = true
+	self.chassis.direction_yaw = yaw
+end
+function action:chassis_direction_free()
+	action:info("Clear chassis direction")
+	self.chassis.direction_active = false
+	self.chassis.direction_yaw = NaN
 end
 function action:gimbal_free()
 	action:info("Set gimbal to free mode")

@@ -15,6 +15,7 @@ local util = require("util.native")
 --- @field update_enable_control fun(enable: boolean)
 --- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(yaw: number, pitch: number)
+--- @field update_chassis_direction fun(yaw: number)
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "road" | "step" | "slope" | "climb" | "support_arm")
 --- @field update_under_attack fun(yes: boolean)
 --- @field push_sentry_event fun(event: number) -- SentryEvent enum value

@@ -53,7 +53,7 @@ on_init = function()
 			local enable = blackboard.play.rswitch == "UP"
 				and not blackboard.user.enemy_visible
 				and blackboard.user.health > 0
-			action:switch_navigation(enable)
+			action:update_enable_control(enable)
 			request:yield()
 		end
 	end)

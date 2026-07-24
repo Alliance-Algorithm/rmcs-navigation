@@ -39,6 +39,10 @@ struct MotionFsm::Impl {
     double yaw_bias = kNan;
     double last_world_yaw = kNan;
 
+    static constexpr auto normalize_yaw(double yaw) -> double {
+        return std::atan2(std::sin(yaw), std::cos(yaw));
+    }
+
     static auto scale_to_min_speed(Eigen::Vector2d speed, double min) {
         constexpr auto kEps = 1e-9;
 
@@ -59,10 +63,6 @@ struct MotionFsm::Impl {
         }
 
         constexpr auto kYawBiasCorrectionGain = 0.002;
-
-        constexpr auto normalize_yaw = [](double yaw) -> double {
-            return std::atan2(std::sin(yaw), std::cos(yaw));
-        };
 
         const auto target_yaw = context.target_gimbal_toward.x();
         const auto pitch = context.target_gimbal_toward.y();
@@ -95,6 +95,25 @@ struct MotionFsm::Impl {
         return {target_local_yaw, pitch};
     }
 
+    /// 底盘航向误差：与云台共用同一 OdomGimbalImu 目标和测量，不重算 world→odom。
+    /// err = gimbal_toward.x − base_odom — 两者随系同漂，差稳定。
+    auto update_chassis_direction_error() -> double {
+        const auto target_yaw = command.gimbal_toward.x();
+        if (!std::isfinite(target_yaw))
+            return kNan;
+
+        const auto ly = context.current_chassis_local_yaw;
+        if (!std::isfinite(ly))
+            return kNan;
+
+        return normalize_yaw(target_yaw - ly);
+    }
+
+    auto update_outputs() -> void {
+        command.gimbal_toward = update_gimbal_target();
+        command.chassis_direction_error = update_chassis_direction_error();
+    }
+
     Impl(MotionFsm& owner, rclcpp::Node& node)
         : context{owner.context}
         , command{owner.command}
@@ -106,7 +125,7 @@ struct MotionFsm::Impl {
             [this] {
                 command.chassis_mode = ChassisMode::ALIGNMENT;
                 command.chassis_speed = context.target_chassis_speed;
-                command.gimbal_toward = update_gimbal_target();
+                update_outputs();
                 return Status::NORMAL;
             });
 
@@ -134,7 +153,7 @@ struct MotionFsm::Impl {
                 const auto position = current_position();
 
                 command.chassis_mode = ChassisMode::ALIGNMENT_POWERED;
-                command.gimbal_toward = update_gimbal_target();
+                update_outputs();
 
                 auto speed = road_filter.update(context.target_chassis_speed);
                 speed = scale_to_min_speed(speed, kMinSpeed);
@@ -162,7 +181,7 @@ struct MotionFsm::Impl {
                 command.chassis_mode =
                     context.under_attack ? ChassisMode::SPIN_FAST : ChassisMode::SPIN_SLOW;
                 command.chassis_speed = context.target_chassis_speed;
-                command.gimbal_toward = update_gimbal_target();
+                update_outputs();
                 return Status::ATTACK;
             });
 
@@ -172,7 +191,7 @@ struct MotionFsm::Impl {
             [this] {
                 command.chassis_mode = ChassisMode::ALIGNMENT_POWERED;
                 command.chassis_speed = context.target_chassis_speed;
-                command.gimbal_toward = update_gimbal_target();
+                update_outputs();
                 return Status::STEP;
             });
 
@@ -185,7 +204,7 @@ struct MotionFsm::Impl {
             [this] {
                 command.chassis_mode = ChassisMode::AUTO;
                 command.chassis_speed = slope_filter.update(context.target_chassis_speed);
-                command.gimbal_toward = update_gimbal_target();
+                update_outputs();
                 return Status::SLOPE;
             });
 
@@ -195,7 +214,7 @@ struct MotionFsm::Impl {
             [this] {
                 command.chassis_mode = ChassisMode::CLIMB;
                 command.chassis_speed = Eigen::Vector2d::Zero();
-                command.gimbal_toward = update_gimbal_target();
+                update_outputs();
                 return Status::CLIMB;
             });
 
@@ -205,7 +224,7 @@ struct MotionFsm::Impl {
             [this] {
                 command.chassis_mode = ChassisMode::SUPPORT_ARM;
                 command.chassis_speed = Eigen::Vector2d::Zero();
-                command.gimbal_toward = update_gimbal_target();
+                update_outputs();
                 return Status::SUPPORT_ARM;
             });
 

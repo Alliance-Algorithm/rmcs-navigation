@@ -22,8 +22,10 @@ public:
     struct Context {
         Eigen::Vector2d target_chassis_speed = kVecNan;
         Eigen::Vector2d target_gimbal_toward = kVecNan;
+        double target_chassis_direction_world = kNan;
 
         double current_local_yaw = kNan;
+        double current_chassis_local_yaw = kNan;
         double current_world_yaw = kNan;
 
         double x = kNan, y = kNan;
@@ -35,6 +37,7 @@ public:
         ChassisMode chassis_mode = ChassisMode::ALIGNMENT;
         Eigen::Vector2d chassis_speed = kVecNan;
         Eigen::Vector2d gimbal_toward = kVecNan;
+        double chassis_direction_error = kNan;
     } command;
 
     explicit MotionFsm(rclcpp::Node& node) noexcept;

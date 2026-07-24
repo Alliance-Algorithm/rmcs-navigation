@@ -60,7 +60,7 @@ controller_server:
     current_goal_checker: "general_goal_checker"
     general_goal_checker:
       plugin: "nav2_controller::PositionGoalChecker"
-      xy_goal_tolerance: 0.5
+      xy_goal_tolerance: 0.2
 
     # 布局规划核心
     controller_plugins: ["FollowPath"]

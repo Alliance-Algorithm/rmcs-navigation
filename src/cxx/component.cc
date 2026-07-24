@@ -45,6 +45,7 @@ private:
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
+        OutputInterface<double> chassis_direction_error;
         OutputInterface<std::unordered_map<SentryEvent, std::uint16_t>> sentry_events;
 
         explicit Command(Navigation& component) {
@@ -54,6 +55,8 @@ private:
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
             component.register_output("/rmcs_navigation/gimbal_toward", gimbal_toward, kVecNaN);
+            component.register_output(
+                "/rmcs_navigation/chassis_direction_error", chassis_direction_error, kNan);
             component.register_output("/rmcs_navigation/sentry_events", sentry_events);
         }
     } command{*this};
@@ -127,6 +130,9 @@ public:
         lua.inject("update_gimbal_direction", [this](double yaw, double pitch) {
             motion.context.target_gimbal_toward = {yaw, pitch};
         });
+        lua.inject("update_chassis_direction", [this](double yaw) {
+            motion.context.target_chassis_direction_world = yaw;
+        });
         lua.inject(
             "switch_motion_mode", [this](const std::string& mode) { motion.switch_mode(mode); });
         lua.inject("update_under_attack", [this](bool yes) { motion.context.under_attack = yes; });
@@ -159,6 +165,7 @@ public:
         {
             *command.chassis_speed = Eigen::Vector2d::Zero();
             *command.gimbal_toward = Eigen::Vector2d::Zero();
+            *command.chassis_direction_error = kNan;
             *command.chassis_behavior = motion.context.under_attack
                                           ? rmcs_msgs::ChassisMode::SPIN_FAST
                                           : rmcs_msgs::ChassisMode::SPIN_SLOW;
@@ -173,10 +180,16 @@ public:
             rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
         motion.context.current_local_yaw = std::atan2(direction->y(), direction->x());
 
+        const auto chassis_base = fast_tf::cast<rmcs_description::OdomGimbalImu>(
+            rmcs_description::BaseLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
+        motion.context.current_chassis_local_yaw =
+            std::atan2(chassis_base->y(), chassis_base->x());
+
         const auto cmd = motion.spin_once();
         if (*command.enable_control) {
             *command.chassis_speed = cmd.chassis_speed;
             *command.gimbal_toward = cmd.gimbal_toward;
+            *command.chassis_direction_error = cmd.chassis_direction_error;
             *command.chassis_behavior = cmd.chassis_mode;
 
             auto mode = cmd.chassis_mode;

@@ -26,7 +26,9 @@ end
 local function face_direction(from, to)
 	local dx = to.x - from.x
 	local dy = to.y - from.y
-	action:gimbal_toward(math.atan(dy, dx), 0)
+	local yaw = math.atan(dy, dx)
+	action:chassis_direction(yaw)
+	action:gimbal_toward(yaw, 0)
 end
 
 local kClimbTimeout = 15
@@ -48,6 +50,7 @@ local function climb_with_retry(from, to)
 			action:warn(string.format(
 				"climb attempt %d/%d timed out, returning to %s",
 				attempt, kClimbMaxRetries, from.name))
+			action:chassis_direction_free()
 			action:switch_motion_mode("normal")
 			request:sleep(1)
 			action:navigate(from)
@@ -58,6 +61,7 @@ local function climb_with_retry(from, to)
 			}
 		else
 			action:info("climb succeeded, navigating to " .. to.name)
+			action:chassis_direction_free()
 			action:navigate(to)
 			request:yield()
 			request:sleep(1.0)
@@ -71,6 +75,7 @@ local function climb_with_retry(from, to)
 			return
 		end
 	end
+	action:chassis_direction_free()
 	bb.user.climb_failed = true
 end
 
@@ -93,6 +98,7 @@ Map:connect(Points.kE, Points.kF) {
 			end,
 			timeout = 30,
 		}
+		action:chassis_direction_free()
 		if timed_out then
 			error("support arm failed")
 		end
