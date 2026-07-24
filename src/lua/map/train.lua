@@ -7,9 +7,13 @@ local Points = {
 	kA = Map:point("A", { x = 0.0, y = 0.0 }),
 	kB = Map:point("B", { x = 0.2, y = 1.0 }),
 	kC = Map:point("C", { x = 1.0, y = 2.5 }),
-	kD = Map:point("D", { x = 2.8, y = 0.0 }),
-	kE = Map:point("E", { x = 2.8, y = -0.8 }),
-	kF = Map:point("F", { x = 2.8, y = -2.3 }),
+	kD = Map:point("D", { x = 2.5, y = 0.0 }),
+	kE = Map:point("E", { x = 2.55, y = -0.8 }),
+	kF = Map:point("F", { x = 2.4, y = -2.1 }),
+	kG = Map:point("G", { x = 5.2, y = -2.2 }),
+	kH = Map:point("H", { x = 5.2, y = 1.2 }),
+	kI = Map:point("I", { x = 5.1, y = 2.7 }),
+	kJ = Map:point("J", { x = 5.1, y = 3.7 }),
 }
 
 local function navigate(_, to)
@@ -17,10 +21,16 @@ local function navigate(_, to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)
 	request:wait_until {
 		monitor = function()
-			return bb.condition.near(to, 0.2)
+			return bb.condition.near(to, 0.3)
 		end,
 	}
 	bb.context.current = to
+end
+
+local function navigate_with_boost(_, to)
+	action:set_boost(true)
+	navigate(_, to)
+	action:set_boost(false)
 end
 
 local function face_direction(from, to)
@@ -68,7 +78,7 @@ local function climb_with_retry(from, to)
 			action:switch_motion_mode("normal")
 			request:wait_until {
 				monitor = function()
-					return bb.condition.near(to, 0.2)
+					return bb.condition.near(to, 0.3)
 				end,
 			}
 			bb.context.current = to
@@ -108,12 +118,16 @@ Map:connect(Points.kE, Points.kF) {
 		action:switch_motion_mode("normal")
 		request:wait_until {
 			monitor = function()
-				return bb.condition.near(to, 0.2)
+				return bb.condition.near(to, 0.3)
 			end,
 		}
 		bb.context.current = to
 	end,
 }
+Map:connect(Points.kF, Points.kG) { navigate, navigate }
+Map:connect(Points.kG, Points.kH) { navigate_with_boost, navigate }
+Map:connect(Points.kH, Points.kI) { navigate, navigate }
+Map:connect(Points.kI, Points.kJ) { navigate, navigate_with_boost }
 
 return {
 	map = Map,

@@ -245,6 +245,12 @@ function action:switch_motion_mode(mode)
 	bb.user.motion_mode = mode
 end
 
+--- @param enable boolean
+function action:set_boost(enable)
+	action:info("set_boost: " .. tostring(enable))
+	api.set_boost_enabled(enable)
+end
+
 --- @param yes boolean
 function action:update_under_attack(yes)
 	api.update_under_attack(yes)
@@ -259,6 +265,27 @@ end
 --- 服务未就绪或 robot_id 未知时本次调用被丢弃并打 WARN，不抛错。
 function action:relocalize()
 	api.relocalize()
+end
+
+--- 查询重定位状态: 0=IDLE, 1=COLLECTING, 2=SUCCEEDED, 3=FAILED
+--- @return integer
+function action:relocalize_status()
+	return api.relocalize_status()
+end
+
+--- 触发重定位并阻塞等待结果，返回 true/false。
+--- @param timeout number 超时秒数
+--- @return boolean
+function action:relocalize_and_wait(timeout)
+	action:relocalize()
+	local deadline = bb.meta.timestamp + timeout
+	repeat
+		local status = action:relocalize_status()
+		if status == 2 then return true end
+		if status == 3 then return false end
+		request:sleep(0.5)
+	until bb.meta.timestamp >= deadline
+	return false
 end
 
 function action:restart_navigation(config)

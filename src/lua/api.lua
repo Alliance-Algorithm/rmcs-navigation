@@ -21,6 +21,7 @@ local util = require("util.native")
 --- @field push_sentry_event fun(event: number) -- SentryEvent enum value
 --- @field update_enable_autoaim fun(enable: boolean)
 --- @field relocalize fun() 触发重定位，红/蓝方由 referee robot_id 自动派生
+--- @field relocalize_status fun(): integer  0=IDLE, 1=COLLECTING, 2=SUCCEEDED, 3=FAILED
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)

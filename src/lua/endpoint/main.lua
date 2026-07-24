@@ -45,6 +45,15 @@ on_init = function()
 			launch_odin1 = false,
 			use_sim_time = false,
 		}
+		scheduler:append_task(function()
+			request:sleep(5)
+			local ok = action:relocalize_and_wait(15)
+			if ok then
+				action:info("重定位成功")
+			else
+				action:warn("重定位失败，使用默认位姿")
+			end
+		end)
 	end
 	action:stop_navigation()
 

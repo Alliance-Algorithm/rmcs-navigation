@@ -100,11 +100,11 @@ local function create_default_blackboard()
 			local y_diff = math.abs(target.y - result.user.y)
 
 			if type(tolerance) == "number" then
-				return math.sqrt(x_diff * x_diff + y_diff * y_diff) <= tolerance
+				return x_diff <= tolerance and y_diff <= tolerance
 			end
 
 			local limit = tolerance or { x = 0.05, y = 0.05 }
-			return math.sqrt(x_diff * x_diff + y_diff * y_diff) <= math.sqrt(limit.x * limit.x + limit.y * limit.y)
+			return x_diff <= limit.x and y_diff <= limit.y
 		end,
 	}
 

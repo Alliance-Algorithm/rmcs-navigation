@@ -28,6 +28,13 @@ public:
     /// - navigation.send_target(1.5, -2.0);
     auto send_target(double x, double y) -> void;
 
+    enum class RelocalizeStatus : std::uint8_t {
+        IDLE = 0,
+        COLLECTING = 1,
+        SUCCEEDED = 2,
+        FAILED = 3,
+    };
+
     /// 触发 rmcs_localization 重定位。
     ///
     /// 行为说明：
@@ -39,6 +46,20 @@ public:
     /// 用法示例：
     /// - navigation.relocalize(rmcs_msgs::RobotColor::RED);
     auto relocalize(rmcs_msgs::RobotColor color) -> void;
+
+    /// 查询重定位当前状态。
+    ///
+    /// 返回值：
+    /// - RelocalizeStatus 枚举: IDLE=0, COLLECTING=1, SUCCEEDED=2, FAILED=3
+    ///
+    /// 行为说明：
+    /// - 订阅 /rmcs_localization/relocalize/result 自动更新状态
+    /// - relocalize() 调用后状态变为 COLLECTING
+    /// - 收到结果 topic 后变为 SUCCEEDED 或 FAILED
+    ///
+    /// 用法示例：
+    /// - auto status = navigation.relocalize_status();
+    auto relocalize_status() const -> RelocalizeStatus;
 
     /// 查询当前位姿（world -> base_link）。
     ///

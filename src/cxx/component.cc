@@ -47,6 +47,7 @@ private:
         OutputInterface<Eigen::Vector2d> gimbal_toward;
         OutputInterface<double> chassis_direction_error;
         OutputInterface<std::unordered_map<SentryEvent, std::uint16_t>> sentry_events;
+        OutputInterface<bool> boost_request;
 
         explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
@@ -58,6 +59,7 @@ private:
             component.register_output(
                 "/rmcs_navigation/chassis_direction_error", chassis_direction_error, kNan);
             component.register_output("/rmcs_navigation/sentry_events", sentry_events);
+            component.register_output("/rmcs_navigation/boost_request", boost_request, false);
         }
     } command{*this};
 
@@ -143,11 +145,16 @@ public:
         lua.inject("update_enable_autoaim", [this](bool enable) {
             *command.enable_autoaim = enable;
         });
+        lua.inject(
+            "set_boost_enabled", [this](bool enable) { *command.boost_request = enable; });
         lua.inject("relocalize", [this] {
             const auto robot_id = *rmcs.robot_id;
             nav.relocalize(
                 robot_id == rmcs_msgs::RobotId::UNKNOWN ? rmcs_msgs::RobotColor::UNKNOWN
                                                         : robot_id.color());
+        });
+        lua.inject("relocalize_status", [this] {
+            return static_cast<int>(nav.relocalize_status());
         });
 
         node::info("Navigation is initialized");

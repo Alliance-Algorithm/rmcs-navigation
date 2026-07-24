@@ -18,6 +18,7 @@
 #include <rclcpp/subscription.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <tf2/exceptions.h>
 #include <tf2/time.h>
 #include <tf2_ros/buffer.h>
@@ -47,6 +48,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     static constexpr auto kGoalPoseTopic = "/goal_pose";
     static constexpr auto kRelocalizeRedService = "/rmcs_localization/relocalize/red";
     static constexpr auto kRelocalizeBlueService = "/rmcs_localization/relocalize/blue";
+    static constexpr auto kRelocalizeResultTopic = "/rmcs_localization/relocalize/result";
     static constexpr auto kServerNotReadyWarnInterval = std::chrono::seconds{5};
 
     struct Target final {
@@ -89,6 +91,9 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
         node.create_client<std_srvs::srv::Trigger>(kRelocalizeRedService);
     std::shared_ptr<TriggerClient> relocalize_blue_client =
         node.create_client<std_srvs::srv::Trigger>(kRelocalizeBlueService);
+
+    std::atomic<RelocalizeStatus> relocalize_status_ = RelocalizeStatus::IDLE;
+    std::shared_ptr<rclcpp::Subscription<std_msgs::msg::Bool>> relocalize_result_sub_;
 
     // Goal Runtime State
     std::shared_ptr<GoalHandle> current_goal_handle;
@@ -198,6 +203,12 @@ public:
                 latest_cmd_vel = {msg->linear.x, msg->linear.y};
                 latest_cmd_vel_time = std::chrono::steady_clock::now();
             });
+        relocalize_result_sub_ = node.create_subscription<std_msgs::msg::Bool>(
+            kRelocalizeResultTopic, 10,
+            [this](const std_msgs::msg::Bool::ConstSharedPtr& msg) {
+                relocalize_status_ = msg->data ? RelocalizeStatus::SUCCEEDED
+                                               : RelocalizeStatus::FAILED;
+            });
     }
 
     ~Impl() {
@@ -245,6 +256,7 @@ public:
             return;
         }
 
+        relocalize_status_ = RelocalizeStatus::COLLECTING;
         client->async_send_request(
             std::make_shared<std_srvs::srv::Trigger::Request>(),
             [this](TriggerClient::SharedFuture future) { // NOLINT
@@ -271,6 +283,10 @@ public:
         move_base_goal_subscription.reset();
         goal_pose_subscription.reset();
         info("goal topic forwarding disabled");
+    }
+
+    auto relocalize_status() const -> RelocalizeStatus {
+        return relocalize_status_.load();
     }
 
     auto check_position() const -> std::tuple<double, double, double> {
@@ -300,6 +316,8 @@ Navigation::~Navigation() noexcept = default;
 auto Navigation::send_target(double x, double y) -> void { pimpl->send_target(x, y); }
 
 auto Navigation::relocalize(rmcs_msgs::RobotColor color) -> void { pimpl->relocalize(color); }
+
+auto Navigation::relocalize_status() const -> RelocalizeStatus { return pimpl->relocalize_status(); }
 
 auto Navigation::switch_topic_forward(bool enable) -> void { pimpl->switch_topic_forward(enable); }
 

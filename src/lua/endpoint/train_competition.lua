@@ -89,13 +89,23 @@ on_init = function()
 				path_task()
 			end
 
-		do_scan(kSpinDuration)
+			do_scan(kSpinDuration)
 
-		action:switch_motion_mode("normal")
-		request:sleep(1.0)
-		local kPathD = Map:search(blackboard.context.current, Points.kF)
+			action:switch_motion_mode("normal")
+			request:sleep(1.0)
+			local kPathD = Map:search(blackboard.context.current, Points.kF)
 			for index, path_task in ipairs(kPathD) do
 				action:info("execute kPathD task: " .. index)
+				path_task()
+			end
+
+			do_scan(kSpinDuration)
+
+			action:switch_motion_mode("normal")
+			request:sleep(1.0)
+			local kPathE = Map:search(blackboard.context.current, Points.kJ)
+			for index, path_task in ipairs(kPathE) do
+				action:info("execute kPathE task: " .. index)
 				path_task()
 			end
 
@@ -129,11 +139,21 @@ on_init = function()
 			action:gimbal_nod(2)
 
 			action:restart_navigation {
-				global_map = "empty",
+				global_map = "战队",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
+			request:sleep(1)
+			scheduler:append_task(function()
+				request:sleep(5)
+				local ok = action:relocalize_and_wait(15)
+				if ok then
+					action:info("重定位成功")
+				else
+					action:warn("重定位失败，使用默认位姿")
+				end
+			end)
 			action:update_enable_control(false)
 
 			intent_handler = scheduler:append_task(intent)
