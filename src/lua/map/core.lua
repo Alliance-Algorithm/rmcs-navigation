@@ -3,12 +3,12 @@
 --- @field x number
 --- @field y number
 
---- @alias MapTask fun(from: MapPoint, to: MapPoint)
+--- @alias MapTask fun(from: MapPoint, to: MapPoint): boolean
 
 --- @class Map
 --- @field private _points table<string, MapPoint>
 --- @field private _registered table<MapPoint, boolean>
---- @field private _edges table<MapPoint, table<MapPoint, fun()>>
+--- @field private _edges table<MapPoint, table<MapPoint, (fun(): boolean)>>
 --- @field private _neighbors table<MapPoint, MapPoint[]>
 local Map = {}
 Map.__index = Map
@@ -34,7 +34,7 @@ end
 
 --- @param from MapPoint
 --- @param to MapPoint
---- @param task fun()
+--- @param task (fun(): boolean)
 function Map:_add_edge(from, to, task)
 	if self._edges[from] == nil then
 		self._edges[from] = {}
@@ -70,10 +70,10 @@ function Map:connect(a, b)
 		end
 
 		self:_add_edge(a, b, function()
-			forward(a, b)
+			return forward(a, b)
 		end)
 		self:_add_edge(b, a, function()
-			backward(b, a)
+			return backward(b, a)
 		end)
 	end
 end
@@ -81,7 +81,7 @@ end
 --- 搜索从 from 到 to 的路径，返回依次执行即可到达的有序零参 Task 列表
 --- @param from MapPoint
 --- @param to MapPoint
---- @return fun()[]
+--- @return (fun(): boolean)[]
 function Map:search(from, to)
 	if not self._registered[from] then
 		error("路径搜索起点未注册: " .. tostring(from and from.name))

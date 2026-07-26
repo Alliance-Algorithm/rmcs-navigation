@@ -16,6 +16,7 @@ local clock = require("util.clock")
 local function trace_task(trace, label)
 	return function(from, to)
 		trace[#trace + 1] = string.format("%s-%s:%s", from.name, to.name, label)
+		return true
 	end
 end
 
@@ -99,10 +100,8 @@ do
 	local c = map:point("c", { x = 2, y = 0 })
 
 	local function pass(from, to)
-		return function()
-			assert_eq(from, a, "same function reused should receive a as from")
-			assert_eq(to, b, "same function reused should receive b as to")
-		end
+		assert((from == a and to == b) or (from == b and to == a), "unexpected edge direction")
+		return true
 	end
 
 	map:connect(a, b) { pass, pass }
@@ -122,7 +121,9 @@ do
 	local b = map:point("b", { x = 1, y = 0 })
 	local c = map:point("c", { x = 2, y = 0 })
 
-	local noop = function(_, _) end
+	local noop = function(_, _)
+		return true
+	end
 	map:connect(a, b) { noop, noop }
 	map:connect(b, c) { noop, noop }
 	map:connect(a, c) { noop, noop }
@@ -168,7 +169,9 @@ do
 	local a = map:point("a", { x = 0, y = 0 })
 	local b = map:point("b", { x = 1, y = 0 })
 
-	local noop = function(_, _) end
+	local noop = function(_, _)
+		return true
+	end
 	map:connect(a, b) { noop, noop }
 	assert_error(function()
 		map:connect(a, b) { noop, noop }
@@ -235,6 +238,7 @@ do
 			end,
 		}
 		bb.context.current = to
+		return true
 	end
 
 	map:connect(a, b) { navigate, navigate }
@@ -276,7 +280,9 @@ do
 		error("boom")
 	end
 	local function ok_task(from, to)
+		_ = from
 		bb.context.current = to
+		return true
 	end
 
 	map:connect(a, b) { failing, ok_task }

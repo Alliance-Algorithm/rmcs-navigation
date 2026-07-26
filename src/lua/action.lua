@@ -207,7 +207,7 @@ function action:reset_gimbal_speed()
 	self.gimbal.yt_per_rad = kYtPerRad
 end
 
---- @param mode "normal" | "attack" | "road" | "step" | "slope"
+--- @param mode "normal" | "attack" | "slope"
 function action:switch_motion_mode(mode)
 	api.switch_motion_mode(mode)
 end
@@ -233,6 +233,24 @@ end
 
 function action:toggle_record()
 	return api.toggle_record()
+end
+
+--- @param world_yaw number 台阶方向，world 系 XY yaw。
+--- @param is_climb boolean true 上台阶，false 下台阶。
+--- @return boolean success
+function action:blocking_cross_step(world_yaw, is_climb)
+	api.set_climb_switch(is_climb)
+	api.set_climb_direction(world_yaw)
+	request:yield()
+
+	while true do
+		local status = api.get_climb_status()
+		if status == 1.0 or status == -1.0 then
+			api.set_climb_direction(NaN)
+			return status == 1.0
+		end
+		request:yield()
+	end
 end
 
 --- @param position {x: number, y: number}

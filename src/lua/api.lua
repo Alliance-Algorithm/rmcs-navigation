@@ -15,7 +15,10 @@ local util = require("util.native")
 --- @field update_enable_control fun(enable: boolean)
 --- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(yaw: number, pitch: number)
---- @field switch_motion_mode fun(mode: "normal" | "attack" | "road" | "step" | "slope")
+--- @field set_climb_direction fun(angle: number)
+--- @field set_climb_switch fun(is_climb: boolean)
+--- @field get_climb_status fun(): number
+--- @field switch_motion_mode fun(mode: "normal" | "attack" | "slope")
 --- @field update_under_attack fun(yes: boolean)
 --- @field relocalize fun() 触发重定位，红/蓝方由 referee robot_id 自动派生
 ---

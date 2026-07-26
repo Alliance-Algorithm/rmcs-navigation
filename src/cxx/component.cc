@@ -37,6 +37,8 @@ private:
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
+        OutputInterface<double> climb_cross_direction;
+        OutputInterface<bool> climb_is_climb;
 
         explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
@@ -45,6 +47,9 @@ private:
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
             component.register_output("/rmcs_navigation/gimbal_toward", gimbal_toward, kVecNaN);
+            component.register_output(
+                "/rmcs_navigation/request/cross_direction", climb_cross_direction, kNan);
+            component.register_output("/rmcs_navigation/request/is_climb", climb_is_climb, false);
         }
     } command{*this};
 
@@ -101,12 +106,15 @@ public:
         lua.inject(
             "switch_motion_mode", [this](const std::string& mode) { motion.switch_mode(mode); });
         lua.inject("update_under_attack", [this](bool yes) { motion.context.under_attack = yes; });
-        lua.inject("relocalize", [this] {
-            const auto robot_id = *rmcs.robot_id;
-            nav.relocalize(
-                robot_id == rmcs_msgs::RobotId::UNKNOWN ? rmcs_msgs::RobotColor::UNKNOWN
-                                                        : robot_id.color());
+
+        lua.inject("set_climb_direction", [this](double world_yaw) {
+            *command.climb_cross_direction = motion.world2odom(world_yaw);
         });
+        lua.inject(
+            "set_climb_switch", [this](bool is_climb) { *command.climb_is_climb = is_climb; });
+        lua.inject("get_climb_status", [this] { return *rmcs.climber_status; });
+
+        lua.inject("relocalize", [this] { nav.relocalize(rmcs.robot_id->color()); });
 
         node::info("Navigation is initialized");
     }
@@ -132,7 +140,7 @@ public:
             (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
 
         const auto direction = fast_tf::cast<rmcs_description::OdomGimbalImu>(
-            rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
+            rmcs_description::BaseLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
         motion.context.current_local_yaw = std::atan2(direction->y(), direction->x());
 
         const auto cmd = motion.spin_once();

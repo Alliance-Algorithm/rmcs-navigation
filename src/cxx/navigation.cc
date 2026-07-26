@@ -239,7 +239,7 @@ public:
         }
 
         const auto& client =
-            color == rmcs_msgs::RobotColor::BLUE ? relocalize_blue_client : relocalize_red_client;
+            (color == rmcs_msgs::RobotColor::BLUE) ? relocalize_blue_client : relocalize_red_client;
         if (!client->service_is_ready()) {
             warn("relocalize ignored: service {} is not available", client->get_service_name());
             return;

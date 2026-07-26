@@ -39,6 +39,7 @@ public:
 
     explicit MotionFsm(rclcpp::Node& node) noexcept;
     auto switch_mode(const std::string& mode) -> void;
+    auto world2odom(double yaw) -> double;
     auto spin_once() noexcept -> Command;
 };
 

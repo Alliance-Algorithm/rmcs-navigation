@@ -94,7 +94,6 @@ lua/
 
   task/                         迷你任务
     navigate-to.lua             > 导航至（普通事件，不涉及地形跨越）
-    crossing-road-zone.lua      > 跨越公路区
     cruise-loop.lua             > 巡航进行时
 
   endpoint/                     接入点

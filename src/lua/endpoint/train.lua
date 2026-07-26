@@ -32,39 +32,30 @@ on_init = function()
 
 	local intent_handler = nil
 	local intent = function()
-		blackboard.context.current = Points.kA
+		blackboard.context.current = Points.kOrigin
 
-		local kSpinDuration = 5
+		local kPoints = {
+			Points.kAttackInLeft,
+			Points.kAttackInRight,
+			Points.kUnderRune,
+			Points.kAttackAtHole,
+		}
 		while true do
-			action:gimbal_suspend()
-			local kPathA = Map:search(blackboard.context.current, Points.kB)
-			for index, path_task in ipairs(kPathA) do
-				action:info("execute kPathA task: " .. index)
-				path_task()
+			for _, point in ipairs(kPoints) do
+				action:gimbal_suspend()
+
+				for index, path_task in ipairs(Map:search(blackboard.context.current, point)) do
+					action:info("Execute path task: " .. index)
+					if not path_task() then
+						action:fuck("Failed to follow path, return")
+						return
+					end
+				end
+				blackboard.context.current = point
+
+				action:gimbal_scan(0, 0)
+				request:sleep(3)
 			end
-
-			action:gimbal_scan(0, 0)
-			request:sleep(kSpinDuration)
-
-			action:gimbal_suspend()
-			local kPathB = Map:search(blackboard.context.current, Points.kC)
-			for index, path_task in ipairs(kPathB) do
-				action:info("execute kPathB task: " .. index)
-				path_task()
-			end
-
-			action:gimbal_scan(0, 0)
-			request:sleep(kSpinDuration)
-
-			action:gimbal_suspend()
-			local kPathC = Map:search(blackboard.context.current, Points.kE)
-			for index, path_task in ipairs(kPathC) do
-				action:info("execute kPathC task: " .. index)
-				path_task()
-			end
-
-			action:gimbal_scan(0, 0)
-			request:sleep(kSpinDuration)
 		end
 	end
 

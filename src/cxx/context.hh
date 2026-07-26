@@ -28,6 +28,7 @@ public:
     InputInterface<Eigen::Vector2d> ljoystick;
 
     InputInterface<double> chassis_power_limit_referee;
+    InputInterface<double> climber_status;
     InputInterface<bool> auto_aim_should_control;
 
     InputInterface<rmcs_description::SentryTf> tf;

@@ -40,7 +40,9 @@ on_init = function()
 			local kPathA = Map:search(blackboard.context.current, Points.kB)
 			for index, path_task in ipairs(kPathA) do
 				action:info("execute kPathA task: " .. index)
-				path_task()
+				if not path_task() then
+					return
+				end
 			end
 
 			action:gimbal_scan(0, 0)
@@ -50,7 +52,9 @@ on_init = function()
 			local kPathB = Map:search(blackboard.context.current, Points.kC)
 			for index, path_task in ipairs(kPathB) do
 				action:info("execute kPathB task: " .. index)
-				path_task()
+				if not path_task() then
+					return
+				end
 			end
 
 			action:gimbal_scan(0, 0)
@@ -60,7 +64,9 @@ on_init = function()
 			local kPathC = Map:search(blackboard.context.current, Points.kE)
 			for index, path_task in ipairs(kPathC) do
 				action:info("execute kPathC task: " .. index)
-				path_task()
+				if not path_task() then
+					return
+				end
 			end
 
 			action:gimbal_scan(0, 0)
