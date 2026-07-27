@@ -56,12 +56,12 @@ private:
     auto sync_blackboard() {
         auto [x, y, yaw] = nav.check_position();
 
+        // 高频查询 TF 是不对的，所以应该先缓存一份
+        // context 保留 NaN 作为 world 不可用的真实信号，blackboard 单独 fallback
+        motion.context.current_world_yaw = yaw;
         if (std::isnan(yaw)) {
             yaw = motion.context.current_local_yaw;
         }
-
-        // 高频查询 TF 是不对的，所以应该先缓存一份
-        motion.context.current_world_yaw = yaw;
         motion.context.x = x;
         motion.context.y = y;
 

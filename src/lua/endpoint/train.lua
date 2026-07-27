@@ -81,20 +81,21 @@ on_init = function()
 		else
 			action:info("导航启动")
 			action:update_enable_control(true)
-
-			action:gimbal_nod(2)
+			action:gimbal_suspend()
 
 			action:restart_navigation {
-				global_map = "empty",
+				global_map = "战队",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
 
 			request:sleep(2)
+			action:relocalize()
 			action:switch_topic_forward(true)
 			action:switch_motion_mode("attack")
-			action:gimbal_scan(0, 0)
+
+			request:sleep(3)
 
 			intent_handler = scheduler:append_task(intent)
 
@@ -119,4 +120,6 @@ on_tick = function()
 	scheduler:spin_once()
 end
 
-on_exit = function() end
+on_exit = function()
+	action:stop_navigation()
+end

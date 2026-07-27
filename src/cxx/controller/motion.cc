@@ -23,35 +23,26 @@ struct MotionFsm::Impl {
 
     LowPassFilter<Eigen::Vector2d> slope_filter{Tau<3.0>{}, Eigen::Vector2d::Zero()};
 
-    bool yaw_bias_initialized = false;
-    double yaw_bias = kNan;
+    double yaw_bias = 0;
     double last_world_yaw = kNan;
 
-    static auto normalize_yaw(double yaw) -> double {
+    static constexpr auto normalize_yaw(double yaw) noexcept {
         return std::atan2(std::sin(yaw), std::cos(yaw));
     }
 
-    auto update_yaw_bias() -> bool {
+    auto update_yaw_bias() {
         const auto world_yaw = context.current_world_yaw;
-        const auto odom_yaw = context.current_local_yaw;
-        if (!std::isfinite(world_yaw) || !std::isfinite(odom_yaw))
-            return false;
-
-        constexpr auto kYawBiasCorrectionGain = 0.002;
-        const auto measured_bias = normalize_yaw(world_yaw - odom_yaw);
-        if (!yaw_bias_initialized) {
-            yaw_bias = measured_bias;
-            yaw_bias_initialized = true;
-        } else {
-            const auto bias_error = normalize_yaw(measured_bias - yaw_bias);
-            yaw_bias = normalize_yaw(yaw_bias + kYawBiasCorrectionGain * bias_error);
-        }
+        if (!std::isfinite(world_yaw) || world_yaw == last_world_yaw)
+            return;
         last_world_yaw = world_yaw;
-        return true;
+
+        constexpr auto kGain = 0.002;
+        const auto error = normalize_yaw(world_yaw - context.current_local_yaw - yaw_bias);
+        yaw_bias = normalize_yaw(yaw_bias + kGain * error);
     }
 
-    auto world2odom(double world_yaw) const -> double {
-        if (!std::isfinite(world_yaw) || !yaw_bias_initialized)
+    auto world2odom(double world_yaw) const {
+        if (!std::isfinite(world_yaw))
             return kNan;
         return normalize_yaw(world_yaw - yaw_bias);
     }

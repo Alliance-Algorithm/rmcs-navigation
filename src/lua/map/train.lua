@@ -5,7 +5,7 @@ local bb = require("blackboard").singleton()
 
 local Points = {
 	kOrigin = Map:point("kBegin", { x = 0.0, y = 0.0 }),
-	kAttackInLeft = Map:point("kAttackInLeft", { x = 2.4, y = 3.9 }),
+	kAttackInLeft = Map:point("kAttackInLeft", { x = 2.0, y = 3.5 }),
 	kAttackInRight = Map:point("kAttackInRight", { x = 2.4, y = 0.2 }),
 	kStepBegin = Map:point("kStepBegin", { x = 2.4, y = -0.7 }),
 	kStepFinal = Map:point("kStepFinal", { x = 2.4, y = -2.0 }),
@@ -19,7 +19,7 @@ local function navigate(_, to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)
 	local timeout = request:wait_until {
 		monitor = function()
-			return bb.condition.near(to, 0.2)
+			return bb.condition.near(to, 0.5)
 		end,
 		timeout = 15,
 	}
