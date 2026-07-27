@@ -68,6 +68,8 @@ struct RmcsContext::Impl {
         make_input("/referee/current_hp", context.robot_health, std::uint16_t{400});
         make_input("/referee/shooter/bullet_allowance", context.robot_bullet, std::uint16_t{300});
         make_input("/referee/id", context.robot_id, rmcs_msgs::RobotId{});
+        make_input("/referee/enemy/outpost/hp", context.enemy_outpost_hp, std::uint16_t{0});
+        make_input("/referee/enemy/base/hp", context.enemy_base_hp, std::uint16_t{0});
 
         make_input("/remote/switch/right", context.switch_right, rmcs_msgs::Switch::UNKNOWN);
         make_input("/remote/switch/left", context.switch_left, rmcs_msgs::Switch::UNKNOWN);

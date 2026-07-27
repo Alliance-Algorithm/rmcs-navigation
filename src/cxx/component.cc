@@ -10,6 +10,9 @@
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/rmcs_msgs.hpp>
 
+#include <string>
+#include <unordered_map>
+
 namespace rmcs::navigation {
 
 class Navigation final
@@ -31,6 +34,7 @@ private:
 
     struct Command {
         using ChassisMode = rmcs_msgs::ChassisMode;
+        using SentryEventCounts = std::unordered_map<rmcs_msgs::SentryEvent, std::uint16_t>;
 
         OutputInterface<bool> enable_control;
         OutputInterface<bool> enable_autoaim;
@@ -39,6 +43,7 @@ private:
         OutputInterface<Eigen::Vector2d> gimbal_toward;
         OutputInterface<double> climb_cross_direction;
         OutputInterface<bool> climb_is_climb;
+        OutputInterface<SentryEventCounts> sentry_events;
 
         explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
@@ -50,6 +55,8 @@ private:
             component.register_output(
                 "/rmcs_navigation/request/cross_direction", climb_cross_direction, kNan);
             component.register_output("/rmcs_navigation/request/is_climb", climb_is_climb, false);
+            component.register_output(
+                "/rmcs_navigation/sentry_events", sentry_events, SentryEventCounts{});
         }
     } command{*this};
 
@@ -77,6 +84,8 @@ private:
 
         auto game = blackboard["game"].get<sol::table>();
         game["stage"] = rmcs_msgs::to_string(*rmcs.game_stage);
+        game["enemy_outpost_hp"] = *rmcs.enemy_outpost_hp;
+        game["enemy_base_hp"] = *rmcs.enemy_base_hp;
 
         auto play = blackboard["play"].get<sol::table>();
         play["rswitch"] = rmcs_msgs::to_string(*rmcs.switch_right);
@@ -115,6 +124,30 @@ public:
         lua.inject("get_climb_status", [this] { return *rmcs.climber_status; });
 
         lua.inject("relocalize", [this] { nav.relocalize(rmcs.robot_id->color()); });
+
+        lua.inject("sentry_event", [this](const std::string& name) {
+            using SentryEvent = rmcs_msgs::SentryEvent;
+            static const auto table = std::unordered_map<std::string, SentryEvent>{
+                {"SWITCH_POSE_ATTACK", SentryEvent::SWITCH_POSE_ATTACK},
+                {"SWITCH_POSE_DEFENSE", SentryEvent::SWITCH_POSE_DEFENSE},
+                {"SWITCH_POSE_MOVE", SentryEvent::SWITCH_POSE_MOVE},
+                {"SWITCH_POSE_POWERED_ATTACK", SentryEvent::SWITCH_POSE_POWERED_ATTACK},
+                {"SWITCH_POSE_POWERED_DEFENSE", SentryEvent::SWITCH_POSE_POWERED_DEFENSE},
+                {"SWITCH_POSE_POWERED_MOVE", SentryEvent::SWITCH_POSE_POWERED_MOVE},
+                {"CONFIRM_REBIRTH", SentryEvent::CONFIRM_REBIRTH},
+                {"CONFIRM_INSTANT_REBIRTH", SentryEvent::CONFIRM_INSTANT_REBIRTH},
+                {"EXCHANGE_AMMO_SUPPLY_POINT", SentryEvent::EXCHANGE_AMMO_SUPPLY_POINT},
+                {"EXCHANGE_AMMO_REMOTE", SentryEvent::EXCHANGE_AMMO_REMOTE},
+                {"EXCHANGE_HP_REMOTE", SentryEvent::EXCHANGE_HP_REMOTE},
+                {"ACTIVATE_ENERGY_CORE", SentryEvent::ACTIVATE_ENERGY_CORE},
+            };
+
+            if (const auto it = table.find(name); it != table.end()) {
+                ++(*command.sentry_events)[it->second];
+            } else {
+                node::warn("Unknown sentry event: {}", name);
+            }
+        });
 
         node::info("Navigation is initialized");
     }

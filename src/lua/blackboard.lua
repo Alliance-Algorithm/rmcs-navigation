@@ -12,6 +12,20 @@ Intent = {
 	spikes = "spikes",
 	supply = "supply",
 }
+SentryEvent = {
+	SWITCH_POSE_ATTACK = "SWITCH_POSE_ATTACK",
+	SWITCH_POSE_DEFENSE = "SWITCH_POSE_DEFENSE",
+	SWITCH_POSE_MOVE = "SWITCH_POSE_MOVE",
+	SWITCH_POSE_POWERED_ATTACK = "SWITCH_POSE_POWERED_ATTACK",
+	SWITCH_POSE_POWERED_DEFENSE = "SWITCH_POSE_POWERED_DEFENSE",
+	SWITCH_POSE_POWERED_MOVE = "SWITCH_POSE_POWERED_MOVE",
+	CONFIRM_REBIRTH = "CONFIRM_REBIRTH",
+	CONFIRM_INSTANT_REBIRTH = "CONFIRM_INSTANT_REBIRTH",
+	EXCHANGE_AMMO_SUPPLY_POINT = "EXCHANGE_AMMO_SUPPLY_POINT",
+	EXCHANGE_AMMO_REMOTE = "EXCHANGE_AMMO_REMOTE",
+	EXCHANGE_HP_REMOTE = "EXCHANGE_HP_REMOTE",
+	ACTIVATE_ENERGY_CORE = "ACTIVATE_ENERGY_CORE",
+}
 
 local function create_default_blackboard()
 	local result = {
@@ -26,6 +40,8 @@ local function create_default_blackboard()
 		},
 		game = {
 			stage = GameStage.UNKNOWN,
+			enemy_outpost_hp = 0,
+			enemy_base_hp = 0,
 		},
 		play = {
 			rswitch = "UNKNOWN",

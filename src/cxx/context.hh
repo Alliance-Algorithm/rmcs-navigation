@@ -21,6 +21,8 @@ public:
     InputInterface<rmcs_msgs::RobotId> robot_id;
     InputInterface<std::uint16_t> robot_health;
     InputInterface<std::uint16_t> robot_bullet;
+    InputInterface<std::uint16_t> enemy_outpost_hp;
+    InputInterface<std::uint16_t> enemy_base_hp;
 
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
