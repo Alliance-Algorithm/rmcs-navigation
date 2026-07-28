@@ -23,28 +23,44 @@ struct MotionFsm::Impl {
 
     LowPassFilter<Eigen::Vector2d> slope_filter{Tau<3.0>{}, Eigen::Vector2d::Zero()};
 
-    double yaw_bias = 0;
-    double last_world_yaw = kNan;
+    bool gimbal_yaw_bias_initialized = false;
+    double gimbal_yaw_bias = kNan;
+    std::uint64_t last_yaw_sample = 0;
 
-    static constexpr auto normalize_yaw(double yaw) noexcept {
+    static auto normalize_yaw(double yaw) -> double {
         return std::atan2(std::sin(yaw), std::cos(yaw));
     }
 
-    auto update_yaw_bias() {
+    auto update_yaw_bias(double local_yaw, bool& initialized, double& bias) -> bool {
         const auto world_yaw = context.current_world_yaw;
-        if (!std::isfinite(world_yaw) || world_yaw == last_world_yaw)
-            return;
-        last_world_yaw = world_yaw;
+        if (!std::isfinite(world_yaw) || !std::isfinite(local_yaw))
+            return false;
 
-        constexpr auto kGain = 0.002;
-        const auto error = normalize_yaw(world_yaw - context.current_local_yaw - yaw_bias);
-        yaw_bias = normalize_yaw(yaw_bias + kGain * error);
+        constexpr auto kYawBiasCorrectionGain = 0.002;
+        const auto measured_bias = normalize_yaw(world_yaw - local_yaw);
+        if (!initialized) {
+            bias = measured_bias;
+            initialized = true;
+        } else {
+            const auto bias_error = normalize_yaw(measured_bias - bias);
+            bias = normalize_yaw(bias + kYawBiasCorrectionGain * bias_error);
+        }
+        return true;
     }
 
-    auto world2odom(double world_yaw) const {
-        if (!std::isfinite(world_yaw))
+    auto update_yaw_biases() -> void {
+        if (last_yaw_sample == context.yaw_sample)
+            return;
+
+        last_yaw_sample = context.yaw_sample;
+        update_yaw_bias(
+            context.current_gimbal_yaw, gimbal_yaw_bias_initialized, gimbal_yaw_bias);
+    }
+
+    auto world2gimbal_odom(double world_yaw) const -> double {
+        if (!std::isfinite(world_yaw) || !gimbal_yaw_bias_initialized)
             return kNan;
-        return normalize_yaw(world_yaw - yaw_bias);
+        return normalize_yaw(world_yaw - gimbal_yaw_bias);
     }
 
     auto update_gimbal_target() -> Eigen::Vector2d {
@@ -58,15 +74,12 @@ struct MotionFsm::Impl {
         const auto pitch = context.target_gimbal_toward.y();
         const auto wy = context.current_world_yaw;
 
-        // world 不可用：目标按 OdomGimbalImu 绝对角直通（与 current_local_yaw 同源）
+        // world 不可用时保持上一帧云台目标，避免切换坐标参考。
         if (!std::isfinite(wy)) {
-            if (!std::isfinite(target_yaw)) {
-                return {command.gimbal_toward.x(), command.gimbal_toward.y()};
-            }
-            return {normalize_yaw(target_yaw), pitch};
+            return {command.gimbal_toward.x(), command.gimbal_toward.y()};
         }
 
-        const auto target_local_yaw = world2odom(target_yaw);
+        const auto target_local_yaw = world2gimbal_odom(target_yaw);
         return {target_local_yaw, pitch};
     }
 
@@ -124,7 +137,7 @@ struct MotionFsm::Impl {
     }
 
     auto spin_once() noexcept -> Command {
-        update_yaw_bias();
+        update_yaw_biases();
         fsm.spin_once();
         return command;
     }
@@ -137,7 +150,7 @@ MotionFsm::~MotionFsm() noexcept = default;
 
 auto MotionFsm::switch_mode(const std::string& mode) -> void { pimpl->switch_mode(mode); }
 
-auto MotionFsm::world2odom(double yaw) -> double { return pimpl->world2odom(yaw); }
+auto MotionFsm::world2gimbal_odom(double yaw) -> double { return pimpl->world2gimbal_odom(yaw); }
 
 auto MotionFsm::spin_once() noexcept -> Command { return pimpl->spin_once(); }
 

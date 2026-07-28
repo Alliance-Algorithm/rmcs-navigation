@@ -25,6 +25,7 @@ private:
     static inline auto kVecNaN = Eigen::Vector2d{kNan, kNan};
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
+    double pending_climb_world_yaw = kNan;
 
     details::LuaContext lua{*this};
     details::Navigation nav{*this};
@@ -38,6 +39,7 @@ private:
 
         OutputInterface<bool> enable_control;
         OutputInterface<bool> enable_autoaim;
+        OutputInterface<bool> enable_supercap_;
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
@@ -48,6 +50,7 @@ private:
         explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
             component.register_output("/rmcs_navigation/enable_autoaim", enable_autoaim, true);
+            component.register_output("/rmcs_navigation/enable_supercap", enable_supercap_, false);
             component.register_output(
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
@@ -64,11 +67,8 @@ private:
         auto [x, y, yaw] = nav.check_position();
 
         // 高频查询 TF 是不对的，所以应该先缓存一份
-        // context 保留 NaN 作为 world 不可用的真实信号，blackboard 单独 fallback
         motion.context.current_world_yaw = yaw;
-        if (std::isnan(yaw)) {
-            yaw = motion.context.current_local_yaw;
-        }
+        ++motion.context.yaw_sample;
         motion.context.x = x;
         motion.context.y = y;
 
@@ -115,9 +115,16 @@ public:
         lua.inject(
             "switch_motion_mode", [this](const std::string& mode) { motion.switch_mode(mode); });
         lua.inject("update_under_attack", [this](bool yes) { motion.context.under_attack = yes; });
+        lua.inject(
+            "update_supercap_boost", [this](bool enable) { *command.enable_supercap_ = enable; });
 
         lua.inject("set_climb_direction", [this](double world_yaw) {
-            *command.climb_cross_direction = motion.world2odom(world_yaw);
+            if (std::isfinite(world_yaw)) {
+                pending_climb_world_yaw = world_yaw;
+            } else {
+                pending_climb_world_yaw = kNan;
+                *command.climb_cross_direction = kNan;
+            }
         });
         lua.inject(
             "set_climb_switch", [this](bool is_climb) { *command.climb_is_climb = is_climb; });
@@ -155,6 +162,11 @@ public:
     auto before_updating() -> void override { rmcs.ensure_defaults(); }
 
     auto update() -> void override {
+        const auto gimbal_direction = fast_tf::cast<rmcs_description::OdomGimbalImu>(
+            rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
+        motion.context.current_gimbal_yaw =
+            std::atan2(gimbal_direction->y(), gimbal_direction->x());
+
         if (lua_tick_count++ == 10) [[unlikely]] {
             lua_tick_count = 0;
             sync_blackboard();
@@ -172,11 +184,14 @@ public:
         motion.context.target_chassis_speed =
             (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
 
-        const auto direction = fast_tf::cast<rmcs_description::OdomGimbalImu>(
-            rmcs_description::BaseLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
-        motion.context.current_local_yaw = std::atan2(direction->y(), direction->x());
-
         const auto cmd = motion.spin_once();
+        if (std::isfinite(pending_climb_world_yaw)) {
+            const auto target = motion.world2gimbal_odom(pending_climb_world_yaw);
+            if (std::isfinite(target)) {
+                *command.climb_cross_direction = target;
+                pending_climb_world_yaw = kNan;
+            }
+        }
         if (*command.enable_control) {
             *command.chassis_speed = cmd.chassis_speed;
             *command.gimbal_toward = cmd.gimbal_toward;
