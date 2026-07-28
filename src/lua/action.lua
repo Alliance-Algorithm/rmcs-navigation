@@ -33,6 +33,9 @@ local action = {
 		full_scan_start = 0,
 		full_scan_stamp = 0,
 	},
+	climb = {
+		up = false,
+	},
 }
 
 --- 绑定 action 的后台任务。
@@ -167,6 +170,7 @@ function action:gimbal_scan(y1, y2)
 	self.gimbal.p1 = 0 + 0.2
 	self.gimbal.p2 = 0 - 0.2
 end
+
 function action:gimbal_toward(yaw, pitch)
 	action:info("Set gimbal to toward mode")
 	self.gimbal.mode = "toward"
@@ -175,14 +179,17 @@ function action:gimbal_toward(yaw, pitch)
 	self.gimbal.p1 = pitch
 	self.gimbal.p2 = pitch
 end
+
 function action:gimbal_free()
 	action:info("Set gimbal to free mode")
 	self.gimbal.mode = "free"
 end
+
 function action:gimbal_suspend()
 	action:info("Set gimbal to suspended mode")
 	self.gimbal.mode = "suspended"
 end
+
 -- @param interval number
 function action:gimbal_suspend_during(interval)
 	self.gimbal.suspend_timeline = clock:now() + interval
@@ -198,10 +205,12 @@ end
 function action:set_gimbal_pt(t)
 	self.gimbal.pt_per_rad = t
 end
+
 --- @param t number
 function action:set_gimbal_yt(t)
 	self.gimbal.yt_per_rad = t
 end
+
 function action:reset_gimbal_speed()
 	self.gimbal.pt_per_rad = kPtPerRad
 	self.gimbal.yt_per_rad = kYtPerRad
@@ -215,6 +224,11 @@ end
 --- @param yes boolean
 function action:update_under_attack(yes)
 	api.update_under_attack(yes)
+end
+
+--- @param enable boolean
+function action:update_supercap_boost(enable)
+	api.update_supercap_boost(enable)
 end
 
 --- 触发一次重定位，红/蓝方由 referee robot_id 自动派生；
@@ -240,6 +254,7 @@ end
 --- @param is_climb boolean true 上台阶，false 下台阶。
 --- @return boolean success
 function action:blocking_cross_step(world_yaw, is_climb)
+	self.climb.up = is_climb
 	api.set_climb_switch(is_climb)
 	api.set_climb_direction(world_yaw)
 	request:yield()

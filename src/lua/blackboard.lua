@@ -58,6 +58,7 @@ local function create_default_blackboard()
 		rule = {
 			-- 状态类规则
 			health_limit = 200,
+			health_critical = 50,
 			bullet_limit = 20,
 			health_ready = 350,
 			bullet_ready = 95,
@@ -72,6 +73,8 @@ local function create_default_blackboard()
 			intent_to_return = Intent.nothing,
 
 			current = nil, -- 当前地图节点，由 Map 边 Task 成功后推进
+
+			power_move = false,
 		},
 	}
 

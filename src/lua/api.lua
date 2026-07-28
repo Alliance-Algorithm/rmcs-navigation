@@ -13,6 +13,7 @@ local util = require("util.native")
 --- @field fuck fun(message: string)
 ---
 --- @field update_enable_control fun(enable: boolean)
+--- @field update_supercap_boost fun(enable: boolean)
 --- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(yaw: number, pitch: number)
 --- @field set_climb_direction fun(angle: number)

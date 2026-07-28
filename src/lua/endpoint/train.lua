@@ -70,6 +70,7 @@ on_init = function()
 			action:update_enable_control(false)
 			action:switch_topic_forward(false)
 
+			action:update_supercap_boost(false)
 			action:stop_navigation()
 
 			if intent_handler ~= nil then
@@ -92,6 +93,7 @@ on_init = function()
 
 			request:sleep(2)
 			action:relocalize()
+			request:sleep(5)
 			action:switch_topic_forward(true)
 			action:switch_motion_mode("attack")
 
