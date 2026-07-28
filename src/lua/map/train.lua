@@ -5,10 +5,10 @@ local bb = require("blackboard").singleton()
 
 local Points = {
 	kOrigin = Map:point("kBegin", { x = 0.0, y = 0.0 }),
-	kAttackInLeft = Map:point("kAttackInLeft", { x = 1.0, y = 0.2 }),
-	kAttackInRight = Map:point("kAttackInRight", { x = 2.4, y = 0.2 }),
-	kStepBegin = Map:point("kStepBegin", { x = 2.4, y = -0.7 }),
-	kStepFinal = Map:point("kStepFinal", { x = 2.4, y = -2.0 }),
+	kAttackInLeft = Map:point("kAttackInLeft", { x = 1.0, y = 2.4 }),
+	kAttackInRight = Map:point("kAttackInRight", { x = 2.6, y = 0.2 }),
+	kStepBegin = Map:point("kStepBegin", { x = 2.5, y = -0.8 }),
+	kStepFinal = Map:point("kStepFinal", { x = 2.5, y = -2.2 }),
 	kUnderSlope = Map:point("kUnderSlope", { x = 4.7, y = -2.1 }),
 	kUnderRune = Map:point("kUnderRune", { x = 4.7, y = -2.1 }),
 	kAttackAtHole = Map:point("kAttackAtHole", { x = 4.7, y = -2.1 }),
@@ -23,6 +23,7 @@ local function navigate(_, to)
 		end,
 		timeout = 15,
 	}
+	action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
 	return not timeout
 end
 
@@ -31,12 +32,14 @@ Map:connect(Points.kOrigin, Points.kAttackInRight) { navigate, navigate }
 Map:connect(Points.kAttackInRight, Points.kStepBegin) { navigate, navigate }
 Map:connect(Points.kStepBegin, Points.kStepFinal) {
 	function(from, to)
+		action:cancel_target()
 		action:update_supercap_boost(true)
 		local success = action:blocking_cross_step(math.atan(to.y - from.y, to.x - from.x), true)
 		action:update_supercap_boost(false)
 		return success
 	end,
 	function(from, to)
+		action:cancel_target()
 		action:update_supercap_boost(true)
 		local success = action:blocking_cross_step(math.atan(to.y - from.y, to.x - from.x), false)
 		action:update_supercap_boost(false)

@@ -232,6 +232,15 @@ public:
         send_target(goal, request_id);
     }
 
+    auto cancel_target() -> void {
+        active_goal.reset();
+        ++latest_request_id;
+
+        auto handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
+        if (handle)
+            client->async_cancel_goal(handle);
+    }
+
     auto relocalize(rmcs_msgs::RobotColor color) -> void {
         if (color == rmcs_msgs::RobotColor::UNKNOWN) {
             warn("relocalize ignored: robot color is unknown");
@@ -298,6 +307,8 @@ Navigation::Navigation(rclcpp::Node& node) noexcept
 Navigation::~Navigation() noexcept = default;
 
 auto Navigation::send_target(double x, double y) -> void { pimpl->send_target(x, y); }
+
+auto Navigation::cancel_target() -> void { pimpl->cancel_target(); }
 
 auto Navigation::relocalize(rmcs_msgs::RobotColor color) -> void { pimpl->relocalize(color); }
 

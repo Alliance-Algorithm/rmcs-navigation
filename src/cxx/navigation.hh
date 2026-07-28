@@ -28,6 +28,17 @@ public:
     /// - navigation.send_target(1.5, -2.0);
     auto send_target(double x, double y) -> void;
 
+    /// 取消当前导航目标。
+    ///
+    /// 行为说明：
+    /// - 清除活跃目标并使在途回调失效；
+    /// - 若存在已接受的 goal，向 NAV2 发送取消请求；
+    /// - 没有活跃目标时为 no-op。
+    ///
+    /// 用法示例：
+    /// - navigation.cancel_target();
+    auto cancel_target() -> void;
+
     /// 触发 rmcs_localization 重定位。
     ///
     /// 行为说明：

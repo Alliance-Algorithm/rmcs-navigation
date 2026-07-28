@@ -107,6 +107,7 @@ public:
         lua.inject(
             "update_enable_control", [this](bool enable) { *command.enable_control = enable; });
         lua.inject("send_target", [this](double x, double y) { nav.send_target(x, y); });
+        lua.inject("cancel_target", [this] { nav.cancel_target(); });
         lua.inject(
             "switch_topic_forward", [this](bool enable) { nav.switch_topic_forward(enable); });
         lua.inject("update_gimbal_direction", [this](double yaw, double pitch) {

@@ -54,13 +54,18 @@ on_init = function()
 				action:info("关闭录制")
 				action:gimbal_nod(2)
 				recording = false
+
+				request:sleep(2)
+				action:gimbal_toward(0 / 0, 0 / 0)
 			else
 				action:info("开始录制")
 				action:gimbal_nod(1)
 				recording = true
+
+				request:sleep(2)
+				action:gimbal_toward(0 / 0, 0 / 0)
 			end
 
-			request:sleep(2)
 			action:update_enable_control(false)
 		end)
 

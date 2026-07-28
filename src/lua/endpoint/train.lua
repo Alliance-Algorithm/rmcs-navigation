@@ -81,8 +81,6 @@ on_init = function()
 			train_started = false
 		else
 			action:info("导航启动")
-			action:update_enable_control(true)
-			action:gimbal_suspend()
 
 			action:restart_navigation {
 				global_map = "战队",
@@ -91,13 +89,14 @@ on_init = function()
 				use_sim_time = false,
 			}
 
-			request:sleep(2)
+			request:sleep(5)
 			action:relocalize()
 			request:sleep(5)
+
+			action:update_enable_control(true)
 			action:switch_topic_forward(true)
 			action:switch_motion_mode("attack")
-
-			request:sleep(3)
+			action:gimbal_suspend()
 
 			intent_handler = scheduler:append_task(intent)
 

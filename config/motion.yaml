@@ -24,7 +24,7 @@ global_costmap:
       initial_transform_timeout: 120.0
       global_frame: world
       robot_base_frame: base_link
-      footprint: "[[0.2475, 0.2475], [0.2475, -0.2475], [-0.2475, -0.2475], [-0.2475, 0.2475]]"
+      footprint: "[[0.1, 0.1], [0.1, -0.1], [-0.1, -0.1], [-0.1, 0.1]]"
       update_frequency: 5.0
       publish_frequency: 5.0
       always_send_full_costmap: true
@@ -160,5 +160,5 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.30
+        inflation_radius: 0.5
         cost_scaling_factor: 0.5

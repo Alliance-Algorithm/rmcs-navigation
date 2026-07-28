@@ -282,4 +282,10 @@ function action:navigate(position)
 	self.target = position
 end
 
+function action:cancel_target()
+	action:info("cancel navigation target")
+	self.target = { x = NaN, y = NaN }
+	api.cancel_target()
+end
+
 return action
