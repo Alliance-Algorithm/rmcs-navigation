@@ -5,6 +5,7 @@ local request = require("util.scheduler").request
 
 return function()
 	local last_attack_timestamp = clock:now()
+	local last_attack_seen = clock:now()
 	local last_hp = 0
 
 	local last_posture = nil
@@ -37,6 +38,9 @@ return function()
 		local defense = hp < blackboard.rule.health_limit or (climbing and not action.climb.up)
 		local power_move = blackboard.context.power_move
 		local attack = blackboard.autoaim.should_control
+		if attack then
+			last_attack_seen = clock:now()
+		end
 
 		local desired
 		if power_defense then
@@ -46,6 +50,8 @@ return function()
 		elseif power_move then
 			desired = "POWERED_MOVE"
 		elseif attack then
+			desired = "ATTACK"
+		elseif last_posture == "ATTACK" and clock:now() - last_attack_seen < 2 then
 			desired = "ATTACK"
 		else
 			desired = "DEFENSE"
