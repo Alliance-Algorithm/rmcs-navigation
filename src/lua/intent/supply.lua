@@ -35,7 +35,6 @@ function intent:loop()
 
 			if is_supplied() then
 				action:info("途中补给完成，直接返回")
-				bb.context.hint_intent = bb.context.intent_to_return
 				return
 			end
 		end
@@ -60,8 +59,6 @@ function intent:loop()
 		timeout = kSupplyInterval,
 	}
 	action:info(timeout and "补给时限已到，返回战场" or "补给完成，返回战场")
-
-	bb.context.hint_intent = bb.context.intent_to_return
 end
 
 return intent

@@ -17,7 +17,7 @@ local scheduler = {}
 scheduler.__index = scheduler
 
 --- @param fn function
---- @return { cancel: function } task
+--- @return { cancel: function, done: function } task
 function scheduler:append_task(fn)
 	local cancel_status = false
 
@@ -36,6 +36,9 @@ function scheduler:append_task(fn)
 	return {
 		cancel = function()
 			cancel_status = true
+		end,
+		done = function()
+			return cancel_status or coroutine.status(task.thread) == "dead"
 		end,
 	}
 end

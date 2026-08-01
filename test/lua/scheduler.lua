@@ -214,15 +214,18 @@ do
 	local ctx = scheduler.new()
 	local trace = {}
 
-	ctx:append_task(task_of(function(items)
+	local handle = ctx:append_task(task_of(function(items)
 		items[#items + 1] = "done"
 	end, trace))
+
+	assert_false(handle.done(), "task should not be done before running")
 
 	local ok = pcall(function()
 		step(ctx, 0)
 	end)
 	assert_eq(ok, true, "completed task should not crash scheduler")
 	assert_table_eq(trace, { "done" }, "completed task trace")
+	assert_true(handle.done(), "task should be done after natural completion")
 
 	ok = pcall(function()
 		step(ctx, 1.0)
@@ -243,6 +246,8 @@ do
 		end
 	end, trace))
 
+	assert_false(handle.done(), "running task should not be done")
+
 	step(ctx, 0)
 	assert_table_eq(trace, { "before_loop" }, "cancel task first spin")
 
@@ -250,6 +255,7 @@ do
 	assert_table_eq(trace, { "before_loop", "loop" }, "cancel task second spin")
 
 	handle.cancel()
+	assert_true(handle.done(), "cancelled task should be done immediately")
 	step(ctx, 0)
 	assert_table_eq(trace, { "before_loop", "loop" }, "cancelled task should not continue")
 end

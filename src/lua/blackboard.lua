@@ -7,11 +7,6 @@ GameStage = {
 	SETTLING = "SETTLING",
 	UNKNOWN = "UNKNOWN",
 }
-Intent = {
-	nothing = "nothing",
-	spikes = "spikes",
-	supply = "supply",
-}
 SentryEvent = {
 	SWITCH_POSE_ATTACK = "SWITCH_POSE_ATTACK",
 	SWITCH_POSE_DEFENSE = "SWITCH_POSE_DEFENSE",
@@ -64,11 +59,6 @@ local function create_default_blackboard()
 
 		-- context
 		context = {
-			last_intent = Intent.nothing,
-			hint_intent = Intent.nothing,
-
-			intent_to_return = Intent.nothing,
-
 			current = nil, -- 当前地图节点，由 Map 边 Task 成功后推进
 
 			power_move = false,
