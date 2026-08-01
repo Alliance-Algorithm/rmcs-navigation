@@ -60,9 +60,6 @@ local function create_default_blackboard()
 			health_limit = 200,
 			health_critical = 50,
 			bullet_limit = 20,
-			health_ready = 350,
-			bullet_ready = 95,
-			supply_interval = 6, -- 返回补给区，只补充对应的秒数，防止因意外而阻塞其他机器人进出
 		},
 
 		-- context

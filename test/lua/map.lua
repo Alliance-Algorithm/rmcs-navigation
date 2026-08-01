@@ -45,7 +45,9 @@ do
 	local tasks = map:search(a, b)
 	assert_eq(#tasks, 1, "direct search should return one task")
 	for _, task in ipairs(tasks) do
-		task()
+		assert(task.begin_point == a and task.final_point == b, "task should carry begin/final points")
+		assert(task.begin_name == "a" and task.final_name == "b", "task should carry point names")
+		task.run()
 	end
 	assert_table_eq(trace, { "a-b:forward" }, "direct search should bind forward task with (a, b)")
 end
@@ -68,8 +70,10 @@ do
 
 	local tasks = map:search(a, c)
 	assert_eq(#tasks, 2, "multi-hop search should return two tasks")
+	assert(tasks[1].begin_point == a and tasks[1].final_point == b, "first task should carry (a, b)")
+	assert(tasks[2].begin_point == b and tasks[2].final_point == c, "second task should carry (b, c)")
 	for _, task in ipairs(tasks) do
-		task()
+		task.run()
 	end
 	assert_table_eq(trace, { "a-b:forward", "b-c:forward" }, "multi-hop search task order and direction")
 end
@@ -88,7 +92,7 @@ do
 	local tasks = map:search(b, a)
 	assert_eq(#tasks, 1, "reverse search should return one task")
 	for _, task in ipairs(tasks) do
-		task()
+		task.run()
 	end
 	assert_table_eq(trace, { "b-a:backward" }, "reverse search should bind backward task with (b, a)")
 end
@@ -108,11 +112,11 @@ do
 
 	local tasks = map:search(a, b)
 	assert_eq(#tasks, 1, "same function reused should produce one task")
-	tasks[1]()
+	tasks[1].run()
 
 	local tasks_back = map:search(b, a)
 	assert_eq(#tasks_back, 1, "same function reused should produce reverse task")
-	tasks_back[1]()
+	tasks_back[1].run()
 end
 
 do
@@ -247,7 +251,7 @@ do
 		local tasks = map:search(a, b)
 		assert_eq(#tasks, 1, "scenario closure search should return one task")
 		trace[#trace + 1] = "before"
-		tasks[1]()
+		tasks[1].run()
 		trace[#trace + 1] = "after"
 	end)
 
@@ -288,7 +292,7 @@ do
 	map:connect(a, b) { failing, ok_task }
 
 	local tasks = map:search(a, b)
-	local ok = pcall(tasks[1])
+	local ok = pcall(tasks[1].run)
 	assert_false(ok, "failing closure task should propagate error")
 	assert_eq(bb.context.current, a, "current should stay when closure task fails")
 end

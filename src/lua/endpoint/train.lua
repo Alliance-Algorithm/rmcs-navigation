@@ -46,7 +46,7 @@ on_init = function()
 
 				for index, path_task in ipairs(Map:search(blackboard.context.current, point)) do
 					action:info("Execute path task: " .. index)
-					if not path_task() then
+					if not path_task.run() then
 						action:fuck("Failed to follow path, return")
 						return
 					end

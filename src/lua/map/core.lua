@@ -5,6 +5,13 @@
 
 --- @alias MapTask fun(from: MapPoint, to: MapPoint): boolean
 
+--- @class MapPathTask
+--- @field run fun(): boolean 执行该边任务，返回是否成功
+--- @field begin_point MapPoint 边起点
+--- @field final_point MapPoint 边终点
+--- @field begin_name string 边起点名称，用于日志
+--- @field final_name string 边终点名称，用于日志
+
 --- @class Map
 --- @field private _points table<string, MapPoint>
 --- @field private _registered table<MapPoint, boolean>
@@ -78,10 +85,10 @@ function Map:connect(a, b)
 	end
 end
 
---- 搜索从 from 到 to 的路径，返回依次执行即可到达的有序零参 Task 列表
+--- 搜索从 from 到 to 的路径，返回依次执行即可到达的有序 Task 表列表
 --- @param from MapPoint
 --- @param to MapPoint
---- @return (fun(): boolean)[]
+--- @return MapPathTask[]
 function Map:search(from, to)
 	if not self._registered[from] then
 		error("路径搜索起点未注册: " .. tostring(from and from.name))
@@ -111,7 +118,13 @@ function Map:search(from, to)
 					local cursor = to
 					while cursor ~= from do
 						local parent = previous[cursor]
-						table.insert(reversed, self._edges[parent][cursor])
+						table.insert(reversed, {
+							run = self._edges[parent][cursor],
+							begin_point = parent,
+							final_point = cursor,
+							begin_name = parent.name,
+							final_name = cursor.name,
+						})
 						cursor = parent
 					end
 

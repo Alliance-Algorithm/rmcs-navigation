@@ -57,21 +57,28 @@ local function rough_navigate(_, to)
 	return not timeout
 end
 
-local function cross_slope(_, to)
-	action:update_supercap_boost(true)
-	action:navigate(to)
-	action:info("cross slope to " .. to.x .. ", " .. to.y)
-	local timeout = request:wait_until {
-		monitor = function()
-			return bb.condition.near(to, 0.3)
-		end,
-		timeout = 10,
-	}
-	if timeout then
-		action:fuck("cross slope timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+-- 爬坡任务：need_boost 为 true（上坡）时开启超级电容，下坡不开
+local function cross_slope(need_boost)
+	return function(_, to)
+		if need_boost then
+			action:update_supercap_boost(true)
+		end
+		action:navigate(to)
+		action:info("cross slope to " .. to.x .. ", " .. to.y)
+		local timeout = request:wait_until {
+			monitor = function()
+				return bb.condition.near(to, 0.3)
+			end,
+			timeout = 10,
+		}
+		if timeout then
+			action:fuck("cross slope timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+		end
+		if need_boost then
+			action:update_supercap_boost(false)
+		end
+		return not timeout
 	end
-	action:update_supercap_boost(false)
-	return not timeout
 end
 
 -- 跨越地形任务：正向 from -> to，反向 to -> from
@@ -107,8 +114,8 @@ Map:connect(Points.kNearThemOutpost, Points.kThemStepFinal) { rough_navigate, ro
 Map:connect(Points.kThemStepBegin, Points.kThemDoubleStepsBegin) { rough_navigate, rough_navigate }
 Map:connect(Points.kThemDoubleStepsBegin, Points.kThemHighlandBegin) { rough_navigate, rough_navigate }
 
-Map:connect(Points.kSelfHighlandBegin, Points.kSelfHighlandFinal) { cross_slope, cross_slope }
-Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope, cross_slope }
+Map:connect(Points.kSelfHighlandBegin, Points.kSelfHighlandFinal) { cross_slope(true), cross_slope(false) }
+Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope(true), cross_slope(false) }
 
 Map:connect(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
 Map:connect(Points.kThemStepFinal, Points.kThemStepBegin) { cross_step(true), cross_step(false) }
