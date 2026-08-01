@@ -9,9 +9,6 @@ local fsm = require("util.fsm")
 local option = require("option")
 local order = require("util.order")
 
-local RmucMap = require("map.rmuc")
-local Map, Points = RmucMap.map, RmucMap.points
-
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
 local request = Scheduler.request
@@ -27,17 +24,12 @@ local task = {
 blackboard = require("blackboard").singleton()
 
 on_init = function()
-	action:info(ascii.banner)
-	action:info("Endpoint -> RMUC")
-
+	_ = ascii
 	_ = fsm
 	_ = option
 	_ = order
 	_ = task
 	_ = request
-
-	_ = Map
-	_ = Points
 
 	action:bind(scheduler)
 	clock:reset(blackboard.meta.timestamp)
