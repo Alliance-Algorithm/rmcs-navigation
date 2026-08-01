@@ -1,4 +1,5 @@
 #include "cxx/context.hh"
+#include "cxx/util/node_mixin.hh"
 #include "cxx/util/service.hpp"
 
 #include <atomic>
@@ -15,6 +16,8 @@ struct RmcsContext::Impl {
     RmcsContext& context;
     rclcpp::Node& node;
     rmcs_executor::Component& component;
+
+    NodeWrap<rclcpp::Node> logging{node};
 
     std::vector<std::function<void()>> default_binders;
     std::vector<std::function<std::optional<std::string>()>> readiness_checks;
@@ -42,9 +45,7 @@ struct RmcsContext::Impl {
     auto ensure_defaults() -> void {
         for (const auto& check : readiness_checks) {
             if (auto name = check()) {
-                RCLCPP_WARN(
-                    node.get_logger(), "Context input not ready, binding default: %s",
-                    name->c_str());
+                logging.warn("Context input not ready, binding default: {}", *name);
             }
         }
         for (auto& binder : default_binders) {
@@ -82,12 +83,15 @@ struct RmcsContext::Impl {
         service_thread = std::thread{[this] {
             auto service = util::make_service<"context">(
                 util::make_action<"game_stage", int>([this](int value) {
+                    logging.info("Mock context updated: game_stage << {}", value);
                     write_input(context.game_stage, static_cast<rmcs_msgs::GameStage>(value));
                 }),
                 util::make_action<"robot_health", int>([this](int value) {
+                    logging.info("Mock context updated: robot_health << {}", value);
                     write_input(context.robot_health, static_cast<std::uint16_t>(value));
                 }),
                 util::make_action<"robot_bullet", int>([this](int value) {
+                    logging.info("Mock context updated: robot_bullet << {}", value);
                     write_input(context.robot_bullet, static_cast<std::uint16_t>(value));
                 }));
 
