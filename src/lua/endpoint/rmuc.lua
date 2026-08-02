@@ -9,9 +9,6 @@ local fsm = require("util.fsm")
 local option = require("option")
 local order = require("util.order")
 
-local RmucMap = require("map.rmuc")
-local Map, Points = RmucMap.map, RmucMap.points
-
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
 local request = Scheduler.request
@@ -41,29 +38,35 @@ local function intent_maintainer()
 		kAttackOutpost = "attack-outpost",
 	}
 
-	local kHealthLimit = 200
-	local kBulletLimit = 020
-	local kHealthReady = 350
-	local kBulletReady = 080
+	local main_intents = {
+		Intent.kAttackRune,
+		Intent.kAttackOutpost,
+		Intent.kCruiseAtHome,
+	}
+	local function remove_from_main_intents(name)
+		for i, item in ipairs(main_intents) do
+			if item == name then
+				table.remove(main_intents, i)
+				break
+			end
+		end
+	end
 
 	local handler = nil
-	local current = Intent.kNothing
+	local runing_intent = Intent.kNothing
+	local select_intent = runing_intent
+
+	local kHealthLimit = blackboard.rule.health_limit
+	local kBulletLimit = blackboard.rule.bullet_limit
 
 	local last_stage = blackboard.game.stage
 
-	local last_health = blackboard.user.health
-	local last_bullet = blackboard.user.bullet
-
 	while true do
-		local select_intent = current
-
-		----
-
 		local stage = blackboard.game.stage
 		if last_stage ~= GameStage.PREPARATION and stage == GameStage.PREPARATION then
 			action:info("[Intent] 进入 PREPARATION 阶段")
 			action:stop_navigation()
-			-- action:abort_record()
+			action:abort_record()
 			select_intent = Intent.kNothing
 		end
 		if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
@@ -74,44 +77,58 @@ local function intent_maintainer()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
-			-- action:start_record()
+			action:start_record()
 
 			-- action:relocalize()
 		end
 		if last_stage ~= GameStage.STARTED and stage == GameStage.STARTED then
 			action:info("[Intent] 进入 STARTED 阶段")
-			select_intent = Intent.kCruiseAtHome
+			select_intent = main_intents[1]
+
+			blackboard.context.started_timestamp = clock:now()
 		end
 		last_stage = stage
 
 		-- 比赛阶段才执行的意图切换检测
 		if stage == GameStage.STARTED then
-			if select_intent == Intent.kNothing then
-				select_intent = Intent.kCruiseAtHome
-			end
-
 			local health, bullet = blackboard.user.health, blackboard.user.bullet
-			local low_health = (health < kHealthLimit) and (last_health >= kHealthLimit)
-			local low_bullet = (bullet < kBulletLimit) and (last_bullet >= kBulletLimit)
-			if low_health or low_bullet then
+			local low_health = (health < kHealthLimit)
+			local low_bullet = (bullet < kBulletLimit)
+			if (low_health or low_bullet) and runing_intent ~= Intent.kSupply then
 				action:info(string.format("[Intent] Supply, health: %d, bullet: %d", health, bullet))
 				select_intent = Intent.kSupply
+				blackboard.context.unhealth = true
+				goto FINALIZED
 			end
 
-			if current == Intent.kSupply and (health > kHealthReady and bullet > kBulletReady) then
-				select_intent = Intent.kCruiseAtHome
+			if (runing_intent == Intent.kSupply) and not blackboard.context.unhealth then
+				select_intent = main_intents[1]
+				goto FINALIZED
+			end
+			if
+				(runing_intent == Intent.kAttackOutpost and blackboard.context.attacked_outpost)
+				or (runing_intent == Intent.kAttackRune and blackboard.context.attacked_rune)
+			then
+				remove_from_main_intents(runing_intent)
+				select_intent = main_intents[1]
+
+				goto FINALIZED
 			end
 
-			last_health, last_bullet = health, bullet
+			::FINALIZED::
+			if select_intent == Intent.kNothing then
+				-- Unreachable
+				select_intent = main_intents[1]
+			end
 		end
 
-		----
+		-------
 
 		local need_append_task = false
 		if (handler == nil) or handler.done() then
 			need_append_task = true
 		end
-		if select_intent ~= current then
+		if select_intent ~= runing_intent then
 			if handler ~= nil then
 				handler.cancel()
 			end
@@ -121,7 +138,7 @@ local function intent_maintainer()
 			local intent = require("intent." .. select_intent)
 			handler = scheduler:append_task(intent.loop)
 
-			current = select_intent
+			runing_intent = select_intent
 		end
 		request:yield()
 	end
@@ -142,14 +159,9 @@ on_init = function()
 	_ = order
 	_ = task
 
-	_ = Map
-	_ = Points
-
 	scheduler:append_task(remote_controller)
 	scheduler:append_task(intent_maintainer)
 	scheduler:append_task(task.robot_status)
-
-	blackboard.context.current = Points.kOrigin -- 初始出生点
 
 	action:bind(scheduler)
 	clock:reset(blackboard.meta.timestamp)

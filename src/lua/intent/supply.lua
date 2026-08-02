@@ -35,6 +35,7 @@ function intent:loop()
 
 			if is_supplied() then
 				action:info("途中补给完成，直接返回")
+				blackboard.context.unhealth = false
 				return
 			end
 		end
@@ -58,6 +59,7 @@ function intent:loop()
 		monitor = is_supplied,
 		timeout = kSupplyInterval,
 	}
+	blackboard.context.unhealth = false
 	action:info(timeout and "补给时限已到，返回战场" or "补给完成，返回战场")
 end
 

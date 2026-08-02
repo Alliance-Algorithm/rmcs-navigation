@@ -52,16 +52,22 @@ local function create_default_blackboard()
 		-- Static Information
 		rule = {
 			-- 状态类规则
-			health_limit = 200,
 			health_critical = 50,
+
+			health_limit = 200,
 			bullet_limit = 20,
 		},
 
 		-- context
 		context = {
 			current = nil, -- 当前地图节点，由 Map 边 Task 成功后推进
+			started_timestamp = 0,
 
-			power_move = false,
+			powered_move = false,
+			unhealth = false,
+
+			attacked_rune = false,
+			attacked_outpost = false,
 		},
 	}
 

@@ -120,6 +120,8 @@ Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope(
 Map:connect(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
 Map:connect(Points.kThemStepFinal, Points.kThemStepBegin) { cross_step(true), cross_step(false) }
 
+blackboard.context.current = Points.kOrigin
+
 local M = {
 	map = Map,
 	points = Points,

@@ -36,7 +36,7 @@ return function()
 
 		local power_defense = hp < blackboard.rule.health_critical or (climbing and action.climb.up)
 		local defense = hp < blackboard.rule.health_limit or (climbing and not action.climb.up)
-		local power_move = blackboard.context.power_move
+		local powered_move = blackboard.context.powered_move
 		local attack = blackboard.autoaim.should_control
 		if attack then
 			last_attack_seen = clock:now()
@@ -47,7 +47,7 @@ return function()
 			desired = "POWERED_DEFENSE"
 		elseif defense then
 			desired = "DEFENSE"
-		elseif power_move then
+		elseif powered_move then
 			desired = "POWERED_MOVE"
 		elseif attack then
 			desired = "ATTACK"
