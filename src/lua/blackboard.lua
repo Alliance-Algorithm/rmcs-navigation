@@ -45,6 +45,10 @@ local function create_default_blackboard()
 		autoaim = {
 			should_control = false,
 		},
+		energy = {
+			small = 0, -- 0=未激活, 1=已激活, 2=正在激活
+			big = 0,
+		},
 		meta = {
 			timestamp = 0, -- 秒
 		},

@@ -33,6 +33,9 @@ public:
     InputInterface<double> climber_status;
     InputInterface<bool> auto_aim_should_control;
 
+    InputInterface<std::uint8_t> ally_small_energy_core_state;
+    InputInterface<std::uint8_t> ally_big_energy_core_state;
+
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 

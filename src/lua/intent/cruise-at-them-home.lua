@@ -3,23 +3,21 @@ local action = require("action")
 local bb = require("blackboard").singleton()
 local MapRmuc = require("map.rmuc")
 local Map, Points = MapRmuc.map, MapRmuc.points
-local kCruiseInterval = 5 -- 秒，每个高地节点停留时长
-local highland_points = {
-    Points.kSelfHighlandBegin,
-    Points.kSelfHighlandFinal,
+local kCruiseInterval = 3 -- 秒，每个节点停留时长
+local them_home_points = {
+    Points.kThemStepBegin,
+    Points.kThemDoubleStepsBegin,
     Points.kThemHighlandBegin,
-    Points.kThemHighlandFinal,
+    Points.kThemFortressRight,
 }
-
 local intent = {}
 function intent:loop()
-    action:info("在高地巡游，四个高地点每 " .. kCruiseInterval .. "s 切换一次")
+    action:info("在对方半场巡游，四个点每 " .. kCruiseInterval .. "s 切换一次")
     action:switch_motion_mode("attack")
-    action:gimbal_scan(0, 0);
-
+    action:gimbal_scan(0, 0)
     local index = 1
     while true do
-        local target = highland_points[index]
+        local target = them_home_points[index]
         -- 兜底任务：永不放弃。失败则返回上一个确认点，重新搜索重试
         while true do
             local failed = false
@@ -32,6 +30,7 @@ function intent:loop()
                 end
                 bb.context.current = path.final_point -- 每条边成功后推进
             end
+
             if not failed then
                 break
             end
@@ -46,7 +45,7 @@ function intent:loop()
         end
         action:info("到达 " .. target.name .. "，停留 " .. kCruiseInterval .. "s")
         request:sleep(kCruiseInterval)
-        index = index % #highland_points + 1
+        index = index % #them_home_points + 1
     end
 end
 

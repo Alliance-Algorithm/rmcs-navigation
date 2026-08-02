@@ -30,6 +30,16 @@ on_init = function()
 
 	local train_started = false
 
+	local track_rune_handler = nil
+	local toggle_rune = function()
+		while true do
+			action:update_track_rune(true)
+			request:sleep(5)
+			action:update_track_rune(false)
+			request:sleep(5)
+		end
+	end
+
 	local intent_handler = nil
 	local intent = function()
 		blackboard.context.current = Points.kA
@@ -92,13 +102,18 @@ on_init = function()
 				intent_handler = nil
 			end
 
+			if track_rune_handler ~= nil then
+				track_rune_handler.cancel()
+				track_rune_handler = nil
+			end
+
 			train_started = false
 		else
 			action:info("导航启动")
 			action:update_enable_control(true)
 
 			action:restart_navigation {
-				global_map = "战队",
+				global_map = "rmuc",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,
@@ -112,6 +127,7 @@ on_init = function()
 
 			-- intent_handler = scheduler:append_task(intent)
 
+			track_rune_handler = scheduler:append_task(toggle_rune)
 			train_started = true
 		end
 	end

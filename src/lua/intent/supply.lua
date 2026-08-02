@@ -6,7 +6,7 @@ local MapRmuc = require("map.rmuc")
 local Map, Points = MapRmuc.map, MapRmuc.points
 
 local kHealthReady = 350
-local kBulletReady = 95
+local kBulletReady = 80
 local kSupplyInterval = 6 -- 秒，到达补给区后最多停留时长
 
 local intent = {}

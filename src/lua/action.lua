@@ -231,6 +231,11 @@ function action:update_supercap_boost(enable)
 	api.update_supercap_boost(enable)
 end
 
+--- @param enable boolean
+function action:update_track_rune(enable)
+	api.update_track_rune(enable)
+end
+
 --- 触发一次重定位，红/蓝方由 referee robot_id 自动派生；
 --- 服务未就绪或 robot_id 未知时本次调用被丢弃并打 WARN，不抛错。
 function action:relocalize()
