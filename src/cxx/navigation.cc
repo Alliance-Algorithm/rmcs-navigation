@@ -1,15 +1,20 @@
 #include "cxx/navigation.hh"
 #include "cxx/util/node_mixin.hh"
+#include "cxx/util/service.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <fcntl.h>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
+#include <unistd.h>
 #include <utility>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -17,7 +22,6 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
-#include <std_srvs/srv/trigger.hpp>
 #include <tf2/exceptions.h>
 #include <tf2/time.h>
 #include <tf2_ros/buffer.h>
@@ -33,7 +37,6 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     using GoalClient = rclcpp_action::Client<GoalAction>;
     using GoalSubscription = rclcpp::Subscription<geometry_msgs::msg::PoseStamped>;
     using PoseStamped = geometry_msgs::msg::PoseStamped;
-    using TriggerClient = rclcpp::Client<std_srvs::srv::Trigger>;
 
     using TfBuffer = tf2_ros::Buffer;
     using TfListener = tf2_ros::TransformListener;
@@ -45,8 +48,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     static constexpr auto kBaseFrame = "base_link";
     static constexpr auto kMoveBaseGoalTopic = "/move_base_simple/goal";
     static constexpr auto kGoalPoseTopic = "/goal_pose";
-    static constexpr auto kRelocalizeRedService = "/rmcs_localization/relocalize/red";
-    static constexpr auto kRelocalizeBlueService = "/rmcs_localization/relocalize/blue";
+    static constexpr auto kRelocalizeTriggerFifo = "/tmp/rmcs-localization/relocalize/trigger";
     static constexpr auto kServerNotReadyWarnInterval = std::chrono::seconds{5};
 
     struct Target final {
@@ -84,11 +86,11 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     std::shared_ptr<GoalSubscription> goal_pose_subscription;
     bool topic_forward_enabled = false;
 
-    // Localization Trigger
-    std::shared_ptr<TriggerClient> relocalize_red_client =
-        node.create_client<std_srvs::srv::Trigger>(kRelocalizeRedService);
-    std::shared_ptr<TriggerClient> relocalize_blue_client =
-        node.create_client<std_srvs::srv::Trigger>(kRelocalizeBlueService);
+    // Localization Trigger (FIFO)
+    // 触发：向 /tmp/rmcs-localization/relocalize/trigger 写入 "red"/"blue"
+    // 结果：独立线程监听 /tmp/rmcs-navigation/relocalize/result 并打日志
+    std::thread service_thread;
+    std::atomic<bool> stop_service{false};
 
     // Goal Runtime State
     std::shared_ptr<GoalHandle> current_goal_handle;
@@ -198,9 +200,28 @@ public:
                 latest_cmd_vel = {msg->linear.x, msg->linear.y};
                 latest_cmd_vel_time = std::chrono::steady_clock::now();
             });
+
+        service_thread = std::thread{[this] {
+            auto service = util::make_service<"relocalize">(
+                util::make_action<"result">([this](std::string_view data) {
+                    if (data.starts_with("SUCCESS"))
+                        info("relocalize {}", data);
+                    else
+                        warn("relocalize {}", data);
+                }));
+            info("relocalize result fifo at /tmp/rmcs-navigation/relocalize/");
+            while (!stop_service.load(std::memory_order::relaxed)) {
+                service.spin_once();
+                std::this_thread::sleep_for(std::chrono::milliseconds{100});
+            }
+        }};
     }
 
     ~Impl() {
+        stop_service.store(true, std::memory_order::relaxed);
+        if (service_thread.joinable())
+            service_thread.join();
+
         auto current_handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
         active_goal.reset();
         ++latest_request_id;
@@ -241,28 +262,28 @@ public:
             client->async_cancel_goal(handle);
     }
 
-    auto relocalize(rmcs_msgs::RobotColor color) -> void {
+    auto relocalize(rmcs_msgs::RobotColor color) const -> void {
         if (color == rmcs_msgs::RobotColor::UNKNOWN) {
             warn("relocalize ignored: robot color is unknown");
             return;
         }
 
-        const auto& client =
-            (color == rmcs_msgs::RobotColor::BLUE) ? relocalize_blue_client : relocalize_red_client;
-        if (!client->service_is_ready()) {
-            warn("relocalize ignored: service {} is not available", client->get_service_name());
+        const auto mode = (color == rmcs_msgs::RobotColor::BLUE) ? std::string_view{"blue"}
+                                                                 : std::string_view{"red"};
+
+        const auto fd = ::open(kRelocalizeTriggerFifo, O_WRONLY | O_NONBLOCK);
+        if (fd < 0) {
+            warn("relocalize ignored: trigger fifo {} is not available", kRelocalizeTriggerFifo);
             return;
         }
 
-        client->async_send_request(
-            std::make_shared<std_srvs::srv::Trigger::Request>(),
-            [this](TriggerClient::SharedFuture future) { // NOLINT
-                const auto& response = *future.get();
-                if (response.success)
-                    info("relocalize: {}", response.message);
-                else
-                    warn("relocalize rejected: {}", response.message);
-            });
+        const auto written = ::write(fd, mode.data(), mode.size());
+        ::close(fd);
+        if (written != static_cast<ssize_t>(mode.size())) {
+            warn("relocalize failed: cannot write to trigger fifo {}", kRelocalizeTriggerFifo);
+            return;
+        }
+        info("relocalize triggered: mode={}", mode);
     }
 
     auto switch_topic_forward(bool enable) -> void {

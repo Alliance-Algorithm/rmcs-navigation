@@ -234,11 +234,13 @@ end
 --- 触发一次重定位，红/蓝方由 referee robot_id 自动派生；
 --- 服务未就绪或 robot_id 未知时本次调用被丢弃并打 WARN，不抛错。
 function action:relocalize()
-	action:info("触发重定位")
+	action:info("[Action] 触发重定位...")
 	api.relocalize()
 end
 
+--- @param config { launch_livox: boolean, launch_odin1: boolean, global_map: string, use_sim_time: boolean }
 function action:restart_navigation(config)
+	action:info("[Action] 正在启动导航堆栈(" .. config.global_map .. ")...")
 	return api.restart_navigation(config)
 end
 
@@ -248,6 +250,16 @@ end
 
 function action:toggle_record()
 	return api.toggle_record()
+end
+
+function action:start_record()
+	action:info("[Action] 开始录制...")
+	return api.start_record()
+end
+
+function action:abort_record()
+	action:info("[Action] 中断录制...")
+	return api.abort_record()
 end
 
 --- @param world_yaw number 台阶方向，world 系 XY yaw。

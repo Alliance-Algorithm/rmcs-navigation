@@ -24,10 +24,23 @@ local function remote_controller()
 	local rswitch = blackboard.play.rswitch
 
 	while true do
+		local enable_navigation = (rswitch == "UP")
+		action:update_enable_control(enable_navigation)
+
+		request:yield()
 	end
 end
 
 local function intent_maintainer()
+	local Intent = {
+		kNothing = "nothing",
+		kSupply = "supply",
+		kCruiseAtHome = "cruise-at-home",
+		kCruiseAtHighland = "cruise-at-highland",
+		kAttackRune = "attack-rune",
+		kAttackOutpost = "attack-outpost",
+	}
+
 	local kHealthLimit = 200
 	local kBulletLimit = 020
 
@@ -40,11 +53,17 @@ local function intent_maintainer()
 	local last_bullet = blackboard.user.bullet
 
 	while true do
-		local select_intent = "nothing"
+		local select_intent = Intent.kNothing
 
 		----
 
 		local stage = blackboard.game.stage
+		if last_stage ~= GameStage.PREPARATION and stage == GameStage.PREPARATION then
+			action:info("[Intent] 进入 PREPARATION 阶段")
+			action:stop_navigation()
+			action:abort_record()
+			select_intent = Intent.kNothing
+		end
 		if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
 			action:info("[Intent] 退出 PREPARATION 阶段")
 			action:restart_navigation {
@@ -53,17 +72,20 @@ local function intent_maintainer()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
+			action:start_record()
+
+			-- action:relocalize()
 		end
 		if last_stage ~= GameStage.STARTED and stage == GameStage.STARTED then
 			action:info("[Intent] 进入 STARTED 阶段")
-			-- TODO:
+			select_intent = Intent.kCruiseAtHome
 		end
 		last_stage = stage
 
 		-- 比赛阶段才执行的意图切换检测
 		if stage == GameStage.STARTED then
-			if select_intent == "nothing" then
-				select_intent = "cruise-at-home"
+			if select_intent == Intent.kNothing then
+				select_intent = Intent.kCruiseAtHome
 			end
 
 			local health, bullet = blackboard.user.health, blackboard.user.bullet
@@ -71,7 +93,7 @@ local function intent_maintainer()
 			local low_bullet = (bullet < kBulletLimit) and (last_bullet >= kBulletLimit)
 			if low_health or low_bullet then
 				action:info(string.format("[Intent] Supply, health: %d, bullet: %d", health, bullet))
-				select_intent = "supply"
+				select_intent = Intent.kSupply
 			end
 			last_health, last_bullet = health, bullet
 		end
@@ -131,4 +153,6 @@ on_tick = function()
 	scheduler:spin_once()
 end
 
-on_exit = function() end
+on_exit = function()
+	action:stop_navigation()
+end
