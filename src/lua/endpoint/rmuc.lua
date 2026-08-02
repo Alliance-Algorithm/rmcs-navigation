@@ -21,9 +21,9 @@ local task = {
 }
 
 local function remote_controller()
-	local rswitch = blackboard.play.rswitch
-
 	while true do
+		local rswitch = blackboard.play.rswitch
+
 		local enable_navigation = (rswitch == "UP")
 		action:update_enable_control(enable_navigation)
 
@@ -43,9 +43,11 @@ local function intent_maintainer()
 
 	local kHealthLimit = 200
 	local kBulletLimit = 020
+	local kHealthReady = 350
+	local kBulletReady = 080
 
 	local handler = nil
-	local current = nil
+	local current = Intent.kNothing
 
 	local last_stage = blackboard.game.stage
 
@@ -53,7 +55,7 @@ local function intent_maintainer()
 	local last_bullet = blackboard.user.bullet
 
 	while true do
-		local select_intent = Intent.kNothing
+		local select_intent = current
 
 		----
 
@@ -61,18 +63,18 @@ local function intent_maintainer()
 		if last_stage ~= GameStage.PREPARATION and stage == GameStage.PREPARATION then
 			action:info("[Intent] 进入 PREPARATION 阶段")
 			action:stop_navigation()
-			action:abort_record()
+			-- action:abort_record()
 			select_intent = Intent.kNothing
 		end
 		if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
 			action:info("[Intent] 退出 PREPARATION 阶段")
 			action:restart_navigation {
-				global_map = "rmuc",
+				global_map = "empty",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
-			action:start_record()
+			-- action:start_record()
 
 			-- action:relocalize()
 		end
@@ -95,6 +97,11 @@ local function intent_maintainer()
 				action:info(string.format("[Intent] Supply, health: %d, bullet: %d", health, bullet))
 				select_intent = Intent.kSupply
 			end
+
+			if current == Intent.kSupply and (health > kHealthReady and bullet > kBulletReady) then
+				select_intent = Intent.kCruiseAtHome
+			end
+
 			last_health, last_bullet = health, bullet
 		end
 
