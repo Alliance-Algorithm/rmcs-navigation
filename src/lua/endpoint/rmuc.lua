@@ -34,6 +34,7 @@ local function intent_maintainer()
 		kSupply = "supply",
 		kCruiseAtHome = "cruise-at-home",
 		kCruiseAtHighland = "cruise-at-highland",
+		kCruiseAtFullMap = "cruise-at-full-map",
 		kAttackRune = "attack-rune",
 		kAttackOutpost = "attack-outpost",
 	}
@@ -50,6 +51,13 @@ local function intent_maintainer()
 				break
 			end
 		end
+	end
+	local function reset_main_intents()
+		main_intents = {
+			Intent.kAttackRune,
+			Intent.kAttackOutpost,
+			Intent.kCruiseAtHome,
+		}
 	end
 
 	local handler = nil
@@ -69,6 +77,7 @@ local function intent_maintainer()
 			action:abort_record()
 			select_intent = Intent.kNothing
 
+			reset_main_intents()
 			blackboard.context.attacked_outpost = false
 			blackboard.context.attacked_rune = false
 		end
