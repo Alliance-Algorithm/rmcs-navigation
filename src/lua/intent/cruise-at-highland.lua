@@ -15,14 +15,13 @@ local intent = {}
 function intent:loop()
     action:info("在高地巡游，四个高地点每 " .. kCruiseInterval .. "s 切换一次")
     action:switch_motion_mode("attack")
-    action:gimbal_scan(0, 0);
-
     local index = 1
     while true do
         local target = highland_points[index]
         -- 兜底任务：永不放弃。失败则返回上一个确认点，重新搜索重试
         while true do
             local failed = false
+            action:gimbal_toward(0, 0)
             for i, path in ipairs(Map:search(bb.context.current, target)) do
                 action:info("Execute path task: " .. i .. " " .. path.begin_name .. " -> " .. path.final_name)
                 if not path.run() then
@@ -36,6 +35,7 @@ function intent:loop()
                 break
             end
             -- 返回上一个确认点（容差/时限与 rough_navigate 一致，局部内联）
+            action:gimbal_toward(0, 0)
             action:navigate(bb.context.current)
             request:wait_until {
                 monitor = function()
@@ -45,6 +45,7 @@ function intent:loop()
             }
         end
         action:info("到达 " .. target.name .. "，停留 " .. kCruiseInterval .. "s")
+        action:gimbal_scan(0, 0)
         request:sleep(kCruiseInterval)
         index = index % #highland_points + 1
     end

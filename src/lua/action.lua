@@ -6,8 +6,8 @@ local clock = require("util.clock")
 local bb = require("blackboard").singleton()
 
 local NaN = 0 / 0
-local kYtPerRad = 2.0
-local kPtPerRad = 2.0
+local kYtPerRad = 1.5
+local kPtPerRad = 2.2
 local kGimbalFree = 2.2250738585072014e-308
 
 local action = {

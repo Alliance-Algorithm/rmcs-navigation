@@ -7,7 +7,7 @@ local Map, Points = MapRmuc.map, MapRmuc.points
 
 local kHealthReady = 350
 local kBulletReady = 80
-local kSupplyInterval = 6 -- 秒，到达补给区后最多停留时长
+local kSupplyInterval = 75 -- 秒，到达补给区后最多停留时长
 
 local intent = {}
 
@@ -19,6 +19,9 @@ function intent:loop()
 	action:info("需要补给，回家")
 	action:info("health: " .. bb.user.health)
 	action:info("bullet: " .. bb.user.bullet)
+
+	-- supply 开始时关闭符文追踪
+	action:update_track_rune(false)
 
 	-- 兜底任务：永不放弃。失败则返回上一个确认点，重新搜索重试
 	while true do
@@ -36,6 +39,8 @@ function intent:loop()
 			if is_supplied() then
 				action:info("途中补给完成，直接返回")
 				blackboard.context.unhealth = false
+				-- supply 结束前关闭超级电容
+				action:update_supercap_boost(false)
 				return
 			end
 		end
@@ -61,6 +66,8 @@ function intent:loop()
 	}
 	blackboard.context.unhealth = false
 	action:info(timeout and "补给时限已到，返回战场" or "补给完成，返回战场")
+	-- supply 结束前关闭超级电容
+	action:update_supercap_boost(false)
 end
 
 return intent

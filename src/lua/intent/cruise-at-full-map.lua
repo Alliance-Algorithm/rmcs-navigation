@@ -1,48 +1,32 @@
-local action = require("action")
 local request = require("util.scheduler").request
+local action = require("action")
 local bb = require("blackboard").singleton()
-
 local MapRmuc = require("map.rmuc")
 local Map, Points = MapRmuc.map, MapRmuc.points
 
-local kRoute = {
-	Points.kBehindOutpost,
-	Points.kSelfStepBegin,
-	Points.kSelfDoubleStepsBegin,
+local kCruiseInterval = 3 -- 秒，每个节点停留时长
+
+local full_map_points = {
+	Points.kOrigin, -- kBegin
 	Points.kSelfHighlandBegin,
 	Points.kAttackRune,
 	Points.kAttackOutpost,
-	Points.kAttackRune,
-	Points.kSelfHighlandBegin,
 	Points.kSelfDoubleStepsBegin,
 	Points.kSelfStepBegin,
+	Points.kSelfStepFinal,
+	Points.kSelfSlopeBegin,
+	Points.kNearSelfOutpost,
+	Points.kSelfDoubleStepsFinal,
+	Points.kThemDoubleStepsFinal,
+	Points.kNearThemOutpost,
+	Points.kThemStepFinal,
+	Points.kThemStepBegin,
+	Points.kThemDoubleStepsBegin,
+	Points.kThemHighlandBegin,
+	Points.kThemHighlandFinal,
 }
 
-local kCruiseInterval = 5 -- 秒，每个节点停留时长
-
 local intent = {}
-
-local function start_index()
-	local current = bb.context.current
-	if current ~= nil then
-		for index, route_point in ipairs(kRoute) do
-			if route_point == current then
-				return index
-			end
-		end
-	end
-
-	local nearest_index, nearest_distance = 1, math.huge
-	for index, route_point in ipairs(kRoute) do
-		local dx = route_point.x - bb.user.x
-		local dy = route_point.y - bb.user.y
-		local distance = dx * dx + dy * dy
-		if distance < nearest_distance then
-			nearest_index, nearest_distance = index, distance
-		end
-	end
-	return nearest_index
-end
 
 local function cruise_leg(from, to)
 	for _, step in ipairs(Map:search(from, to)) do
@@ -56,16 +40,15 @@ local function cruise_leg(from, to)
 end
 
 function intent:loop()
-	action:info("在家中巡游，形如地刺")
+	action:info("全图游走")
 	action:switch_motion_mode("attack")
 
-	local count = #kRoute
-	local index = start_index()
-	local begin = index
+	local count = #full_map_points
+	local index = 1
 
 	while true do
-		local from = kRoute[index]
-		local to = kRoute[index % count + 1]
+		local from = full_map_points[index]
+		local to = full_map_points[index % count + 1]
 
 		action:gimbal_toward(0, 0)
 		if cruise_leg(from, to) then
@@ -82,10 +65,6 @@ function intent:loop()
 				end,
 				timeout = 10,
 			}
-		end
-
-		if index == begin then
-			action:info("完成一圈家中巡游")
 		end
 	end
 end

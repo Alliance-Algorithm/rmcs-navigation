@@ -10,6 +10,8 @@ local intent = {}
 
 local kNavigateTimeout = 10
 local kScanTimeout = 20
+local kYtPerRad = 1.7
+local kPtPerRad = 3.0
 
 function intent:loop()
 	action:info("Attack rune start")
@@ -30,6 +32,8 @@ function intent:loop()
 
 	api.sentry_event(SentryEvent.ACTIVATE_ENERGY_CORE)
 	api.update_track_rune(true)
+	action:set_gimbal_yt(kYtPerRad)
+	action:set_gimbal_pt(kPtPerRad)
 	action:gimbal_scan(-6 * math.pi / 12, -math.pi / 12)
 	action:switch_motion_mode("attack")
 
@@ -43,6 +47,7 @@ function intent:loop()
 	api.update_track_rune(false)
 	action:info(scan_timeout and "attack rune timeout" or "rune activated")
 
+	action:reset_gimbal_speed()
 	blackboard.context.attacked_rune = true
 end
 

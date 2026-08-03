@@ -69,6 +69,7 @@ local function create_default_blackboard()
 
 			powered_move = false,
 			unhealth = false,
+			runing_intent = "nothing",
 
 			attacked_rune = false,
 			attacked_outpost = false,

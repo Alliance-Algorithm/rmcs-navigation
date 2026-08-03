@@ -42,6 +42,12 @@ local Points = {
 	kThemHighlandFinal = Map:point("kThemHighlandFinal", { x = 17.5, y = -3.7 }),
 }
 
+-- 临时测试：坐标缩小一倍
+-- for _, p in pairs(Points) do
+-- 	p.x = p.x * 0.5
+-- 	p.y = p.y * 0.5
+-- end
+
 local function rough_navigate(_, to)
 	action:navigate(to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)

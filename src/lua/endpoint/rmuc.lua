@@ -18,15 +18,27 @@ local task = {
 }
 
 local function remote_controller()
+	local last_paused = false
 	while true do
 		local rswitch = blackboard.play.rswitch
 
 		local enable_navigation = (rswitch == "UP")
-		action:update_enable_control(enable_navigation)
+		local autoaim_pause = blackboard.autoaim.should_control
+			and blackboard.context.runing_intent ~= "supply"
+
+		if autoaim_pause ~= last_paused then
+			action:info(autoaim_pause
+				and "[Control] Autoaim 接管，暂停导航"
+				or "[Control] Autoaim 释放，恢复导航")
+			last_paused = autoaim_pause
+		end
+
+		action:update_enable_control(enable_navigation and not autoaim_pause)
 
 		request:yield()
 	end
 end
+
 
 local function intent_maintainer()
 	local Intent = {
@@ -42,7 +54,7 @@ local function intent_maintainer()
 	local main_intents = {
 		Intent.kAttackRune,
 		Intent.kAttackOutpost,
-		Intent.kCruiseAtHome,
+		Intent.kCruiseAtHighland,
 	}
 	local function remove_from_main_intents(name)
 		for i, item in ipairs(main_intents) do
@@ -56,7 +68,7 @@ local function intent_maintainer()
 		main_intents = {
 			Intent.kAttackRune,
 			Intent.kAttackOutpost,
-			Intent.kCruiseAtHome,
+			Intent.kCruiseAtHighland,
 		}
 	end
 
@@ -76,6 +88,7 @@ local function intent_maintainer()
 			action:stop_navigation()
 			action:abort_record()
 			select_intent = Intent.kNothing
+			blackboard.context.runing_intent = Intent.kNothing
 
 			reset_main_intents()
 			blackboard.context.attacked_outpost = false
@@ -84,7 +97,7 @@ local function intent_maintainer()
 		if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
 			action:info("[Intent] 退出 PREPARATION 阶段")
 			action:restart_navigation {
-				global_map = "empty",
+				global_map = "rmuc",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,
@@ -151,6 +164,7 @@ local function intent_maintainer()
 			handler = scheduler:append_task(intent.loop)
 
 			runing_intent = select_intent
+			blackboard.context.runing_intent = runing_intent
 		end
 		request:yield()
 	end
