@@ -46,6 +46,7 @@ local function intent_maintainer()
 		kCruiseAtHighland = "cruise-at-highland",
 		kCruiseAtFullMap = "cruise-at-full-map",
 		kAttackRune = "attack-rune",
+		kAttackBase = "attack-base",
 		kAttackOutpost = "attack-outpost",
 		kkCruiseAtThemHome = "cruise-at-them-home",
 	}
@@ -90,6 +91,9 @@ local function intent_maintainer()
 	local runing_intent = Intent.kNothing
 	local select_intent = runing_intent
 
+	local forced_enable = false
+	local forced_intent = Intent.kAttackBase
+
 	local kHealthLimit = blackboard.rule.health_limit
 	local kBulletLimit = blackboard.rule.bullet_limit
 
@@ -104,7 +108,9 @@ local function intent_maintainer()
 			action:info("[Intent] 进入 PREPARATION 阶段")
 			action:stop_navigation()
 			-- action:abort_record()
+
 			select_intent = Intent.kNothing
+			forced_enable = false
 			blackboard.context.runing_intent = Intent.kNothing
 
 			reset_main_intents()
@@ -133,7 +139,7 @@ local function intent_maintainer()
 
 		-- 比赛阶段才执行的意图切换检测
 		if stage == GameStage.STARTED then
-			-- [] Map Command
+			-- [] Map Command，优先级最高
 			local command_x = blackboard.map_command.x
 			local command_y = blackboard.map_command.y
 			if last_command_x ~= command_x or last_command_y ~= command_y then
@@ -141,10 +147,12 @@ local function intent_maintainer()
 
 				if near(command_x, command_y, Command.kBase) then
 					action:info("[Intent] 接收云台手指令，开始进攻对方基地")
-					-- TODO:
+					forced_enable = true
+					forced_intent = Intent.kAttackBase
 				elseif near(command_x, command_y, Command.kHelipad) then
 					action:info("[Intent] 接收云台手指令，恢复正常意图")
-					-- TODO:
+					forced_enable = false
+					select_intent = main_intents[1]
 				end
 			end
 			last_command_x = command_x
@@ -181,6 +189,10 @@ local function intent_maintainer()
 			if select_intent == Intent.kNothing then
 				-- Unreachable
 				select_intent = main_intents[1]
+			end
+
+			if forced_enable then
+				select_intent = forced_intent
 			end
 		end
 

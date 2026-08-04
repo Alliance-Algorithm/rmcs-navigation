@@ -26,7 +26,7 @@ local Points = {
 	kSelfSlopeBegin = Map:point("kSelfSlopeBegin", { x = 8.2, y = -6.8 }),
 	kThemSlopeFinal = Map:point("kThemSlopeFinal", { x = 8.3, y = 7.0 }),
 
-	kSelfDoubleStepsBegin = Map:point("kSelfDoubleStepsBegin", { x = 4.7, y = 0 }),
+	kSelfDoubleStepsBegin = Map:point("kSelfDoubleStepsBegin", { x = 4.9, y = 0.4 }),
 	kSelfDoubleStepsFinal = Map:point("kSelfDoubleStepsFinal", { x = 7.5, y = 0 }),
 
 	-- 中央高地
@@ -36,7 +36,7 @@ local Points = {
 
 	-- 对方半场
 
-	kThemDoubleStepsBegin = Map:point("kThemDoubleStepsBegin", { x = 16.0, y = 0 }),
+	kThemDoubleStepsBegin = Map:point("kThemDoubleStepsBegin", { x = 15.7, y = -0.2 }),
 	kThemDoubleStepsFinal = Map:point("kThemDoubleStepsFinal", { x = 13.3, y = 0 }),
 
 	kThemStepBegin = Map:point("kThemStepBegin", { x = 16.2, y = 4.3 }),
@@ -46,13 +46,9 @@ local Points = {
 	kThemHighlandFinal = Map:point("kThemHighlandFinal", { x = 17.5, y = -3.7 }),
 
 	kThemThigh = Map:point("kThemThigh", { x = 17.5, y = -6.6 }),
-}
 
--- 临时测试：坐标缩小一倍
--- for _, p in pairs(Points) do
--- 	p.x = p.x * 0.5
--- 	p.y = p.y * 0.5
--- end
+	kAttackBase = Map:point("kAttackBase", { x = 23.4, y = -1.6 }),
+}
 
 local function rough_navigate(_, to)
 	action:navigate(to)
@@ -104,45 +100,52 @@ local function cross_step(is_forward)
 	end
 end
 
-Map:connect(Points.kOrigin, Points.kHome) { rough_navigate, rough_navigate }
--- Map:connect(Points.kOrigin, Points.kSelfHighlandBegin) { rough_navigate, rough_navigate }
+-- ==================== rough_navigate ====================
 
+-- 出生区
+Map:connect(Points.kOrigin, Points.kHome) { rough_navigate, rough_navigate }
 Map:connect(Points.kOrigin, Points.kOriginLeft) { rough_navigate, rough_navigate }
+Map:connect(Points.kOrigin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
 Map:connect(Points.kOriginLeft, Points.kSelfHighlandBegin) { rough_navigate, rough_navigate }
 
-Map:connect(Points.kSelfHighlandFinal, Points.kThemSlopeFinal) { rough_navigate, rough_navigate }
-Map:connect(Points.kSelfHighlandBegin, Points.kSelfDoubleStepsBegin) { rough_navigate, rough_navigate }
+-- 己方上路（高地 - 符点 - 前哨）
 Map:connect(Points.kSelfHighlandBegin, Points.kAttackRune) { rough_navigate, rough_navigate }
 Map:connect(Points.kAttackRune, Points.kAttackOutpost) { rough_navigate, rough_navigate }
+Map:connect(Points.kSelfHighlandFinal, Points.kThemSlopeFinal) { rough_navigate, rough_navigate }
 
+-- 己方下路（双台阶 - 台阶 - 坡道）
+Map:connect(Points.kSelfHighlandBegin, Points.kSelfDoubleStepsBegin) { rough_navigate, rough_navigate }
+Map:connect(Points.kSelfDoubleStepsBegin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
 Map:connect(Points.kSelfDoubleStepsBegin, Points.kSelfStepBegin) { rough_navigate, rough_navigate }
+Map:connect(Points.kSelfStepBegin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
 Map:connect(Points.kSelfStepBegin, Points.kBehindOutpost) { rough_navigate, rough_navigate }
 Map:connect(Points.kSelfStepFinal, Points.kSelfSlopeBegin) { rough_navigate, rough_navigate }
 Map:connect(Points.kSelfSlopeBegin, Points.kNearSelfOutpost) { rough_navigate, rough_navigate }
 
+-- 中央区（双台阶终点 - 两个前哨观察位构成的环）
 Map:connect(Points.kSelfDoubleStepsFinal, Points.kNearSelfOutpost) { rough_navigate, rough_navigate }
 Map:connect(Points.kNearSelfOutpost, Points.kThemDoubleStepsFinal) { rough_navigate, rough_navigate }
 Map:connect(Points.kThemDoubleStepsFinal, Points.kNearThemOutpost) { rough_navigate, rough_navigate }
 Map:connect(Points.kNearThemOutpost, Points.kSelfDoubleStepsFinal) { rough_navigate, rough_navigate }
 
+-- 对方半场
 Map:connect(Points.kNearThemOutpost, Points.kThemStepFinal) { rough_navigate, rough_navigate }
 Map:connect(Points.kThemStepBegin, Points.kThemDoubleStepsBegin) { rough_navigate, rough_navigate }
 Map:connect(Points.kThemDoubleStepsBegin, Points.kThemHighlandBegin) { rough_navigate, rough_navigate }
+Map:connect(Points.kThemHighlandFinal, Points.kThemThigh) { rough_navigate, rough_navigate }
+Map:connect(Points.kThemHighlandBegin, Points.kAttackBase) { rough_navigate, rough_navigate }
+
+-- ==================== cross_slope（爬坡） ====================
 
 Map:connect(Points.kSelfHighlandBegin, Points.kSelfHighlandFinal) { cross_slope(true), cross_slope(false) }
 Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope(true), cross_slope(false) }
 
+-- ==================== cross_step（跨台阶） ====================
+
 Map:connect(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
 Map:connect(Points.kThemStepBegin, Points.kThemStepFinal) { cross_step(true), cross_step(false) }
 
-
-Map:connect(Points.kOrigin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
-Map:connect(Points.kSelfDoubleStepsBegin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
-Map:connect(Points.kSelfStepBegin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
-
-Map:connect(Points.kThemHighlandFinal, Points.kThemThigh) { rough_navigate, rough_navigate }
-
-blackboard.context.current = Points.kOrigin
+bb.context.current = Points.kOrigin
 
 local M = {
 	map = Map,

@@ -58,6 +58,7 @@ end
 function intent:loop()
 	action:info("在家中巡游，形如地刺")
 	action:switch_motion_mode("attack")
+	action:reset_gimbal_speed()
 
 	local count = #kRoute
 	local index = start_index()

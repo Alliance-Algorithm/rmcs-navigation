@@ -42,6 +42,7 @@ end
 function intent:loop()
 	action:info("全图游走")
 	action:switch_motion_mode("attack")
+	action:reset_gimbal_speed()
 
 	local count = #full_map_points
 	local index = 1

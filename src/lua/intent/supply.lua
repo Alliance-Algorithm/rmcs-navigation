@@ -27,7 +27,8 @@ function intent:loop()
 	-- 兜底任务：永不放弃。失败则返回上一个确认点，重新搜索重试
 	while true do
 		local failed = false
-		action:gimbal_scan(0, 0, kNavScanSpeed)
+		action:set_gimbal_yt(kNavScanSpeed)
+		action:gimbal_scan(0, 0)
 
 		for index, path in ipairs(Map:search(bb.context.current, Points.kHome)) do
 			action:info("Execute path task: " .. index .. " " .. path.begin_name .. " -> " .. path.final_name)
@@ -52,7 +53,8 @@ function intent:loop()
 		end
 
 		-- 返回上一个确认点（容差/时限与 rough_navigate 一致，局部内联）
-		action:gimbal_scan(0, 0, kNavScanSpeed)
+		action:set_gimbal_yt(kNavScanSpeed)
+		action:gimbal_scan(0, 0)
 		action:navigate(bb.context.current)
 		request:wait_until {
 			monitor = function()
