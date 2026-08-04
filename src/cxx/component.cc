@@ -46,6 +46,7 @@ private:
         OutputInterface<double> climb_cross_direction;
         OutputInterface<bool> climb_is_climb;
         OutputInterface<bool> track_rune;
+        OutputInterface<bool> automatic_resurrection;
         OutputInterface<SentryEventCounts> sentry_events;
 
         explicit Command(Navigation& component) {
@@ -60,6 +61,8 @@ private:
                 "/rmcs_navigation/request/cross_direction", climb_cross_direction, kNan);
             component.register_output("/rmcs_navigation/request/is_climb", climb_is_climb, false);
             component.register_output("/rmcs_navigation/request/track_rune", track_rune, false);
+            component.register_output(
+                "/rmcs_navigation/automatic_resurrection", automatic_resurrection, true);
             component.register_output(
                 "/rmcs_navigation/sentry_events", sentry_events, SentryEventCounts{});
         }
@@ -129,6 +132,9 @@ public:
         lua.inject(
             "update_supercap_boost", [this](bool enable) { *command.enable_supercap_ = enable; });
         lua.inject("update_track_rune", [this](bool enable) { *command.track_rune = enable; });
+        lua.inject("set_automatic_resurrection", [this](bool enable) {
+            *command.automatic_resurrection = enable;
+        });
 
         lua.inject("set_climb_direction", [this](double world_yaw) {
             if (std::isfinite(world_yaw)) {

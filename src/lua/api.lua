@@ -24,6 +24,7 @@ local util = require("util.native")
 --- @field update_under_attack fun(yes: boolean)
 --- @field update_supercap_boost fun(on: boolean)
 --- @field update_track_rune fun(enable: boolean)
+--- @field set_automatic_resurrection fun(enable: boolean)
 --- @field relocalize fun() 触发重定位，红/蓝方由 referee robot_id 自动派生
 --- @field sentry_event fun(event: string) 触发一次哨兵裁判系统指令，计数递增后由 SentryDecision 检测变化并发送
 ---

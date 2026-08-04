@@ -58,7 +58,6 @@ end
 function intent:loop()
 	action:info("在家中巡游，形如地刺")
 	action:switch_motion_mode("attack")
-	action:reset_gimbal_speed()
 
 	local count = #kRoute
 	local index = start_index()
@@ -68,14 +67,14 @@ function intent:loop()
 		local from = kRoute[index]
 		local to = kRoute[index % count + 1]
 
-		action:gimbal_toward(0, 0)
+		action:cruise_slow_scan()
 		if cruise_leg(from, to) then
-			action:gimbal_scan(0, 0)
-			request:sleep(kCruiseInterval)
+			action:cruise_fast_scan()
+			action:dwell_scan(kCruiseInterval)
 			index = index % count + 1
 		else
 			action:warn("巡游段重试: " .. from.name .. " -> " .. to.name)
-			action:gimbal_toward(0, 0)
+			action:cruise_slow_scan()
 			action:navigate(from)
 			request:wait_until {
 				monitor = function()

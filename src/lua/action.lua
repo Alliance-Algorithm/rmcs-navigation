@@ -10,6 +10,11 @@ local kYtPerRad = 1.5
 local kPtPerRad = 2.2
 local kGimbalFree = 2.2250738585072014e-308
 
+local kMaxDwellExtend = 5 -- 静止扫描被自瞄接管时，最多补时的周期数
+
+local kCruiseSlowScanSpeed = 3.2 -- 秒/弧度，赶路慢扫（约 20s 一圈）
+local kCruiseFastScanSpeed = 1.5 -- 秒/弧度，顶点快扫（约 9.4s 一圈）
+
 local action = {
 	last_enable = false,
 	target = {
@@ -171,6 +176,44 @@ function action:gimbal_scan(y1, y2)
 	self.gimbal.p2 = 0 - 0.2
 end
 
+--- 静止停留扫描：周期内每秒轮询，期间出现过自瞄接管则补一个完整周期。
+--- @param interval number 单个停留周期（秒）
+function action:dwell_scan(interval)
+	local extend = 0
+	repeat
+		local deadline = clock:now() + interval
+		local interrupted = false
+		while true do
+			request:sleep(1)
+			if bb.autoaim.should_control then
+				interrupted = true
+			end
+			if clock:now() >= deadline then
+				break
+			end
+		end
+		if not interrupted then
+			break
+		end
+		extend = extend + 1
+		action:info("扫描期间自瞄接管，延长停留 (" .. extend .. "/" .. kMaxDwellExtend .. ")")
+	until extend >= kMaxDwellExtend
+end
+
+--- 赶路慢扫：云台全圆慢扫（yt/pt 显式设置）
+function action:cruise_slow_scan()
+	action:set_gimbal_yt(kCruiseSlowScanSpeed)
+	action:set_gimbal_pt(kPtPerRad)
+	action:gimbal_scan(0, 0)
+end
+
+--- 顶点快扫：云台全圆快扫（yt/pt 显式设置）
+function action:cruise_fast_scan()
+	action:set_gimbal_yt(kCruiseFastScanSpeed)
+	action:set_gimbal_pt(kPtPerRad)
+	action:gimbal_scan(0, 0)
+end
+
 function action:gimbal_toward(yaw, pitch)
 	action:info("Set gimbal to toward mode")
 	self.gimbal.mode = "toward"
@@ -234,6 +277,12 @@ end
 --- @param enable boolean
 function action:update_track_rune(enable)
 	api.update_track_rune(enable)
+end
+
+--- @param enable boolean
+function action:set_automatic_resurrection(enable)
+	action:info("[Action] 设置自动复活为: " .. enable)
+	api.set_automatic_resurrection(enable)
 end
 
 --- 触发一次重定位，红/蓝方由 referee robot_id 自动派生；

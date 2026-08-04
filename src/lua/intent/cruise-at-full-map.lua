@@ -42,7 +42,6 @@ end
 function intent:loop()
 	action:info("全图游走")
 	action:switch_motion_mode("attack")
-	action:reset_gimbal_speed()
 
 	local count = #full_map_points
 	local index = 1
@@ -51,14 +50,14 @@ function intent:loop()
 		local from = full_map_points[index]
 		local to = full_map_points[index % count + 1]
 
-		action:gimbal_toward(0, 0)
+		action:cruise_slow_scan()
 		if cruise_leg(from, to) then
-			action:gimbal_scan(0, 0)
-			request:sleep(kCruiseInterval)
+			action:cruise_fast_scan()
+			action:dwell_scan(kCruiseInterval)
 			index = index % count + 1
 		else
 			action:warn("巡游段重试: " .. from.name .. " -> " .. to.name)
-			action:gimbal_toward(0, 0)
+			action:cruise_slow_scan()
 			action:navigate(from)
 			request:wait_until {
 				monitor = function()

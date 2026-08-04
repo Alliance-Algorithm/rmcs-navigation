@@ -2,6 +2,8 @@
 --- Local Context
 ---
 
+local enable_automatic_record_lidar = false
+
 local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
@@ -18,21 +20,10 @@ local task = {
 }
 
 local function remote_controller()
-	local last_paused = false
 	while true do
 		local rswitch = blackboard.play.rswitch
 
-		local enable_navigation = (rswitch == "UP")
-		local autoaim_pause = blackboard.autoaim.should_control and blackboard.context.runing_intent ~= "supply"
-
-		if autoaim_pause ~= last_paused then
-			action:info(
-				autoaim_pause and "[Control] Autoaim 接管，暂停导航" or "[Control] Autoaim 释放，恢复导航"
-			)
-			last_paused = autoaim_pause
-		end
-
-		action:update_enable_control(enable_navigation and not autoaim_pause)
+		action:update_enable_control(rswitch == "UP")
 
 		request:yield()
 	end
@@ -66,11 +57,7 @@ local function intent_maintainer()
 			or (math.abs(ax - points[2].x) < 1 and math.abs(ay - points[2].y) < 1)
 	end
 
-	local main_intents = {
-		Intent.kAttackOutpost,
-		-- Intent.kCruiseAtHighland,
-		Intent.kkCruiseAtThemHome,
-	}
+	local main_intents = {}
 	local function remove_from_main_intents(name)
 		for i, item in ipairs(main_intents) do
 			if item == name then
@@ -86,6 +73,7 @@ local function intent_maintainer()
 			Intent.kkCruiseAtThemHome,
 		}
 	end
+	reset_main_intents()
 
 	local handler = nil
 	local runing_intent = Intent.kNothing
@@ -107,7 +95,10 @@ local function intent_maintainer()
 		if last_stage ~= GameStage.PREPARATION and stage == GameStage.PREPARATION then
 			action:info("[Intent] 进入 PREPARATION 阶段")
 			action:stop_navigation()
-			-- action:abort_record()
+
+			if enable_automatic_record_lidar then
+				action:abort_record()
+			end
 
 			select_intent = Intent.kNothing
 			forced_enable = false
@@ -116,6 +107,7 @@ local function intent_maintainer()
 			reset_main_intents()
 			blackboard.context.attacked_outpost = false
 			blackboard.context.attacked_rune = false
+			action:set_automatic_resurrection(true)
 		end
 		if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
 			action:info("[Intent] 退出 PREPARATION 阶段")
@@ -125,7 +117,11 @@ local function intent_maintainer()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
-			-- action:start_record()
+
+			if enable_automatic_record_lidar then
+				request:sleep(2)
+				action:start_record()
+			end
 
 			-- action:relocalize()
 		end
@@ -147,10 +143,12 @@ local function intent_maintainer()
 
 				if near(command_x, command_y, Command.kBase) then
 					action:info("[Intent] 接收云台手指令，开始进攻对方基地")
+					action:set_automatic_resurrection(false)
 					forced_enable = true
 					forced_intent = Intent.kAttackBase
 				elseif near(command_x, command_y, Command.kHelipad) then
 					action:info("[Intent] 接收云台手指令，恢复正常意图")
+					action:set_automatic_resurrection(true)
 					forced_enable = false
 					select_intent = main_intents[1]
 				end
