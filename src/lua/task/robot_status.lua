@@ -9,6 +9,7 @@ return function()
 	local last_hp = 0
 
 	local last_posture = nil
+	local last_sent = clock:now()
 	local kPoseEvent = {
 		POWERED_DEFENSE = SentryEvent.SWITCH_POSE_POWERED_DEFENSE,
 		DEFENSE = SentryEvent.SWITCH_POSE_DEFENSE,
@@ -59,7 +60,12 @@ return function()
 
 		if desired ~= last_posture then
 			last_posture = desired
+			last_sent = clock:now()
 			action:info("Sentry pose -> " .. desired)
+			api.sentry_event(kPoseEvent[desired])
+		elseif clock:now() - last_sent >= 6 then
+			last_sent = clock:now()
+			action:info("Sentry pose resend -> " .. desired)
 			api.sentry_event(kPoseEvent[desired])
 		end
 

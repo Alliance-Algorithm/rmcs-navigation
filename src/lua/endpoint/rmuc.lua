@@ -49,12 +49,13 @@ local function intent_maintainer()
 		kCruiseAtFullMap = "cruise-at-full-map",
 		kAttackRune = "attack-rune",
 		kAttackOutpost = "attack-outpost",
+		kkCruiseAtThemHome = "cruise-at-them-home"
 	}
 
 	local main_intents = {
-		Intent.kAttackRune,
 		Intent.kAttackOutpost,
-		Intent.kCruiseAtHighland,
+		-- Intent.kCruiseAtHighland,
+		Intent.kkCruiseAtThemHome,
 	}
 	local function remove_from_main_intents(name)
 		for i, item in ipairs(main_intents) do
@@ -66,9 +67,9 @@ local function intent_maintainer()
 	end
 	local function reset_main_intents()
 		main_intents = {
-			Intent.kAttackRune,
 			Intent.kAttackOutpost,
-			Intent.kCruiseAtHighland,
+			-- Intent.kCruiseAtHighland,
+			Intent.kkCruiseAtThemHome,
 		}
 	end
 

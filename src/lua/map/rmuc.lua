@@ -9,6 +9,10 @@ local Points = {
 	kOrigin = Map:point("kBegin", { x = 0.0, y = 0.0 }),
 	kHome = Map:point("kHome", { x = -1.8, y = -5.0 }),
 
+	kOriginLeft = Map:point("kOriginLeft", { x = 0.0, y = 1.6 }),
+
+	kSelfFortressRight = Map:point("kSelfFortressRight", { x = 2.5, y = -2.0 }),
+
 	kSelfHighlandBegin = Map:point("kSelfHighlandBegin", { x = 2.7, y = 1.7 }),
 	kSelfHighlandFinal = Map:point("kSelfHighlandFinal", { x = 2.7, y = 4.0 }),
 
@@ -20,7 +24,7 @@ local Points = {
 	kSelfStepFinal = Map:point("kSelfStepFinal", { x = 4.5, y = -6.3 }),
 
 	kSelfSlopeBegin = Map:point("kSelfSlopeBegin", { x = 8.2, y = -6.8 }),
-	kThemSlopeFinal = Map:point("kThemSlopeFinal", { x = 8.3, y = 7 }),
+	kThemSlopeFinal = Map:point("kThemSlopeFinal", { x = 8.3, y = 7.0 }),
 
 	kSelfDoubleStepsBegin = Map:point("kSelfDoubleStepsBegin", { x = 4.7, y = 0 }),
 	kSelfDoubleStepsFinal = Map:point("kSelfDoubleStepsFinal", { x = 7.5, y = 0 }),
@@ -40,6 +44,8 @@ local Points = {
 
 	kThemHighlandBegin = Map:point("kThemHighlandBegin", { x = 17.5, y = -1.6 }),
 	kThemHighlandFinal = Map:point("kThemHighlandFinal", { x = 17.5, y = -3.7 }),
+
+	kThemThigh = Map:point("kThemThigh", { x = 17.5, y = -6.6 }),
 }
 
 -- 临时测试：坐标缩小一倍
@@ -99,7 +105,10 @@ local function cross_step(is_forward)
 end
 
 Map:connect(Points.kOrigin, Points.kHome) { rough_navigate, rough_navigate }
-Map:connect(Points.kOrigin, Points.kSelfHighlandBegin) { rough_navigate, rough_navigate }
+-- Map:connect(Points.kOrigin, Points.kSelfHighlandBegin) { rough_navigate, rough_navigate }
+
+Map:connect(Points.kOrigin, Points.kOriginLeft) { rough_navigate, rough_navigate }
+Map:connect(Points.kOriginLeft, Points.kSelfHighlandBegin) { rough_navigate, rough_navigate }
 
 Map:connect(Points.kSelfHighlandFinal, Points.kThemSlopeFinal) { rough_navigate, rough_navigate }
 Map:connect(Points.kSelfHighlandBegin, Points.kSelfDoubleStepsBegin) { rough_navigate, rough_navigate }
@@ -124,7 +133,14 @@ Map:connect(Points.kSelfHighlandBegin, Points.kSelfHighlandFinal) { cross_slope(
 Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope(true), cross_slope(false) }
 
 Map:connect(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
-Map:connect(Points.kThemStepFinal, Points.kThemStepBegin) { cross_step(true), cross_step(false) }
+Map:connect(Points.kThemStepBegin, Points.kThemStepFinal) { cross_step(true), cross_step(false) }
+
+
+Map:connect(Points.kOrigin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
+Map:connect(Points.kSelfDoubleStepsBegin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
+Map:connect(Points.kSelfStepBegin, Points.kSelfFortressRight) { rough_navigate, rough_navigate }
+
+Map:connect(Points.kThemHighlandFinal, Points.kThemThigh) { rough_navigate, rough_navigate }
 
 blackboard.context.current = Points.kOrigin
 

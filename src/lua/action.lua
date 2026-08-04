@@ -162,13 +162,14 @@ function action:fuck(message)
 	api.fuck(message)
 end
 
-function action:gimbal_scan(y1, y2)
+function action:gimbal_scan(y1, y2, yt_per_rad)
 	action:info("Set gimbal to scanning mode")
 	self.gimbal.mode = "scanning"
 	self.gimbal.y1 = y1
 	self.gimbal.y2 = y2
 	self.gimbal.p1 = 0 + 0.2
 	self.gimbal.p2 = 0 - 0.2
+	self.gimbal.yt_per_rad = yt_per_rad or kYtPerRad
 end
 
 function action:gimbal_toward(yaw, pitch)

@@ -3,12 +3,12 @@ local action = require("action")
 local bb = require("blackboard").singleton()
 local MapRmuc = require("map.rmuc")
 local Map, Points = MapRmuc.map, MapRmuc.points
-local kStayDuration = 30 -- 秒，到达哨站后停留时长
+local kStayDuration = 15 -- 秒，到达哨站后停留时长
 local intent = {}
 function intent:loop()
     action:info("前往敌方前哨站")
     action:switch_motion_mode("attack")
-    action:gimbal_scan(-math.pi / 3, math.pi / 3)
+    action:gimbal_toward(1.57, 0)
     local target = Points.kAttackOutpost
 
     -- 兜底任务：永不放弃。失败则返回上一个确认点，重新搜索重试
@@ -41,6 +41,8 @@ function intent:loop()
         }
     end
     action:info("已到达 " .. target.name .. "，停留 " .. kStayDuration .. "s")
+
+    action:gimbal_scan(-math.pi / 2, math.pi / 2)
 
     request:sleep(kStayDuration)
 

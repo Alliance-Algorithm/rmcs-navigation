@@ -8,6 +8,7 @@ local Map, Points = MapRmuc.map, MapRmuc.points
 local kHealthReady = 350
 local kBulletReady = 80
 local kSupplyInterval = 75 -- 秒，到达补给区后最多停留时长
+local kNavScanSpeed = 4.5  -- 秒/弧度，导航中云台慢扫（约 20s 一圈）
 
 local intent = {}
 
@@ -26,6 +27,7 @@ function intent:loop()
 	-- 兜底任务：永不放弃。失败则返回上一个确认点，重新搜索重试
 	while true do
 		local failed = false
+		action:gimbal_scan(0, 0, kNavScanSpeed)
 
 		for index, path in ipairs(Map:search(bb.context.current, Points.kHome)) do
 			action:info("Execute path task: " .. index .. " " .. path.begin_name .. " -> " .. path.final_name)
@@ -50,6 +52,7 @@ function intent:loop()
 		end
 
 		-- 返回上一个确认点（容差/时限与 rough_navigate 一致，局部内联）
+		action:gimbal_scan(0, 0, kNavScanSpeed)
 		action:navigate(bb.context.current)
 		request:wait_until {
 			monitor = function()
