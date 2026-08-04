@@ -281,7 +281,7 @@ end
 
 --- @param enable boolean
 function action:set_automatic_resurrection(enable)
-	action:info("[Action] 设置自动复活为: " .. enable)
+	action:info(string.format("[Action] 设置自动复活为: %s", enable and "开启" or "关闭"))
 	api.set_automatic_resurrection(enable)
 end
 
