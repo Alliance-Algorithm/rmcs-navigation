@@ -85,6 +85,10 @@ struct RmcsContext::Impl {
 
         make_input("/tf", context.tf, rmcs_description::SentryTf{});
         make_input("/auto_aim/robot_center", context.enemy_center, Eigen::Vector3d{0.0, 0.0, 0.0});
+        make_input(
+            "/referee/map_command/target_position_x", context.map_command_x, 0.0);
+        make_input(
+            "/referee/map_command/target_position_y", context.map_command_y, 0.0);
 
         service_thread = std::thread{[this] {
             auto service = util::make_service<"context">(

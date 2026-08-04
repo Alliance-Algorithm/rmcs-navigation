@@ -23,13 +23,12 @@ local function remote_controller()
 		local rswitch = blackboard.play.rswitch
 
 		local enable_navigation = (rswitch == "UP")
-		local autoaim_pause = blackboard.autoaim.should_control
-			and blackboard.context.runing_intent ~= "supply"
+		local autoaim_pause = blackboard.autoaim.should_control and blackboard.context.runing_intent ~= "supply"
 
 		if autoaim_pause ~= last_paused then
-			action:info(autoaim_pause
-				and "[Control] Autoaim 接管，暂停导航"
-				or "[Control] Autoaim 释放，恢复导航")
+			action:info(
+				autoaim_pause and "[Control] Autoaim 接管，暂停导航" or "[Control] Autoaim 释放，恢复导航"
+			)
 			last_paused = autoaim_pause
 		end
 
@@ -38,7 +37,6 @@ local function remote_controller()
 		request:yield()
 	end
 end
-
 
 local function intent_maintainer()
 	local Intent = {
@@ -49,8 +47,23 @@ local function intent_maintainer()
 		kCruiseAtFullMap = "cruise-at-full-map",
 		kAttackRune = "attack-rune",
 		kAttackOutpost = "attack-outpost",
-		kkCruiseAtThemHome = "cruise-at-them-home"
+		kkCruiseAtThemHome = "cruise-at-them-home",
 	}
+
+	local Command = { -- 操作手 UI 地图坐标系，非机器人坐标，需注意
+		kBase = {
+			{ x = 2.50, y = 7.5 },
+			{ x = 25.5, y = 7.5 },
+		},
+		kHelipad = {
+			{ x = 1.37, y = 13.17 },
+			{ x = 26.6, y = 2.03 },
+		},
+	}
+	local near = function(ax, ay, points)
+		return (math.abs(ax - points[1].x) < 1 and math.abs(ay - points[1].y) < 1)
+			or (math.abs(ax - points[2].x) < 1 and math.abs(ay - points[2].y) < 1)
+	end
 
 	local main_intents = {
 		Intent.kAttackOutpost,
@@ -82,12 +95,15 @@ local function intent_maintainer()
 
 	local last_stage = blackboard.game.stage
 
+	local last_command_x = blackboard.map_command.x
+	local last_command_y = blackboard.map_command.y
+
 	while true do
 		local stage = blackboard.game.stage
 		if last_stage ~= GameStage.PREPARATION and stage == GameStage.PREPARATION then
 			action:info("[Intent] 进入 PREPARATION 阶段")
 			action:stop_navigation()
-			action:abort_record()
+			-- action:abort_record()
 			select_intent = Intent.kNothing
 			blackboard.context.runing_intent = Intent.kNothing
 
@@ -103,7 +119,7 @@ local function intent_maintainer()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
-			action:start_record()
+			-- action:start_record()
 
 			-- action:relocalize()
 		end
@@ -117,6 +133,24 @@ local function intent_maintainer()
 
 		-- 比赛阶段才执行的意图切换检测
 		if stage == GameStage.STARTED then
+			-- [] Map Command
+			local command_x = blackboard.map_command.x
+			local command_y = blackboard.map_command.y
+			if last_command_x ~= command_x or last_command_y ~= command_y then
+				action:warn("[Intent] 目标点更新: (" .. command_x .. ", " .. command_y .. ")")
+
+				if near(command_x, command_y, Command.kBase) then
+					action:info("[Intent] 接收云台手指令，开始进攻对方基地")
+					-- TODO:
+				elseif near(command_x, command_y, Command.kHelipad) then
+					action:info("[Intent] 接收云台手指令，恢复正常意图")
+					-- TODO:
+				end
+			end
+			last_command_x = command_x
+			last_command_y = command_y
+
+			-- [] Health And Bullet
 			local health, bullet = blackboard.user.health, blackboard.user.bullet
 			local low_health = (health < kHealthLimit)
 			local low_bullet = (bullet < kBulletLimit)
@@ -131,6 +165,8 @@ local function intent_maintainer()
 				select_intent = main_intents[1]
 				goto FINALIZED
 			end
+
+			-- [] Consume Main Intents
 			if
 				(runing_intent == Intent.kAttackOutpost and blackboard.context.attacked_outpost)
 				or (runing_intent == Intent.kAttackRune and blackboard.context.attacked_rune)

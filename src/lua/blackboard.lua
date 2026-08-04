@@ -45,6 +45,10 @@ local function create_default_blackboard()
 		autoaim = {
 			should_control = false,
 		},
+		map_command = {
+			x = 0,
+			y = 0,
+		},
 		energy = {
 			small = 0, -- 0=未激活, 1=已激活, 2=正在激活
 			big = 0,

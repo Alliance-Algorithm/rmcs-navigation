@@ -39,6 +39,9 @@ public:
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 
+    InputInterface<double> map_command_x;
+    InputInterface<double> map_command_y;
+
     explicit RmcsContext(auto& node_and_component) noexcept
         : RmcsContext{node_and_component, node_and_component} {}
 

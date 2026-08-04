@@ -96,6 +96,10 @@ private:
         auto autoaim = blackboard["autoaim"].get<sol::table>();
         autoaim["should_control"] = *rmcs.auto_aim_should_control;
 
+        auto map_command = blackboard["map_command"].get<sol::table>();
+        map_command["x"] = *rmcs.map_command_x;
+        map_command["y"] = *rmcs.map_command_y;
+
         auto energy = blackboard["energy"].get<sol::table>();
         energy["small"] = *rmcs.ally_small_energy_core_state;
         energy["big"] = *rmcs.ally_big_energy_core_state;
