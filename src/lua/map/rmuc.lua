@@ -50,6 +50,12 @@ local Points = {
 	kAttackBase = Map:point("kAttackBase", { x = 23.4, y = -1.6 }),
 }
 
+-- 临时测试：坐标缩小
+-- for _, p in pairs(Points) do
+-- 	p.x = p.x * 0.2
+-- 	p.y = p.y * 0.2
+-- end
+
 local function rough_navigate(_, to)
 	action:navigate(to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)

@@ -22,7 +22,6 @@ local task = {
 local function remote_controller()
 	while true do
 		local rswitch = blackboard.play.rswitch
-
 		action:update_enable_control(rswitch == "UP")
 
 		request:yield()

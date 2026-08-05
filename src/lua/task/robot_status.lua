@@ -35,7 +35,7 @@ return function()
 		local s = api.get_climb_status()
 		local climbing = s > 0 and s < 1
 
-		local power_defense = hp < blackboard.rule.health_critical or (climbing and action.climb.up)
+		local power_defense = hp < blackboard.rule.health_critical
 		local defense = hp < blackboard.rule.health_limit or (climbing and not action.climb.up)
 		local powered_move = blackboard.context.powered_move
 		local attack = blackboard.autoaim.should_control
@@ -48,12 +48,12 @@ return function()
 			desired = "POWERED_DEFENSE"
 		elseif defense then
 			desired = "DEFENSE"
-		elseif powered_move then
-			desired = "POWERED_MOVE"
 		elseif attack then
 			desired = "ATTACK"
 		elseif last_posture == "ATTACK" and clock:now() - last_attack_seen < 2 then
 			desired = "ATTACK"
+		elseif powered_move then
+			desired = "POWERED_MOVE"
 		else
 			desired = "DEFENSE"
 		end

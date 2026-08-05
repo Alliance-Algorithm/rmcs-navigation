@@ -10,10 +10,10 @@ local kYtPerRad = 1.5
 local kPtPerRad = 2.2
 local kGimbalFree = 2.2250738585072014e-308
 
-local kMaxDwellExtend = 5 -- 静止扫描被自瞄接管时，最多补时的周期数
+local kMaxDwellExtend = 5        -- 静止扫描被自瞄接管时，最多补时的周期数
 
-local kCruiseSlowScanSpeed = 3.2 -- 秒/弧度，赶路慢扫（约 20s 一圈）
-local kCruiseFastScanSpeed = 1.5 -- 秒/弧度，顶点快扫（约 9.4s 一圈）
+local kCruiseSlowScanSpeed = 3.2 -- 秒/弧度，赶路慢扫
+local kCruiseFastScanSpeed = 1.0 -- 秒/弧度，顶点快扫
 
 local action = {
 	last_enable = false,
@@ -172,8 +172,8 @@ function action:gimbal_scan(y1, y2)
 	self.gimbal.mode = "scanning"
 	self.gimbal.y1 = y1
 	self.gimbal.y2 = y2
-	self.gimbal.p1 = 0 + 0.2
-	self.gimbal.p2 = 0 - 0.2
+	self.gimbal.p1 = 0 + 0.3
+	self.gimbal.p2 = 0 - 0.3
 end
 
 --- 静止停留扫描：周期内每秒轮询，期间出现过自瞄接管则补一个完整周期。

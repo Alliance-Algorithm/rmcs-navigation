@@ -13,6 +13,8 @@ function intent:loop()
 	action:switch_motion_mode("normal")
 	action:cruise_slow_scan()
 
+	blackboard.context.powered_move = true
+
 	local target = Points.kAttackOutpost
 	while true do
 		local failed = false
@@ -40,9 +42,12 @@ function intent:loop()
 	end
 	action:info("已到达 " .. target.name)
 
+	blackboard.context.powered_move = false
+
 	action:switch_motion_mode("attack")
 	action:gimbal_scan(-math.pi / 2, math.pi / 2)
 
+	request:sleep(30)
 	action:dwell_scan(kStayDuration)
 
 	blackboard.context.attacked_outpost = true

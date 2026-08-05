@@ -37,6 +37,7 @@ function intent:loop()
 	end
 	action:info("已到达 " .. target.name)
 
+	action:switch_motion_mode("attack")
 	action:cruise_fast_scan()
 	request:sleep(300) -- 基本等于永久停留
 end
