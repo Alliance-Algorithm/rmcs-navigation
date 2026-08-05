@@ -13,15 +13,15 @@ local Points = {
 
 	kSelfFortressRight = Map:point("kSelfFortressRight", { x = 2.5, y = -2.0 }),
 
-	kSelfHighlandBegin = Map:point("kSelfHighlandBegin", { x = 2.7, y = 1.7 }),
-	kSelfHighlandFinal = Map:point("kSelfHighlandFinal", { x = 2.7, y = 4.0 }),
+	kSelfHighlandBegin = Map:point("kSelfHighlandBegin", { x = 4.0, y = 1.7 }),
+	kSelfHighlandFinal = Map:point("kSelfHighlandFinal", { x = 4.0, y = 4.0 }),
 
 	kAttackRune = Map:point("kAttackRune", { x = 6.6, y = 3.7 }),
 	kAttackOutpost = Map:point("kAttackOutpost", { x = 7.9, y = 5.3 }),
 
 	kBehindOutpost = Map:point("kBehindOutpost", { x = 6.2, y = -3.9 }),
-	kSelfStepBegin = Map:point("kSelfStepBegin", { x = 4.5, y = -4.3 }),
-	kSelfStepFinal = Map:point("kSelfStepFinal", { x = 4.5, y = -6.3 }),
+	kSelfStepBegin = Map:point("kSelfStepBegin", { x = 4.3, y = -4.3 }),
+	kSelfStepFinal = Map:point("kSelfStepFinal", { x = 4.3, y = -6.3 }),
 
 	kSelfSlopeBegin = Map:point("kSelfSlopeBegin", { x = 8.2, y = -6.8 }),
 	kThemSlopeFinal = Map:point("kThemSlopeFinal", { x = 8.3, y = 7.0 }),
@@ -145,8 +145,6 @@ Map:connect(Points.kThemHighlandBegin, Points.kAttackBase) { rough_navigate, rou
 
 Map:connect(Points.kSelfHighlandBegin, Points.kSelfHighlandFinal) { cross_slope(true), cross_slope(false) }
 Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope(true), cross_slope(false) }
-
--- ==================== cross_step（跨台阶） ====================
 
 Map:connect(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
 Map:connect(Points.kThemStepBegin, Points.kThemStepFinal) { cross_step(true), cross_step(false) }
