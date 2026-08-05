@@ -42,7 +42,8 @@ return function()
 		local defense = hp < blackboard.rule.health_limit or (climbing and not action.climb.up)
 		local powered_move = blackboard.context.powered_move
 		local attack = blackboard.autoaim.should_control
-		local attack_base = attack and blackboard.context.runing_intent == "attack-base"
+		local attack_base = attack and
+			(blackboard.context.runing_intent == "attack-base" or blackboard.context.runing_intent == "attack-basefront")
 		if attack then
 			last_attack_seen = clock:now()
 		end

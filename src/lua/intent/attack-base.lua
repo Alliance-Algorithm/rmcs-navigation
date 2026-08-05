@@ -7,7 +7,7 @@ local Map, Points = MapRmuc.map, MapRmuc.points
 local intent = {}
 
 function intent:loop()
-	action:info("前往敌方基地")
+	action:info("前往敌方厕所")
 	action:switch_motion_mode("attack")
 	action:cruise_slow_scan()
 

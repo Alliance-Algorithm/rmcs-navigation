@@ -13,17 +13,17 @@ local Points = {
 
 	kSelfFortressRight = Map:point("kSelfFortressRight", { x = 2.5, y = -2.0 }),
 
-	kSelfHighlandBegin = Map:point("kSelfHighlandBegin", { x = 4.0, y = 1.7 }),
-	kSelfHighlandFinal = Map:point("kSelfHighlandFinal", { x = 4.0, y = 4.0 }),
+	kSelfHighlandBegin = Map:point("kSelfHighlandBegin", { x = 2.5, y = 2.0 }),
+	kSelfHighlandFinal = Map:point("kSelfHighlandFinal", { x = 2.5, y = 4.0 }),
 
-	kAttackRune = Map:point("kAttackRune", { x = 6.6, y = 3.7 }),
+	kAttackRune = Map:point("kAttackRune", { x = 5.1, y = 2.1 }),
 	kAttackOutpost = Map:point("kAttackOutpost", { x = 7.9, y = 5.3 }),
 
 	kBehindOutpost = Map:point("kBehindOutpost", { x = 6.2, y = -3.9 }),
-	kSelfStepBegin = Map:point("kSelfStepBegin", { x = 4.3, y = -4.3 }),
-	kSelfStepFinal = Map:point("kSelfStepFinal", { x = 4.3, y = -6.3 }),
+	kSelfStepBegin = Map:point("kSelfStepBegin", { x = 4.45, y = -4.3 }),
+	kSelfStepFinal = Map:point("kSelfStepFinal", { x = 4.45, y = -6.3 }),
 
-	kSelfSlopeBegin = Map:point("kSelfSlopeBegin", { x = 8.2, y = -6.8 }),
+	kSelfSlopeBegin = Map:point("kSelfSlopeBegin", { x = 7.0, y = -6.4 }),
 	kThemSlopeFinal = Map:point("kThemSlopeFinal", { x = 8.3, y = 7.0 }),
 
 	kSelfDoubleStepsBegin = Map:point("kSelfDoubleStepsBegin", { x = 4.9, y = 0.4 }),
@@ -48,12 +48,14 @@ local Points = {
 	kThemThigh = Map:point("kThemThigh", { x = 17.5, y = -6.6 }),
 
 	kAttackBase = Map:point("kAttackBase", { x = 23.4, y = -1.6 }),
+
+	kAttackBaseFront = Map:point("kAttackBaseFront", { x = 20.0, y = 0.0 }),
 }
 
 -- 临时测试：坐标缩小
 -- for _, p in pairs(Points) do
--- 	p.x = p.x * 0.2
--- 	p.y = p.y * 0.2
+--  p.x = p.x * 0.2
+--  p.y = p.y * 0.2
 -- end
 
 local function rough_navigate(_, to)
@@ -98,7 +100,15 @@ end
 -- 跨越地形任务：正向 from -> to，反向 to -> from
 local function cross_step(is_forward)
 	return function(from, to)
+		action:navigate(from)
+		request:wait_until {
+			monitor = function()
+				return bb.condition.near(to, 0.15)
+			end,
+			timeout = 5,
+		}
 		action:cancel_target()
+
 		action:update_supercap_boost(true)
 		local success = action:blocking_cross_step(math.atan(to.y - from.y, to.x - from.x), is_forward)
 		action:update_supercap_boost(false)
@@ -148,6 +158,10 @@ Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope(
 
 Map:connect(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
 Map:connect(Points.kThemStepBegin, Points.kThemStepFinal) { cross_step(true), cross_step(false) }
+
+Map:connect(Points.kAttackBaseFront, Points.kAttackBase) { rough_navigate, rough_navigate }
+Map:connect(Points.kAttackBaseFront, Points.kThemHighlandBegin) { rough_navigate, rough_navigate }
+Map:connect(Points.kThemStepBegin, Points.kAttackBaseFront) { rough_navigate, rough_navigate }
 
 bb.context.current = Points.kOrigin
 

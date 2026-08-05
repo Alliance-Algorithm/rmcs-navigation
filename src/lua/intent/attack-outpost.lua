@@ -11,7 +11,7 @@ local intent = {}
 function intent:loop()
 	action:info("前往敌方前哨站")
 	action:switch_motion_mode("normal")
-	action:cruise_slow_scan()
+	action:gimbal_toward(0, 0.3)
 
 	blackboard.context.powered_move = true
 
@@ -45,6 +45,7 @@ function intent:loop()
 	blackboard.context.powered_move = false
 
 	action:switch_motion_mode("attack")
+	action:cruise_slow_scan()
 	action:gimbal_scan(-math.pi / 2, math.pi / 2)
 
 	request:sleep(30)

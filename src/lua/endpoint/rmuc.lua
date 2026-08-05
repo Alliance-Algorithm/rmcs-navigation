@@ -39,12 +39,17 @@ local function intent_maintainer()
 		kAttackBase = "attack-base",
 		kAttackOutpost = "attack-outpost",
 		kkCruiseAtThemHome = "cruise-at-them-home",
+		kAttackBaseFront = "attack-basefront",
 	}
 
 	local Command = { -- 操作手 UI 地图坐标系，非机器人坐标，需注意
 		kBase = {
 			{ x = 2.50, y = 7.5 },
 			{ x = 25.5, y = 7.5 },
+		},
+		kFortress = {
+			{ x = 21.35, y = 7.5 },
+			{ x = 6.65,  y = 7.5 }
 		},
 		kHelipad = {
 			{ x = 1.37, y = 13.17 },
@@ -141,10 +146,15 @@ local function intent_maintainer()
 				action:warn("[Intent] 目标点更新: (" .. command_x .. ", " .. command_y .. ")")
 
 				if near(command_x, command_y, Command.kBase) then
-					action:info("[Intent] 接收云台手指令，开始进攻对方基地")
+					action:info("[Intent] 接收云台手指令，开始进攻对方厕所")
 					action:set_automatic_resurrection(false)
 					forced_enable = true
 					forced_intent = Intent.kAttackBase
+				elseif near(command_x, command_y, Command.kFortress) then
+					action:info("[Intent] 接收云台手指令，开始进攻对方基地前方")
+					action:set_automatic_resurrection(false)
+					forced_enable = true
+					forced_intent = Intent.kAttackBaseFront
 				elseif near(command_x, command_y, Command.kHelipad) then
 					action:info("[Intent] 接收云台手指令，恢复正常意图")
 					action:set_automatic_resurrection(true)
