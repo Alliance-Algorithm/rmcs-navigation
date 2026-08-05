@@ -39,7 +39,9 @@ private:
 
         OutputInterface<bool> enable_control;
         OutputInterface<bool> enable_autoaim;
-        OutputInterface<bool> enable_supercap_;
+        OutputInterface<bool> track_building_only;
+
+        OutputInterface<bool> enable_supercap;
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
@@ -52,7 +54,10 @@ private:
         explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
             component.register_output("/rmcs_navigation/enable_autoaim", enable_autoaim, true);
-            component.register_output("/rmcs_navigation/enable_supercap", enable_supercap_, false);
+            component.register_output(
+                "/rmcs_navigation/track_building_only", track_building_only, false);
+
+            component.register_output("/rmcs_navigation/enable_supercap", enable_supercap, false);
             component.register_output(
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
@@ -130,8 +135,11 @@ public:
             "switch_motion_mode", [this](const std::string& mode) { motion.switch_mode(mode); });
         lua.inject("update_under_attack", [this](bool yes) { motion.context.under_attack = yes; });
         lua.inject(
-            "update_supercap_boost", [this](bool enable) { *command.enable_supercap_ = enable; });
+            "update_supercap_boost", [this](bool enable) { *command.enable_supercap = enable; });
         lua.inject("update_track_rune", [this](bool enable) { *command.track_rune = enable; });
+        lua.inject("update_track_building_only", [this](bool enable) {
+            *command.track_building_only = enable;
+        });
         lua.inject("set_automatic_resurrection", [this](bool enable) {
             *command.automatic_resurrection = enable;
         });

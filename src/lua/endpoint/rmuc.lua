@@ -15,6 +15,8 @@ local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
 local request = Scheduler.request
 
+local Points = require("map.rmuc").points
+
 local task = {
 	robot_status = require("task.robot_status"),
 }
@@ -49,7 +51,7 @@ local function intent_maintainer()
 		},
 		kFortress = {
 			{ x = 21.35, y = 7.5 },
-			{ x = 6.65,  y = 7.5 }
+			{ x = 6.65, y = 7.5 },
 		},
 		kHelipad = {
 			{ x = 1.37, y = 13.17 },
@@ -106,12 +108,16 @@ local function intent_maintainer()
 
 			select_intent = Intent.kNothing
 			forced_enable = false
-			blackboard.context.runing_intent = Intent.kNothing
-
 			reset_main_intents()
+
+			blackboard.context.runing_intent = Intent.kNothing
+			blackboard.context.current = Points.kOrigin
+
 			blackboard.context.attacked_outpost = false
 			blackboard.context.attacked_rune = false
+
 			action:set_automatic_resurrection(true)
+			action:update_track_building_only(false)
 		end
 		if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
 			action:info("[Intent] 退出 PREPARATION 阶段")
@@ -148,16 +154,19 @@ local function intent_maintainer()
 				if near(command_x, command_y, Command.kBase) then
 					action:info("[Intent] 接收云台手指令，开始进攻对方厕所")
 					action:set_automatic_resurrection(false)
+					action:update_track_building_only(true)
 					forced_enable = true
 					forced_intent = Intent.kAttackBase
 				elseif near(command_x, command_y, Command.kFortress) then
 					action:info("[Intent] 接收云台手指令，开始进攻对方基地前方")
 					action:set_automatic_resurrection(false)
+					action:update_track_building_only(true)
 					forced_enable = true
 					forced_intent = Intent.kAttackBaseFront
 				elseif near(command_x, command_y, Command.kHelipad) then
 					action:info("[Intent] 接收云台手指令，恢复正常意图")
 					action:set_automatic_resurrection(true)
+					action:update_track_building_only(false)
 					forced_enable = false
 					select_intent = main_intents[1]
 				end

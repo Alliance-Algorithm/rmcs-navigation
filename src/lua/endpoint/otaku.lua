@@ -5,8 +5,6 @@
 local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
-local order = require("util.order")
-local edges = require("util.edge")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -36,27 +34,18 @@ on_init = function()
 	action:gimbal_scan(0, 0)
 	action:switch_motion_mode("attack")
 
+	action:restart_navigation {
+		global_map = "empty",
+		launch_livox = true,
+		launch_odin1 = false,
+		use_sim_time = false,
+	}
+
 	scheduler:append_task(task.robot_status)
-	scheduler:append_task(function()
-		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
-		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function() end)
-
-		while true do
-			switch_order:spin()
-			request:yield()
-		end
-	end)
-
 	scheduler:append_task(function()
 		while true do
 			action:update_enable_control(blackboard.play.rswitch == "UP")
 			request:yield()
-		end
-	end)
-
-	scheduler:append_task(function()
-		while true do
-			request:sleep(0.1)
 		end
 	end)
 end
@@ -66,4 +55,6 @@ on_tick = function()
 	scheduler:spin_once()
 end
 
-on_exit = function() end
+on_exit = function()
+	action:stop_navigation()
+end

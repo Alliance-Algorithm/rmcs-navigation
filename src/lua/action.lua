@@ -10,7 +10,7 @@ local kYtPerRad = 1.5
 local kPtPerRad = 2.2
 local kGimbalFree = 2.2250738585072014e-308
 
-local kMaxDwellExtend = 5        -- 静止扫描被自瞄接管时，最多补时的周期数
+local kMaxDwellExtend = 5 -- 静止扫描被自瞄接管时，最多补时的周期数
 
 local kCruiseSlowScanSpeed = 3.2 -- 秒/弧度，赶路慢扫
 local kCruiseFastScanSpeed = 1.0 -- 秒/弧度，顶点快扫
@@ -277,6 +277,12 @@ end
 --- @param enable boolean
 function action:update_track_rune(enable)
 	api.update_track_rune(enable)
+end
+
+--- @param enable boolean
+function action:update_track_building_only(enable)
+	action:info(string.format("[Action] 仅跟踪建筑模式: %s", enable and "开启" or "关闭"))
+	api.update_track_building_only(enable)
 end
 
 --- @param enable boolean
