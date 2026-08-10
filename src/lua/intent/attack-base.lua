@@ -4,18 +4,14 @@ local bb = require("blackboard").singleton()
 local MapRmuc = require("map.rmuc")
 local Map, Points = MapRmuc.map, MapRmuc.points
 
-local kStayDuration = 10 -- 秒，到达哨站后停留时长
-
 local intent = {}
 
 function intent:loop()
-	action:info("前往敌方前哨站")
-	action:switch_motion_mode("normal")
-	action:gimbal_toward(0, 0.3)
+	action:info("前往敌方厕所")
+	action:switch_motion_mode("attack")
+	action:cruise_slow_scan()
 
-	blackboard.context.powered_move = true
-
-	local target = Points.kAttackOutpost
+	local target = Points.kAttackBase
 	while true do
 		local failed = false
 		for i, path in ipairs(Map:search(bb.context.current, target)) do
@@ -25,13 +21,12 @@ function intent:loop()
 				failed = true
 				break
 			end
-			bb.context.current = path.final_point -- 每条边成功后推进
+			bb.context.current = path.final_point
 		end
 		if not failed then
 			break
 		end
 
-		-- 返回上一个确认点（容差/时限与 rough_navigate 一致，局部内联）
 		action:navigate(bb.context.current)
 		request:wait_until {
 			monitor = function()
@@ -42,16 +37,9 @@ function intent:loop()
 	end
 	action:info("已到达 " .. target.name)
 
-	blackboard.context.powered_move = false
-
 	action:switch_motion_mode("attack")
-	action:cruise_slow_scan()
-	action:gimbal_scan(-math.pi / 2, math.pi / 2)
-
-	request:sleep(30)
-	action:dwell_scan(kStayDuration)
-
-	blackboard.context.attacked_outpost = true
+	action:cruise_fast_scan()
+	request:sleep(300) -- 基本等于永久停留
 end
 
 return intent

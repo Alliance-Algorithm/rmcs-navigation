@@ -4,12 +4,14 @@ local request = require("util.scheduler").request
 local intent = {}
 
 function intent:loop()
-	action:info("进入到什么也不做的意图")
+	action:info("Waiting......")
 	action:switch_motion_mode("normal")
 
+	action:gimbal_free()
+
 	while true do
-		action:info("间隔非常长的心跳，以防你不知道哨兵还活着")
-		request:sleep(10)
+		action:info(".")
+		request:sleep(30)
 	end
 end
 

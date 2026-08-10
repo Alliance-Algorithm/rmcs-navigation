@@ -42,10 +42,12 @@ public:
     /// 触发 rmcs_localization 重定位。
     ///
     /// 行为说明：
-    /// - color 为 RED/BLUE 时，分别调用
-    ///   /rmcs_localization/relocalize/{red,blue}（std_srvs/Trigger）；
+    /// - color 为 RED/BLUE 时，向 FIFO
+    ///   /tmp/rmcs-localization/relocalize/trigger 写入 "red"/"blue"；
     /// - color 为 UNKNOWN 时直接拒绝并告警，不做兜底；
-    /// - 服务不可用时，本次请求不会发送。
+    /// - FIFO 不可用（定位端未启动）时，本次请求不会发送；
+    /// - 重定位结果由定位端写入 /tmp/rmcs-navigation/relocalize/result，
+    ///   本端监听并打印成功/失败日志。
     ///
     /// 用法示例：
     /// - navigation.relocalize(rmcs_msgs::RobotColor::RED);

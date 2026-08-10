@@ -40,6 +40,8 @@ public:
                 throw std::runtime_error { std::format("管道无法打开: {}", path) };
             }
         }
+        // mkfifo 受 umask 影响（022 下退化为 0644），显式放宽以保证写端可 open
+        ::chmod(path.c_str(), 0666);
 
         fd_ = ::open(path.c_str(), O_RDONLY | O_NONBLOCK);
     }

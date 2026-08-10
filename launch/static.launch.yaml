@@ -28,7 +28,7 @@ launch:
       default: "false"
   - arg:
       name: "global_map"
-      default: "战队"
+      default: "rmuc"
 
   - arg:
       name: "configuration"

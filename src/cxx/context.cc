@@ -71,6 +71,12 @@ struct RmcsContext::Impl {
         make_input("/referee/id", context.robot_id, rmcs_msgs::RobotId{});
         make_input("/referee/enemy/outpost/hp", context.enemy_outpost_hp, std::uint16_t{0});
         make_input("/referee/enemy/base/hp", context.enemy_base_hp, std::uint16_t{0});
+        make_input(
+            "/referee/event/ally_small_energy_activation_status",
+            context.ally_small_energy_core_state, std::uint8_t{0});
+        make_input(
+            "/referee/event/ally_big_energy_activation_status", context.ally_big_energy_core_state,
+            std::uint8_t{0});
 
         make_input("/remote/switch/right", context.switch_right, rmcs_msgs::Switch::UNKNOWN);
         make_input("/remote/switch/left", context.switch_left, rmcs_msgs::Switch::UNKNOWN);
@@ -79,6 +85,10 @@ struct RmcsContext::Impl {
 
         make_input("/tf", context.tf, rmcs_description::SentryTf{});
         make_input("/auto_aim/robot_center", context.enemy_center, Eigen::Vector3d{0.0, 0.0, 0.0});
+        make_input(
+            "/referee/map_command/target_position_x", context.map_command_x, 0.0);
+        make_input(
+            "/referee/map_command/target_position_y", context.map_command_y, 0.0);
 
         service_thread = std::thread{[this] {
             auto service = util::make_service<"context">(

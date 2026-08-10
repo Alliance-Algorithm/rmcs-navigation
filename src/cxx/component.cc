@@ -39,18 +39,25 @@ private:
 
         OutputInterface<bool> enable_control;
         OutputInterface<bool> enable_autoaim;
-        OutputInterface<bool> enable_supercap_;
+        OutputInterface<bool> track_building_only;
+
+        OutputInterface<bool> enable_supercap;
         OutputInterface<ChassisMode> chassis_behavior;
         OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<Eigen::Vector2d> gimbal_toward;
         OutputInterface<double> climb_cross_direction;
         OutputInterface<bool> climb_is_climb;
+        OutputInterface<bool> track_rune;
+        OutputInterface<bool> automatic_resurrection;
         OutputInterface<SentryEventCounts> sentry_events;
 
         explicit Command(Navigation& component) {
             component.register_output("/rmcs_navigation/enable_control", enable_control, true);
             component.register_output("/rmcs_navigation/enable_autoaim", enable_autoaim, true);
-            component.register_output("/rmcs_navigation/enable_supercap", enable_supercap_, false);
+            component.register_output(
+                "/rmcs_navigation/track_building_only", track_building_only, false);
+
+            component.register_output("/rmcs_navigation/enable_supercap", enable_supercap, false);
             component.register_output(
                 "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output("/rmcs_navigation/chassis_velocity", chassis_speed, kVecNaN);
@@ -58,6 +65,9 @@ private:
             component.register_output(
                 "/rmcs_navigation/request/cross_direction", climb_cross_direction, kNan);
             component.register_output("/rmcs_navigation/request/is_climb", climb_is_climb, false);
+            component.register_output("/rmcs_navigation/request/track_rune", track_rune, false);
+            component.register_output(
+                "/rmcs_navigation/automatic_resurrection", automatic_resurrection, true);
             component.register_output(
                 "/rmcs_navigation/sentry_events", sentry_events, SentryEventCounts{});
         }
@@ -94,6 +104,14 @@ private:
         auto autoaim = blackboard["autoaim"].get<sol::table>();
         autoaim["should_control"] = *rmcs.auto_aim_should_control;
 
+        auto map_command = blackboard["map_command"].get<sol::table>();
+        map_command["x"] = *rmcs.map_command_x;
+        map_command["y"] = *rmcs.map_command_y;
+
+        auto energy = blackboard["energy"].get<sol::table>();
+        energy["small"] = *rmcs.ally_small_energy_core_state;
+        energy["big"] = *rmcs.ally_big_energy_core_state;
+
         auto meta = blackboard["meta"].get<sol::table>();
         meta["timestamp"] = this->now().seconds();
     }
@@ -117,7 +135,14 @@ public:
             "switch_motion_mode", [this](const std::string& mode) { motion.switch_mode(mode); });
         lua.inject("update_under_attack", [this](bool yes) { motion.context.under_attack = yes; });
         lua.inject(
-            "update_supercap_boost", [this](bool enable) { *command.enable_supercap_ = enable; });
+            "update_supercap_boost", [this](bool enable) { *command.enable_supercap = enable; });
+        lua.inject("update_track_rune", [this](bool enable) { *command.track_rune = enable; });
+        lua.inject("update_track_building_only", [this](bool enable) {
+            *command.track_building_only = enable;
+        });
+        lua.inject("set_automatic_resurrection", [this](bool enable) {
+            *command.automatic_resurrection = enable;
+        });
 
         lua.inject("set_climb_direction", [this](double world_yaw) {
             if (std::isfinite(world_yaw)) {

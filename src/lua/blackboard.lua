@@ -7,11 +7,6 @@ GameStage = {
 	SETTLING = "SETTLING",
 	UNKNOWN = "UNKNOWN",
 }
-Intent = {
-	nothing = "nothing",
-	spikes = "spikes",
-	supply = "supply",
-}
 SentryEvent = {
 	SWITCH_POSE_ATTACK = "SWITCH_POSE_ATTACK",
 	SWITCH_POSE_DEFENSE = "SWITCH_POSE_DEFENSE",
@@ -50,6 +45,14 @@ local function create_default_blackboard()
 		autoaim = {
 			should_control = false,
 		},
+		map_command = {
+			x = 0,
+			y = 0,
+		},
+		energy = {
+			small = 0, -- 0=未激活, 1=已激活, 2=正在激活
+			big = 0,
+		},
 		meta = {
 			timestamp = 0, -- 秒
 		},
@@ -57,21 +60,23 @@ local function create_default_blackboard()
 		-- Static Information
 		rule = {
 			-- 状态类规则
-			health_limit = 200,
 			health_critical = 50,
+
+			health_limit = 200,
 			bullet_limit = 20,
 		},
 
 		-- context
 		context = {
-			last_intent = Intent.nothing,
-			hint_intent = Intent.nothing,
-
-			intent_to_return = Intent.nothing,
-
 			current = nil, -- 当前地图节点，由 Map 边 Task 成功后推进
+			started_timestamp = 0,
 
-			power_move = false,
+			powered_move = false,
+			unhealth = false,
+			runing_intent = "nothing",
+
+			attacked_rune = false,
+			attacked_outpost = false,
 		},
 	}
 
