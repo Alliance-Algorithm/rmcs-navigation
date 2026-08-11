@@ -56,6 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 --branch "${RMCS_REF}" "${RMCS_REPO}" /tmp/RMCS
+          git -C /tmp/RMCS submodule update --init rmcs_ws/src/fast_tf
           mkdir -p /tmp/RMCS/rmcs_ws/src/skills/rmcs-navigation
           tar -C "${GITHUB_WORKSPACE}" --exclude=".git" -cf - . \
             | tar -C /tmp/RMCS/rmcs_ws/src/skills/rmcs-navigation -xf -

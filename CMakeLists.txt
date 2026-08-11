@@ -25,6 +25,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 
 find_package(rmcs_executor REQUIRED)
+find_package(rmcs_description REQUIRED)
 
 find_package(nav2_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -63,6 +64,7 @@ target_include_directories(
     SYSTEM PRIVATE
         ${PROJECT_SOURCE_DIR}/src/
         ${rmcs_executor_INCLUDE_DIRS}
+        ${rmcs_description_INCLUDE_DIRS}
         ${geometry_msgs_INCLUDE_DIRS}
         ${rmcs_msgs_INCLUDE_DIRS}
         ${ament_index_cpp_INCLUDE_DIRS}
@@ -85,6 +87,7 @@ target_link_libraries(
         yaml-cpp::yaml-cpp
         Eigen3::Eigen
         ${rmcs_executor_LIBRARIES}
+        ${rmcs_description_LIBRARIES}
         ${geometry_msgs_LIBRARIES}
         ${rmcs_msgs_LIBRARIES}
         ${tf2_ros_LIBRARIES}
