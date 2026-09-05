@@ -36,14 +36,14 @@ on_init = function()
 
 		local kPoints = {
 			Points.kOrigin,
-			Points.kStep1,
+			-- Points.kStep1,
 			Points.kStep2,
-			Points.kStep3,
+			-- Points.kStep3,
 			Points.kStep4,
-			Points.kStep5,
+			-- Points.kStep5,
 			Points.kLand,
-			Points.kStep6,
-			Points.kStep7,
+			-- Points.kStep6,
+			-- Points.kStep7,
 		}
 		while true do
 			for _, point in ipairs(kPoints) do
@@ -94,9 +94,9 @@ on_init = function()
 				use_sim_time = false,
 			}
 
-			request:sleep(5)
+			request:sleep(15)
 			action:relocalize()
-			request:sleep(5)
+			request:sleep(15)
 
 			action:update_enable_control(true)
 			action:switch_topic_forward(true)
