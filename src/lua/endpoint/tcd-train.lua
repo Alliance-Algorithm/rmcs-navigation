@@ -37,7 +37,7 @@ on_init = function()
 		local kPoints = {
 			Points.kOrigin,
 			-- Points.kStep1,
-			Points.kStep2,
+			-- Points.kStep2,
 			-- Points.kStep3,
 			Points.kStep4,
 			-- Points.kStep5,
@@ -94,13 +94,13 @@ on_init = function()
 				use_sim_time = false,
 			}
 
-			request:sleep(15)
+			request:sleep(10)
 			action:relocalize()
-			request:sleep(15)
+			request:sleep(5)
 
 			action:update_enable_control(true)
 			action:switch_topic_forward(true)
-			action:switch_motion_mode("attack")
+			-- action:switch_motion_mode("attack")
 			action:gimbal_suspend()
 
 			intent_handler = scheduler:append_task(intent)

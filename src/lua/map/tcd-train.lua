@@ -6,11 +6,11 @@ local bb = require("blackboard").singleton()
 local Points = {
 	kOrigin = Map:point("kOrigin", { x = 0.0, y = 0.0 }),
 	-- kStep1 = Map:point("kStep1", { x = -2.8, y = 0.1 }),
-	kStep2 = Map:point("kStep2", { x = -3.0, y = 1.0 }),
+	-- kStep2 = Map:point("kStep2", { x = -3.0, y = 1.0 }),
 	-- kStep3 = Map:point("kStep3", { x = -0.5, y = 1.1 }),
 	kStep4 = Map:point("kStep4", { x = -0.8, y = 2.2 }),
 	-- kStep5 = Map:point("kStep5", { x = -5.0, y = 2.2 }),
-	kLand = Map:point("kLand", { x = -4.8, y = -1.8 }),
+	kLand = Map:point("kLand", { x = -4.8, y = -3.3 }),
 	-- kStep6 = Map:point("kStep6", { x = -5.3, y = -3.5 }),
 	-- kStep7 = Map:point("kStep7", { x = -0.9, y = -2.9 }),
 }
@@ -30,9 +30,9 @@ end
 
 -- Map:connect(Points.kOrigin, Points.kStep1) { navigate, navigate }
 -- Map:connect(Points.kStep1, Points.kStep2) { navigate, navigate }
-Map:connect(Points.kOrigin, Points.kStep2) { navigate, navigate }
+Map:connect(Points.kOrigin, Points.kStep4) { navigate, navigate }
 
-Map:connect(Points.kStep2, Points.kStep4) { navigate, navigate }
+-- Map:connect(Points.kStep2, Points.kStep4) { navigate, navigate }
 -- Map:connect(Points.kStep3, Points.kStep4) { navigate, navigate }
 -- Map:connect(Points.kStep4, Points.kStep5) { navigate, navigate }
 Map:connect(Points.kStep4, Points.kLand) { navigate, navigate }

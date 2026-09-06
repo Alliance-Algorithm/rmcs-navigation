@@ -24,7 +24,7 @@ global_costmap:
       initial_transform_timeout: 120.0
       global_frame: world
       robot_base_frame: base_link
-      footprint: "[[0.1, 0.1], [0.1, -0.1], [-0.1, -0.1], [-0.1, 0.1]]"
+      footprint: "[[0.18, 0.18], [0.18, -0.18], [-0.18, -0.18], [-0.18, 0.18]]"
       update_frequency: 5.0
       publish_frequency: 5.0
       always_send_full_costmap: true
@@ -38,8 +38,8 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.34
-        cost_scaling_factor: 0.5
+        inflation_radius: 0.22
+        cost_scaling_factor: 0.7
 
 # 局部地图 + 局部规划
 controller_server:
@@ -118,7 +118,7 @@ controller_server:
         cost_power: 2
         consider_footprint: true
         near_goal_distance: 0.3
-        trajectory_point_step: 1
+        trajectory_point_step: 2
       # 轨迹接近目标
       GoalCritic:
         enabled: true
@@ -127,7 +127,7 @@ controller_server:
       # 轨迹方向与全局路径对齐
       PathAlignCritic:
         enabled: true
-        cost_weight: 3.8
+        cost_weight: 4.5
         threshold_to_consider: 1.0
         trajectory_point_step: 2
       # 跟随全局路径前进
