@@ -100,7 +100,7 @@ on_init = function()
 
 			action:update_enable_control(true)
 			action:switch_topic_forward(true)
-			-- action:switch_motion_mode("attack")
+			action:switch_motion_mode("attack")
 			action:gimbal_suspend()
 
 			intent_handler = scheduler:append_task(intent)

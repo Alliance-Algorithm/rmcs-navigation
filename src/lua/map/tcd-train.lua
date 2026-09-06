@@ -10,7 +10,7 @@ local Points = {
 	-- kStep3 = Map:point("kStep3", { x = -0.5, y = 1.1 }),
 	kStep4 = Map:point("kStep4", { x = -0.8, y = 2.2 }),
 	-- kStep5 = Map:point("kStep5", { x = -5.0, y = 2.2 }),
-	kLand = Map:point("kLand", { x = -4.8, y = -1.4 }),
+	kLand = Map:point("kLand", { x = -4.8, y = -1.8 }),
 	-- kStep6 = Map:point("kStep6", { x = -5.3, y = -3.5 }),
 	-- kStep7 = Map:point("kStep7", { x = -0.9, y = -2.9 }),
 }
