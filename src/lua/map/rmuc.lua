@@ -58,43 +58,20 @@ local Points = {
 --  p.y = p.y * 0.2
 -- end
 
-local function rough_navigate(_, to)
+local function rough_navigate(from, to)
 	action:navigate(to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)
+	local distance = math.sqrt((to.x - from.x) ^ 2 + (to.y - from.y) ^ 2)
 	local timeout = request:wait_until {
 		monitor = function()
 			return bb.condition.near(to, 0.5)
 		end,
-		timeout = 10,
+		timeout = 10 + distance / 2,
 	}
 	if timeout then
 		action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
 	end
 	return not timeout
-end
-
--- 爬坡任务：need_boost 为 true（上坡）时开启超级电容，下坡不开
-local function cross_slope(need_boost)
-	return function(_, to)
-		if need_boost then
-			action:update_supercap_boost(true)
-		end
-		action:navigate(to)
-		action:info("cross slope to " .. to.x .. ", " .. to.y)
-		local timeout = request:wait_until {
-			monitor = function()
-				return bb.condition.near(to, 0.3)
-			end,
-			timeout = 10,
-		}
-		if timeout then
-			action:fuck("cross slope timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
-		end
-		if need_boost then
-			action:update_supercap_boost(false)
-		end
-		return not timeout
-	end
 end
 
 -- 跨越地形任务：正向 from -> to，反向 to -> from
@@ -151,13 +128,15 @@ Map:connect(Points.kThemDoubleStepsBegin, Points.kThemHighlandBegin) { rough_nav
 Map:connect(Points.kThemHighlandFinal, Points.kThemThigh) { rough_navigate, rough_navigate }
 Map:connect(Points.kThemHighlandBegin, Points.kAttackBase) { rough_navigate, rough_navigate }
 
--- ==================== cross_slope（爬坡） ====================
+-- ==================== 坡道（降级为普通边，可合并） ====================
 
-Map:connect(Points.kSelfHighlandBegin, Points.kSelfHighlandFinal) { cross_slope(true), cross_slope(false) }
-Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { cross_slope(true), cross_slope(false) }
+Map:connect(Points.kSelfHighlandBegin, Points.kSelfHighlandFinal) { rough_navigate, rough_navigate }
+Map:connect(Points.kThemHighlandBegin, Points.kThemHighlandFinal) { rough_navigate, rough_navigate }
 
-Map:connect(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
-Map:connect(Points.kThemStepBegin, Points.kThemStepFinal) { cross_step(true), cross_step(false) }
+-- ==================== 台阶（合并屏障，单独跨越） ====================
+
+Map:connect_step(Points.kSelfStepBegin, Points.kSelfStepFinal) { cross_step(true), cross_step(false) }
+Map:connect_step(Points.kThemStepBegin, Points.kThemStepFinal) { cross_step(true), cross_step(false) }
 
 Map:connect(Points.kAttackBaseFront, Points.kAttackBase) { rough_navigate, rough_navigate }
 Map:connect(Points.kAttackBaseFront, Points.kThemHighlandBegin) { rough_navigate, rough_navigate }

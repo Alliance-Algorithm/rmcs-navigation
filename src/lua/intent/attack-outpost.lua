@@ -16,29 +16,8 @@ function intent:loop()
 	blackboard.context.powered_move = true
 
 	local target = Points.kAttackOutpost
-	while true do
-		local failed = false
-		for i, path in ipairs(Map:search(bb.context.current, target)) do
-			action:info("Execute path task: " .. i .. " " .. path.begin_name .. " -> " .. path.final_name)
-			if not path.run() then
-				action:warn("路径任务失败，返回 " .. bb.context.current.name .. " 重试")
-				failed = true
-				break
-			end
-			bb.context.current = path.final_point -- 每条边成功后推进
-		end
-		if not failed then
-			break
-		end
-
-		-- 返回上一个确认点（容差/时限与 rough_navigate 一致，局部内联）
-		action:navigate(bb.context.current)
-		request:wait_until {
-			monitor = function()
-				return bb.condition.near(bb.context.current, 0.5)
-			end,
-			timeout = 10,
-		}
+	while not action:follow_path(Map, target) do
+		action:navigate_until(bb.context.current, 0.5, 10)
 	end
 	action:info("已到达 " .. target.name)
 

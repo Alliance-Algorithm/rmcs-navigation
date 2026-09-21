@@ -14,23 +14,26 @@ local Points = {
 	kAttackAtHole = Map:point("kAttackAtHole", { x = 4.7, y = -2.1 }),
 }
 
-local function navigate(_, to)
+local function navigate(from, to)
 	action:navigate(to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)
+	local distance = math.sqrt((to.x - from.x) ^ 2 + (to.y - from.y) ^ 2)
 	local timeout = request:wait_until {
 		monitor = function()
 			return bb.condition.near(to, 0.5)
 		end,
-		timeout = 15,
+		timeout = 10 + distance / 2,
 	}
-	action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+	if timeout then
+		action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+	end
 	return not timeout
 end
 
 Map:connect(Points.kOrigin, Points.kAttackInLeft) { navigate, navigate }
 Map:connect(Points.kOrigin, Points.kAttackInRight) { navigate, navigate }
 Map:connect(Points.kAttackInRight, Points.kStepBegin) { navigate, navigate }
-Map:connect(Points.kStepBegin, Points.kStepFinal) {
+Map:connect_step(Points.kStepBegin, Points.kStepFinal) {
 	function(from, to)
 		action:cancel_target()
 		action:update_supercap_boost(true)

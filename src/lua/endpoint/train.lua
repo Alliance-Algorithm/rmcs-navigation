@@ -44,14 +44,10 @@ on_init = function()
 			for _, point in ipairs(kPoints) do
 				action:gimbal_suspend()
 
-				for index, path_task in ipairs(Map:search(blackboard.context.current, point)) do
-					action:info("Execute path task: " .. index)
-					if not path_task.run() then
-						action:fuck("Failed to follow path, return")
-						return
-					end
+				if not action:follow_path(Map, point) then
+					action:fuck("Failed to follow path, return")
+					return
 				end
-				blackboard.context.current = point
 
 				action:gimbal_scan(0, 0)
 				request:sleep(3)

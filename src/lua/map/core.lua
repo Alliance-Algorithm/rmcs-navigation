@@ -6,16 +6,23 @@
 --- @alias MapTask fun(from: MapPoint, to: MapPoint): boolean
 
 --- @class MapPathTask
---- @field run fun(): boolean 执行该边任务，返回是否成功
---- @field begin_point MapPoint 边起点
---- @field final_point MapPoint 边终点
---- @field begin_name string 边起点名称，用于日志
---- @field final_name string 边终点名称，用于日志
+--- @field run fun(): boolean 执行该腿任务，返回是否成功
+--- @field begin_point MapPoint 腿起点
+--- @field final_point MapPoint 腿终点
+--- @field begin_name string 腿起点名称，用于日志
+--- @field final_name string 腿终点名称，用于日志
+
+--- 普通边可被合并为一条腿；台阶边是合并屏障，必须单独执行
+--- @alias MapEdgeKind "navigate" | "step"
+
+--- @class MapEdge
+--- @field task MapTask 方向已绑定的边任务，调用时再传入腿的起终点
+--- @field kind MapEdgeKind
 
 --- @class Map
 --- @field private _points table<string, MapPoint>
 --- @field private _registered table<MapPoint, boolean>
---- @field private _edges table<MapPoint, table<MapPoint, (fun(): boolean)>>
+--- @field private _edges table<MapPoint, table<MapPoint, MapEdge>>
 --- @field private _neighbors table<MapPoint, MapPoint[]>
 local Map = {}
 Map.__index = Map
@@ -41,8 +48,9 @@ end
 
 --- @param from MapPoint
 --- @param to MapPoint
---- @param task (fun(): boolean)
-function Map:_add_edge(from, to, task)
+--- @param task MapTask
+--- @param kind MapEdgeKind
+function Map:_add_edge(from, to, task, kind)
 	if self._edges[from] == nil then
 		self._edges[from] = {}
 		self._neighbors[from] = {}
@@ -51,17 +59,18 @@ function Map:_add_edge(from, to, task)
 		error("地图边重复注册: " .. from.name .. " -> " .. to.name)
 	end
 
-	self._edges[from][to] = task
+	self._edges[from][to] = { task = task, kind = kind }
 	table.insert(self._neighbors[from], to)
 end
 
---- 连接两个相邻节点，返回的闭包接收往返两个 Task
+--- 注册一条边，返回的闭包接收往返两个 Task
 --- tasks[1] 为 a -> b，tasks[2] 为 b -> a
---- 注册时 core 将方向参数绑定为 (from, to)，但调用 search 返回的 Task 为零参闭包
+--- 注册时 core 只记录方向与边的类型，search 时才把端点绑定为零参 Task
 --- @param a MapPoint
 --- @param b MapPoint
+--- @param kind MapEdgeKind
 --- @return fun(tasks: { [1]: MapTask, [2]: MapTask })
-function Map:connect(a, b)
+function Map:_connect(a, b, kind)
 	if not self._registered[a] then
 		error("地图边端点未注册: " .. tostring(a and a.name))
 	end
@@ -76,16 +85,66 @@ function Map:connect(a, b)
 			error("地图边必须同时提供往返两个 Task: " .. a.name .. " <-> " .. b.name)
 		end
 
-		self:_add_edge(a, b, function()
-			return forward(a, b)
-		end)
-		self:_add_edge(b, a, function()
-			return backward(b, a)
-		end)
+		self:_add_edge(a, b, forward, kind)
+		self:_add_edge(b, a, backward, kind)
 	end
 end
 
---- 搜索从 from 到 to 的路径，返回依次执行即可到达的有序 Task 表列表
+--- 连接两个相邻节点，声明为普通边；搜索时连续的普通边会合并为一条腿
+--- @param a MapPoint
+--- @param b MapPoint
+--- @return fun(tasks: { [1]: MapTask, [2]: MapTask })
+function Map:connect(a, b)
+	return self:_connect(a, b, "navigate")
+end
+
+--- 连接两个相邻节点，声明为台阶边；台阶边是合并屏障，必须单独执行
+--- @param a MapPoint
+--- @param b MapPoint
+--- @return fun(tasks: { [1]: MapTask, [2]: MapTask })
+function Map:connect_step(a, b)
+	return self:_connect(a, b, "step")
+end
+
+--- 将有序边序列压缩为可依次执行的腿任务
+--- 连续的普通边合并为一条腿，使用首条边的 Task 以整条腿的起终点调用；
+--- 台阶边单独成腿，使用自身 Task 以边的起终点调用
+--- @param path { from: MapPoint, to: MapPoint, edge: MapEdge }[]
+--- @return MapPathTask[]
+local function compress(path)
+	local function make(edge, begin_point, final_point)
+		return {
+			run = function()
+				return edge.task(begin_point, final_point)
+			end,
+			begin_point = begin_point,
+			final_point = final_point,
+			begin_name = begin_point.name,
+			final_name = final_point.name,
+		}
+	end
+
+	local tasks = {}
+	local index = 1
+	while index <= #path do
+		local first = path[index]
+		if first.edge.kind == "step" then
+			table.insert(tasks, make(first.edge, first.from, first.to))
+			index = index + 1
+		else
+			local last = first
+			index = index + 1
+			while index <= #path and path[index].edge.kind == "navigate" do
+				last = path[index]
+				index = index + 1
+			end
+			table.insert(tasks, make(first.edge, first.from, last.to))
+		end
+	end
+	return tasks
+end
+
+--- 搜索从 from 到 to 的路径，返回依次执行即可到达的有序腿任务列表
 --- @param from MapPoint
 --- @param to MapPoint
 --- @return MapPathTask[]
@@ -119,20 +178,18 @@ function Map:search(from, to)
 					while cursor ~= from do
 						local parent = previous[cursor]
 						table.insert(reversed, {
-							run = self._edges[parent][cursor],
-							begin_point = parent,
-							final_point = cursor,
-							begin_name = parent.name,
-							final_name = cursor.name,
+							from = parent,
+							to = cursor,
+							edge = self._edges[parent][cursor],
 						})
 						cursor = parent
 					end
 
-					local tasks = {}
+					local path = {}
 					for i = #reversed, 1, -1 do
-						table.insert(tasks, reversed[i])
+						table.insert(path, reversed[i])
 					end
-					return tasks
+					return compress(path)
 				end
 				table.insert(queue, next)
 			end

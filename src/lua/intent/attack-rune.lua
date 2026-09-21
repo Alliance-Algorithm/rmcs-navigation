@@ -16,14 +16,8 @@ local kPtPerRad = 3.0
 function intent:loop()
 	action:info("Attack rune start")
 	action:gimbal_toward(0, 0)
-	action:navigate(Points.kAttackRune)
-	local navigate_timeout = request:wait_until {
-		monitor = function()
-			return bb.condition.near(Points.kAttackRune, 0.5)
-		end,
-		timeout = kNavigateTimeout,
-	}
-	if navigate_timeout then
+	local success = action:navigate_until(Points.kAttackRune, 0.5, kNavigateTimeout)
+	if not success then
 		action:warn("navigate to rune timeout")
 		blackboard.context.attacked_rune = true
 		return

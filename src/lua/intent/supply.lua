@@ -26,42 +26,25 @@ function intent:loop()
 
 	-- 兜底任务：永不放弃。失败则返回上一个确认点，重新搜索重试
 	while true do
-		local failed = false
 		action:set_gimbal_yt(kNavScanSpeed)
 		action:gimbal_scan(0, 0)
 
-		for index, path in ipairs(Map:search(bb.context.current, Points.kHome)) do
-			action:info("Execute path task: " .. index .. " " .. path.begin_name .. " -> " .. path.final_name)
-			if not path.run() then
-				action:warn("路径任务失败，返回 " .. bb.context.current.name .. " 重试")
-				failed = true
-				break
-			end
-			bb.context.current = path.final_point -- 每条边成功后推进
-
-			if is_supplied() then
-				action:info("途中补给完成，直接返回")
-				blackboard.context.unhealth = false
-				-- supply 结束前关闭超级电容
-				action:update_supercap_boost(false)
-				return
-			end
+		local ok, interrupted = action:follow_path(Map, Points.kHome, is_supplied)
+		if interrupted then
+			action:info("途中补给完成，直接返回")
+			blackboard.context.unhealth = false
+			-- supply 结束前关闭超级电容
+			action:update_supercap_boost(false)
+			return
 		end
-
-		if not failed then
+		if ok then
 			break
 		end
 
 		-- 返回上一个确认点（容差/时限与 rough_navigate 一致，局部内联）
 		action:set_gimbal_yt(kNavScanSpeed)
 		action:gimbal_scan(0, 0)
-		action:navigate(bb.context.current)
-		request:wait_until {
-			monitor = function()
-				return bb.condition.near(bb.context.current, 0.5)
-			end,
-			timeout = 10,
-		}
+		action:navigate_until(bb.context.current, 0.5, 10)
 	end
 
 	-- 到达补给区：等待补给完成或到达时限

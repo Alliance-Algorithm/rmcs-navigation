@@ -60,22 +60,119 @@ do
 
 	local trace = {}
 	map:connect(a, b) {
-		trace_task(trace, "forward"),
+		trace_task(trace, "first"),
 		trace_task(trace, "backward"),
 	}
 	map:connect(b, c) {
-		trace_task(trace, "forward"),
+		trace_task(trace, "second"),
 		trace_task(trace, "backward"),
 	}
 
 	local tasks = map:search(a, c)
-	assert_eq(#tasks, 2, "multi-hop search should return two tasks")
-	assert(tasks[1].begin_point == a and tasks[1].final_point == b, "first task should carry (a, b)")
-	assert(tasks[2].begin_point == b and tasks[2].final_point == c, "second task should carry (b, c)")
+	assert_eq(#tasks, 1, "consecutive navigate edges should merge into one task")
+	assert(tasks[1].begin_point == a and tasks[1].final_point == c, "merged task should span the whole run")
+	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "c", "merged task should carry run names")
+	tasks[1].run()
+	assert_table_eq(trace, { "a-c:first" }, "merged task should bind the first edge task with run endpoints")
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 1, y = 0 })
+	local c = map:point("c", { x = 2, y = 0 })
+	local d = map:point("d", { x = 3, y = 0 })
+	local e = map:point("e", { x = 4, y = 0 })
+
+	local trace = {}
+	map:connect(a, b) {
+		trace_task(trace, "navigate-a-b"),
+		trace_task(trace, "navigate-b-a"),
+	}
+	map:connect_step(b, c) {
+		trace_task(trace, "step-b-c"),
+		trace_task(trace, "step-c-b"),
+	}
+	map:connect(c, d) {
+		trace_task(trace, "navigate-c-d"),
+		trace_task(trace, "navigate-d-c"),
+	}
+	map:connect(d, e) {
+		trace_task(trace, "navigate-d-e"),
+		trace_task(trace, "navigate-e-d"),
+	}
+
+	local tasks = map:search(a, e)
+	assert_eq(#tasks, 3, "step edge should split navigate runs")
+	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "b", "first leg should end at step begin")
+	assert(tasks[2].begin_name == "b" and tasks[2].final_name == "c", "step leg should span the step edge")
+	assert(tasks[3].begin_name == "c" and tasks[3].final_name == "e", "last leg should reach the final point")
 	for _, task in ipairs(tasks) do
 		task.run()
 	end
-	assert_table_eq(trace, { "a-b:forward", "b-c:forward" }, "multi-hop search task order and direction")
+	assert_table_eq(
+		trace,
+		{ "a-b:navigate-a-b", "b-c:step-b-c", "c-e:navigate-c-d" },
+		"step should stay isolated and navigate runs should merge"
+	)
+
+	for i = #trace, 1, -1 do
+		trace[i] = nil
+	end
+	local reversed = map:search(e, a)
+	assert_eq(#reversed, 3, "reverse search should keep step as barrier")
+	assert(reversed[1].begin_name == "e" and reversed[1].final_name == "c", "reverse first leg should merge to step end")
+	assert(reversed[2].begin_name == "c" and reversed[2].final_name == "b", "reverse step leg")
+	assert(reversed[3].begin_name == "b" and reversed[3].final_name == "a", "reverse last leg")
+	for _, task in ipairs(reversed) do
+		task.run()
+	end
+	assert_table_eq(
+		trace,
+		{ "e-c:navigate-e-d", "c-b:step-c-b", "b-a:navigate-b-a" },
+		"reverse merged legs should bind run endpoints"
+	)
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 1, y = 0 })
+	local c = map:point("c", { x = 2, y = 0 })
+
+	local trace = {}
+	map:connect_step(a, b) {
+		trace_task(trace, "step-a-b"),
+		trace_task(trace, "step-b-a"),
+	}
+	map:connect(b, c) {
+		trace_task(trace, "navigate-b-c"),
+		trace_task(trace, "navigate-c-b"),
+	}
+
+	local tasks = map:search(a, c)
+	assert_eq(#tasks, 2, "leading step edge should stay isolated")
+	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "b", "leading step leg")
+	assert(tasks[2].begin_name == "b" and tasks[2].final_name == "c", "trailing navigate leg")
+	for _, task in ipairs(tasks) do
+		task.run()
+	end
+	assert_table_eq(trace, { "a-b:step-a-b", "b-c:navigate-b-c" }, "leading step should not merge")
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 1, y = 0 })
+	local c = map:point("c", { x = 2, y = 0 })
+
+	local noop = function(_, _)
+		return true
+	end
+	map:connect_step(a, b) { noop, noop }
+	map:connect_step(b, c) { noop, noop }
+
+	assert_eq(#map:search(a, c), 2, "consecutive step edges should stay separate")
 end
 
 do
@@ -166,6 +263,14 @@ do
 	assert_error(function()
 		map:connect(a, b) { [2] = trace_task({}, "b-a") }
 	end, "connect missing forward should error")
+
+	assert_error(function()
+		map:connect_step(a, b) { trace_task({}, "a-b") }
+	end, "connect_step missing backward should error")
+
+	assert_error(function()
+		map:connect_step(a, b) { [2] = trace_task({}, "b-a") }
+	end, "connect_step missing forward should error")
 end
 
 do

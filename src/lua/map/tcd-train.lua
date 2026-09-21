@@ -15,16 +15,19 @@ local Points = {
 	-- kStep7 = Map:point("kStep7", { x = -0.9, y = -2.9 }),
 }
 
-local function navigate(_, to)
+local function navigate(from, to)
 	action:navigate(to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)
+	local distance = math.sqrt((to.x - from.x) ^ 2 + (to.y - from.y) ^ 2)
 	local timeout = request:wait_until {
 		monitor = function()
 			return bb.condition.near(to, 0.5)
 		end,
-		timeout = 20,
+		timeout = 10 + distance / 2,
 	}
-	action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+	if timeout then
+		action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+	end
 	return not timeout
 end
 

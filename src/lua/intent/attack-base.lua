@@ -12,28 +12,8 @@ function intent:loop()
 	action:cruise_slow_scan()
 
 	local target = Points.kAttackBase
-	while true do
-		local failed = false
-		for i, path in ipairs(Map:search(bb.context.current, target)) do
-			action:info("Execute path task: " .. i .. " " .. path.begin_name .. " -> " .. path.final_name)
-			if not path.run() then
-				action:warn("路径任务失败，返回 " .. bb.context.current.name .. " 重试")
-				failed = true
-				break
-			end
-			bb.context.current = path.final_point
-		end
-		if not failed then
-			break
-		end
-
-		action:navigate(bb.context.current)
-		request:wait_until {
-			monitor = function()
-				return bb.condition.near(bb.context.current, 0.5)
-			end,
-			timeout = 10,
-		}
+	while not action:follow_path(Map, target) do
+		action:navigate_until(bb.context.current, 0.5, 10)
 	end
 	action:info("已到达 " .. target.name)
 
