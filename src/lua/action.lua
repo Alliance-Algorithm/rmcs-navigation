@@ -341,6 +341,22 @@ function action:blocking_cross_step(world_yaw, is_climb)
 	end
 end
 
+local kGimbalFoldStateUnfold = 0
+local kGimbalFoldStateFolded = 3
+
+--- 折叠或伸出云台，阻塞直到到达目标姿态。
+--- @param tar boolean true 折叠，false 伸出
+function action:blocking_set_gimbal_fold(tar)
+	action:info(tar and "Set gimbal to folded pose" or "Set gimbal to unfolded pose")
+	api.set_gimbal_fold(tar)
+
+	local target = tar and kGimbalFoldStateFolded or kGimbalFoldStateUnfold
+	request:yield()
+	while api.get_gimbal_fold_state() ~= target do
+		request:yield()
+	end
+end
+
 --- @param position {x: number, y: number}
 function action:navigate(position)
 	action:info("navigate to " .. position.x .. ", " .. position.y)

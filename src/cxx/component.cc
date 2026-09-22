@@ -47,6 +47,7 @@ private:
         OutputInterface<Eigen::Vector2d> gimbal_toward;
         OutputInterface<double> climb_cross_direction;
         OutputInterface<bool> climb_is_climb;
+        OutputInterface<bool> gimbal_fold;
         OutputInterface<bool> track_rune;
         OutputInterface<bool> automatic_resurrection;
         OutputInterface<SentryEventCounts> sentry_events;
@@ -65,6 +66,7 @@ private:
             component.register_output(
                 "/rmcs_navigation/request/cross_direction", climb_cross_direction, kNan);
             component.register_output("/rmcs_navigation/request/is_climb", climb_is_climb, false);
+            component.register_output("/rmcs_navigation/request/gimbal_fold", gimbal_fold, false);
             component.register_output("/rmcs_navigation/request/track_rune", track_rune, false);
             component.register_output(
                 "/rmcs_navigation/automatic_resurrection", automatic_resurrection, true);
@@ -155,6 +157,9 @@ public:
         lua.inject(
             "set_climb_switch", [this](bool is_climb) { *command.climb_is_climb = is_climb; });
         lua.inject("get_climb_status", [this] { return *rmcs.climber_status; });
+
+        lua.inject("set_gimbal_fold", [this](bool fold) { *command.gimbal_fold = fold; });
+        lua.inject("get_gimbal_fold_state", [this] { return *rmcs.gimbal_fold_state; });
 
         lua.inject("relocalize", [this] { nav.relocalize(rmcs.robot_id->color()); });
 

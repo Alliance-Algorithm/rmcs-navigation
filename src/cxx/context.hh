@@ -31,6 +31,7 @@ public:
 
     InputInterface<double> chassis_power_limit_referee;
     InputInterface<double> climber_status;
+    InputInterface<int> gimbal_fold_state;
     InputInterface<bool> auto_aim_should_control;
 
     InputInterface<std::uint8_t> ally_small_energy_core_state;

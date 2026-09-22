@@ -20,6 +20,8 @@ local util = require("util.native")
 --- @field set_climb_direction fun(angle: number)
 --- @field set_climb_switch fun(is_climb: boolean)
 --- @field get_climb_status fun(): number
+--- @field set_gimbal_fold fun(fold: boolean) true 请求折叠云台，false 请求伸出云台
+--- @field get_gimbal_fold_state fun(): integer 0=展开, 1=移动到折叠位, 2=折叠中, 3=已折叠, 4=展开中
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "slope")
 --- @field update_under_attack fun(yes: boolean)
 --- @field update_supercap_boost fun(on: boolean)
