@@ -341,18 +341,20 @@ function action:blocking_cross_step(world_yaw, is_climb)
 	end
 end
 
-local kGimbalFoldStateUnfold = 0
-local kGimbalFoldStateFolded = 3
-
---- 折叠或伸出云台，阻塞直到到达目标姿态。
---- @param tar boolean true 折叠，false 伸出
-function action:blocking_set_gimbal_fold(tar)
-	action:info(tar and "Set gimbal to folded pose" or "Set gimbal to unfolded pose")
-	api.set_gimbal_fold(tar)
-
-	local target = tar and kGimbalFoldStateFolded or kGimbalFoldStateUnfold
+--- 折叠云台穿越隧道：前进恒定时间后自动展开云台，阻塞直到完成。
+--- @param world_yaw number 隧道方向的 world yaw
+--- @return boolean success
+function action:blocking_cross_tunnel(world_yaw)
+	action:info("Cross tunnel toward world yaw " .. world_yaw)
+	api.set_tunnel_direction(world_yaw)
 	request:yield()
-	while api.get_gimbal_fold_state() ~= target do
+
+	while true do
+		local status = api.get_tunnel_status()
+		if status == 1.0 or status == -1.0 then
+			api.set_tunnel_direction(NaN)
+			return status == 1.0
+		end
 		request:yield()
 	end
 end

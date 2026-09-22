@@ -26,6 +26,7 @@ private:
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
     double pending_climb_world_yaw = kNan;
+    double pending_tunnel_world_yaw = kNan;
 
     details::LuaContext lua{*this};
     details::Navigation nav{*this};
@@ -47,7 +48,7 @@ private:
         OutputInterface<Eigen::Vector2d> gimbal_toward;
         OutputInterface<double> climb_cross_direction;
         OutputInterface<bool> climb_is_climb;
-        OutputInterface<bool> gimbal_fold;
+        OutputInterface<double> tunnel_direction;
         OutputInterface<bool> track_rune;
         OutputInterface<bool> automatic_resurrection;
         OutputInterface<SentryEventCounts> sentry_events;
@@ -66,7 +67,8 @@ private:
             component.register_output(
                 "/rmcs_navigation/request/cross_direction", climb_cross_direction, kNan);
             component.register_output("/rmcs_navigation/request/is_climb", climb_is_climb, false);
-            component.register_output("/rmcs_navigation/request/gimbal_fold", gimbal_fold, false);
+            component.register_output(
+                "/rmcs_navigation/request/tunnel_direction", tunnel_direction, kNan);
             component.register_output("/rmcs_navigation/request/track_rune", track_rune, false);
             component.register_output(
                 "/rmcs_navigation/automatic_resurrection", automatic_resurrection, true);
@@ -158,8 +160,15 @@ public:
             "set_climb_switch", [this](bool is_climb) { *command.climb_is_climb = is_climb; });
         lua.inject("get_climb_status", [this] { return *rmcs.climber_status; });
 
-        lua.inject("set_gimbal_fold", [this](bool fold) { *command.gimbal_fold = fold; });
-        lua.inject("get_gimbal_fold_state", [this] { return *rmcs.gimbal_fold_state; });
+        lua.inject("set_tunnel_direction", [this](double world_yaw) {
+            if (std::isfinite(world_yaw)) {
+                pending_tunnel_world_yaw = world_yaw;
+            } else {
+                pending_tunnel_world_yaw = kNan;
+                *command.tunnel_direction = kNan;
+            }
+        });
+        lua.inject("get_tunnel_status", [this] { return *rmcs.tunnel_status; });
 
         lua.inject("relocalize", [this] { nav.relocalize(rmcs.robot_id->color()); });
 
@@ -221,6 +230,13 @@ public:
             if (std::isfinite(target)) {
                 *command.climb_cross_direction = target;
                 pending_climb_world_yaw = kNan;
+            }
+        }
+        if (std::isfinite(pending_tunnel_world_yaw)) {
+            const auto target = motion.world2gimbal_odom(pending_tunnel_world_yaw);
+            if (std::isfinite(target)) {
+                *command.tunnel_direction = target;
+                pending_tunnel_world_yaw = kNan;
             }
         }
         if (*command.enable_control) {
