@@ -24,6 +24,7 @@ launch:
             - "bt_navigator"
             - "planner_server"
             - "controller_server"
+            - "behavior_server"
 
   # 1. 导航行为调度
   - node:
@@ -56,5 +57,15 @@ launch:
         - from: "$(var configuration)/motion.yaml"
         - name: "local_costmap.local_costmap.static_layer.map_subscribe_transient_local"
           value: "$(var static_local_map)"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 4. 行为服务
+  - node:
+      pkg: "nav2_behaviors"
+      exec: "behavior_server"
+      name: "behavior_server"
+      param:
+        - from: "$(var configuration)/motion.yaml"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"

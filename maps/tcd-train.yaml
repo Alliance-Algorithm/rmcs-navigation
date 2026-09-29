@@ -1,6 +1,8 @@
 image: tcd-train.png
 mode: trinary
 resolution: 0.1
+# PNG 点 (8.0 m, 6.7 m)（左下为原点，右/上为正）的 map/world 坐标 = origin + 偏移
+# 偏移 = 该点在 PNG 内相对左下角的距离（米）= 像素数 × resolution
 origin: [-8.0, -6.7, 0.0]
 negate: 0
 occupied_thresh: 0.65

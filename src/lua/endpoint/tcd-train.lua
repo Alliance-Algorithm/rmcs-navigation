@@ -90,9 +90,9 @@ on_init = function()
 				use_sim_time = false,
 			}
 
-			request:sleep(10)
-			action:relocalize()
 			request:sleep(5)
+			action:relocalize()
+			request:sleep(2)
 
 			action:update_enable_control(true)
 			action:switch_topic_forward(true)

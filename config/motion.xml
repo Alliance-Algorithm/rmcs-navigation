@@ -69,6 +69,9 @@
           <ClearEntireCostmap
             name="ClearGlobalCostmap-Subtree"
             service_name="global_costmap/clear_entirely_global_costmap"/>
+
+          <!-- 自定义行为：清图后按代价地图最自由方向移动，避免恢复时原地卡死。 -->
+          <BackUp backup_dist="0.30" backup_speed="0.25" time_allowance="10.0"/>
         </Sequence>
 
       </ReactiveFallback>

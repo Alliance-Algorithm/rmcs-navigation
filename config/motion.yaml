@@ -7,16 +7,59 @@ bt_navigator:
     navigate_to_pose:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
 
+# 行为服务
+behavior_server:
+  ros__parameters:
+    local_costmap_topic: local_costmap/costmap_raw
+    global_costmap_topic: global_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_footprint_topic: global_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["backup"]
+    backup:
+      plugin: "rmcs::navigation::behaviors::BackUpFreeSpace"
+      service_name: "/global_costmap/get_static_layer"
+      sample_radius: 3.0
+      sample_directions: 18
+      obstacle_threshold: 150.0
+      refresh_interval: 0.5
+      visualize: false
+    global_frame: world
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+
 # 全局地图 + 全局规划
 planner_server:
   ros__parameters:
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner::NavfnPlanner"
-      tolerance: 0.5
-      use_astar: true
+      # SmacPlanner2D：无运动学约束的 2D A*
+      plugin: "nav2_smac_planner::SmacPlanner2D"
+      # 到目标容差（米），内部按地图分辨率换算成格数；0.1 分辨率下 ≈ 1 格
+      tolerance: 0.1
+      # 是否允许穿越未知栅格（跨场导航必须为 true）
       allow_unknown: true
+      # 搜索迭代上限，一般不动
+      max_iterations: 1000000
+      # 终点附近的额外迭代次数，一般不动
+      max_on_approach_iterations: 1000
+      # 单次规划时间预算（秒），也决定留给平滑的时间；大图可适当调大，过大会加剧卡顿
+      max_planning_time: 2.0
+      # 代价图惩罚系数：越大越贴走廊中线/远离障碍，越小越抄近路
+      cost_travel_multiplier: 20.0
+      # 末位姿是否取"接近方向"的朝向；跟踪器不转向，保持 false
       use_final_approach_orientation: false
+      # 路径后处理平滑（SimpleSmoother）
+      smoother:
+        max_iterations: 1000
+        # 平滑权重：越大路径越直顺
+        w_smooth: 0.25
+        # 贴合原搜索路径/障碍的权重：越大越贴障碍
+        w_data: 0.3
+        tolerance: 1.0e-10
+        # 是否平滑后再细化
+        do_refinement: true
+        refinement_num: 2
 
 global_costmap:
   global_costmap:
@@ -115,7 +158,7 @@ controller_server:
         critical_cost: 120.0
         collision_cost: 8000000.0
         near_collision_cost: 180
-        cost_power: 2
+        cost_power: 3
         consider_footprint: true
         near_goal_distance: 0.3
         trajectory_point_step: 2
@@ -127,13 +170,13 @@ controller_server:
       # 轨迹方向与全局路径对齐
       PathAlignCritic:
         enabled: true
-        cost_weight: 4.5
+        cost_weight: 10.0
         threshold_to_consider: 1.0
         trajectory_point_step: 2
       # 跟随全局路径前进
       PathFollowCritic:
         enabled: true
-        cost_weight: 2.4
+        cost_weight: 3.2
         threshold_to_consider: 1.0
 
 local_costmap:
@@ -165,5 +208,5 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.34
+        inflation_radius: 0.30
         cost_scaling_factor: 0.5

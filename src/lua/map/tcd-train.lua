@@ -23,7 +23,7 @@ local function navigate(from, to)
 		monitor = function()
 			return bb.condition.near(to, 0.5)
 		end,
-		timeout = 10 + distance / 2,
+		timeout = 20 + distance / 2,
 	}
 	if timeout then
 		action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
