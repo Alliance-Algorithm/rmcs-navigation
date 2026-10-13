@@ -26,8 +26,6 @@ local restart_navigation = function()
 	}
 end
 
-local navigation_restarted = false
-
 ---
 --- Export Context
 ---
@@ -42,17 +40,13 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 	action:update_enable_control(true)
 
-	action:set_gimbal_yt(10)
-	action:set_gimbal_pt(5)
-	action:gimbal_scan(-0.4, 0)
-
 	scheduler:append_task(task.robot_status)
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 1)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
 			restart_navigation()
-			navigation_restarted = true
-			action:gimbal_nod(1)
+			request:sleep(1.0);
+			local success = action:blocking_cross_tunnel(3.14)
 		end)
 
 		while true do
@@ -60,21 +54,6 @@ on_init = function()
 
 			switch_order:spin()
 			request:yield()
-		end
-	end)
-
-	scheduler:append_task(function()
-		while not navigation_restarted do
-			request:yield()
-		end
-		while true do
-			action:info(string.format(
-				"己方血量: %d, 敌方前哨血量: %d, 敌方基地血量: %d",
-				blackboard.user.health,
-				blackboard.game.enemy_outpost_hp,
-				blackboard.game.enemy_base_hp
-			))
-			request:sleep(1)
 		end
 	end)
 
