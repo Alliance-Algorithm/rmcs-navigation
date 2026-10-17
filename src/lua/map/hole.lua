@@ -5,11 +5,9 @@ local bb = require("blackboard").singleton()
 
 local Points = {
 	kOrigin = Map:point("kOrigin", { x = 0.0, y = 0.0 }),
-	kStep1 = Map:point("kStep1", { x = 2.6, y = -0.4 }),
-	kStep2 = Map:point("kStep2", { x = 0.4, y = -1.5 }),
-	kHoleBegin = Map:point("kHoleBegin", { x = 7.3, y = -1.9 }),
-	kHoleEnd = Map:point("kHoleEnd", { x = 8.3, y = -1.9 }),
-	kEnd = Map:point("kEnd", { x = 9.1, y = -0.9 }),
+	kHoleBegin = Map:point("kHoleBegin", { x = 3.0, y = -0.4 }),
+	kHoleEnd = Map:point("kHoleEnd", { x = 3.0, y = -2.1 }),
+	kEnd = Map:point("kEnd", { x = 2.4, y = -2.1 }),
 }
 
 local function navigate(from, to)
@@ -34,9 +32,7 @@ local function cross_tunnel(from, to)
 	return action:blocking_cross_tunnel(math.atan(to.y - from.y, to.x - from.x))
 end
 
-Map:connect(Points.kOrigin, Points.kStep1) { navigate, navigate }
-Map:connect(Points.kStep1, Points.kStep2) { navigate, navigate }
-Map:connect(Points.kStep2, Points.kHoleBegin) { navigate, navigate }
+Map:connect(Points.kOrigin, Points.kHoleBegin) { navigate, navigate }
 Map:connect_tunnel(Points.kHoleBegin, Points.kHoleEnd) { cross_tunnel, cross_tunnel }
 Map:connect(Points.kHoleEnd, Points.kEnd) { navigate, navigate }
 

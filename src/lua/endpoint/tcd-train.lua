@@ -36,8 +36,6 @@ on_init = function()
 
 		local kPoints = {
 			Points.kOrigin,
-			Points.kStep1,
-			Points.kStep2,
 			Points.kHoleBegin,
 			Points.kHoleEnd,
 			Points.kEnd,
