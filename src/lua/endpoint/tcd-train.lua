@@ -3,8 +3,8 @@ local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local order = require("util.order")
 
-local MapTrain = require("map.tcd-train")
-local Map, Points = MapTrain.map, MapTrain.points
+local MapHole = require("map.hole")
+local Map, Points = MapHole.map, MapHole.points
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -23,7 +23,7 @@ blackboard = require("blackboard").singleton()
 on_init = function()
 	action:bind(scheduler)
 	action:info(ascii.banner)
-	action:info("操作手训练......")
+	action:info("地洞穿越测试......")
 
 	clock:reset(blackboard.meta.timestamp)
 	action:update_enable_control(false)
@@ -36,25 +36,22 @@ on_init = function()
 
 		local kPoints = {
 			Points.kOrigin,
-			-- Points.kStep1,
-			-- Points.kStep2,
-			-- Points.kStep3,
-			Points.kStep4,
-			-- Points.kStep5,
-			Points.kLand,
-			-- Points.kStep6,
-			-- Points.kStep7,
+			Points.kStep1,
+			Points.kStep2,
+			Points.kHoleBegin,
+			Points.kHoleEnd,
+			Points.kEnd,
 		}
 		while true do
 			for _, point in ipairs(kPoints) do
 				action:gimbal_suspend()
 
-				if not action:follow_path(Map, point) then
+				if not action:follow_path(Map, point, { merge = false }) then
 					action:fuck("Failed to follow path, return")
 					return
 				end
 
-				action:gimbal_scan(0, 0)
+				-- action:gimbal_scan(0, 0)
 				request:sleep(3)
 			end
 		end
@@ -84,15 +81,15 @@ on_init = function()
 			action:info("导航启动")
 
 			action:restart_navigation {
-				global_map = "tcd-train",
+				global_map = "hole",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
 
 			request:sleep(5)
-			action:relocalize()
-			request:sleep(2)
+			-- action:relocalize()
+			-- request:sleep(2)
 
 			action:update_enable_control(true)
 			action:switch_topic_forward(true)

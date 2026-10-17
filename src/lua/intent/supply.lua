@@ -29,7 +29,7 @@ function intent:loop()
 		action:set_gimbal_yt(kNavScanSpeed)
 		action:gimbal_scan(0, 0)
 
-		local ok, interrupted = action:follow_path(Map, Points.kHome, is_supplied)
+		local ok, interrupted = action:follow_path(Map, Points.kHome, { check = is_supplied })
 		if interrupted then
 			action:info("途中补给完成，直接返回")
 			blackboard.context.unhealth = false

@@ -6,7 +6,7 @@
 
 #include <Eigen/Geometry>
 #include <rclcpp/node.hpp>
-#include <rmcs_description/sentry_description.hpp>
+#include <rmcs_description/tunnel_sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/rmcs_msgs.hpp>
 
@@ -202,8 +202,10 @@ public:
     auto before_updating() -> void override { rmcs.ensure_defaults(); }
 
     auto update() -> void override {
-        const auto gimbal_direction = fast_tf::cast<rmcs_description::OdomGimbalImu>(
-            rmcs_description::BottomYawLink::DirectionVector{Eigen::Vector3d::UnitX()}, *rmcs.tf);
+        const auto gimbal_direction = fast_tf::cast<rmcs_description::tunnel_sentry::OdomGimbalImu>(
+            rmcs_description::tunnel_sentry::BottomYawLink::DirectionVector{
+                Eigen::Vector3d::UnitX()},
+            *rmcs.tf);
         motion.context.current_gimbal_yaw =
             std::atan2(gimbal_direction->y(), gimbal_direction->x());
 

@@ -3,7 +3,7 @@
 
 #include <Eigen/Geometry>
 #include <rclcpp/node.hpp>
-#include <rmcs_description/sentry_description.hpp>
+#include <rmcs_description/tunnel_sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
 #include <rmcs_msgs/robot_id.hpp>
@@ -37,7 +37,7 @@ public:
     InputInterface<std::uint8_t> ally_small_energy_core_state;
     InputInterface<std::uint8_t> ally_big_energy_core_state;
 
-    InputInterface<rmcs_description::SentryTf> tf;
+    InputInterface<rmcs_description::tunnel_sentry::Tf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 
     InputInterface<double> map_command_x;

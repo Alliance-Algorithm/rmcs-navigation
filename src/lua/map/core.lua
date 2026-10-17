@@ -12,8 +12,8 @@
 --- @field begin_name string 腿起点名称，用于日志
 --- @field final_name string 腿终点名称，用于日志
 
---- 普通边可被合并为一条腿；台阶边是合并屏障，必须单独执行
---- @alias MapEdgeKind "navigate" | "step"
+--- 普通边可被合并为一条腿；台阶边、隧道边是合并屏障，必须单独执行
+--- @alias MapEdgeKind "navigate" | "step" | "tunnel"
 
 --- @class MapEdge
 --- @field task MapTask 方向已绑定的边任务，调用时再传入腿的起终点
@@ -106,12 +106,21 @@ function Map:connect_step(a, b)
 	return self:_connect(a, b, "step")
 end
 
+--- 连接两个相邻节点，声明为隧道边；隧道边是合并屏障，必须单独执行
+--- @param a MapPoint
+--- @param b MapPoint
+--- @return fun(tasks: { [1]: MapTask, [2]: MapTask })
+function Map:connect_tunnel(a, b)
+	return self:_connect(a, b, "tunnel")
+end
+
 --- 将有序边序列压缩为可依次执行的腿任务
---- 连续的普通边合并为一条腿，使用首条边的 Task 以整条腿的起终点调用；
---- 台阶边单独成腿，使用自身 Task 以边的起终点调用
+--- merge 为 false 时逐条边成腿；否则连续的普通边合并为一条腿，使用首条边的 Task 以整条腿的起终点调用；
+--- 屏障边（台阶/隧道）单独成腿，使用自身 Task 以边的起终点调用
 --- @param path { from: MapPoint, to: MapPoint, edge: MapEdge }[]
+--- @param merge boolean?
 --- @return MapPathTask[]
-local function compress(path)
+local function compress(path, merge)
 	local function make(edge, begin_point, final_point)
 		return {
 			run = function()
@@ -128,7 +137,7 @@ local function compress(path)
 	local index = 1
 	while index <= #path do
 		local first = path[index]
-		if first.edge.kind == "step" then
+		if merge == false or first.edge.kind ~= "navigate" then
 			table.insert(tasks, make(first.edge, first.from, first.to))
 			index = index + 1
 		else
@@ -147,8 +156,9 @@ end
 --- 搜索从 from 到 to 的路径，返回依次执行即可到达的有序腿任务列表
 --- @param from MapPoint
 --- @param to MapPoint
+--- @param merge boolean? 是否合并连续普通边为一条腿，传 false 时逐条边执行，默认 true
 --- @return MapPathTask[]
-function Map:search(from, to)
+function Map:search(from, to, merge)
 	if not self._registered[from] then
 		error("路径搜索起点未注册: " .. tostring(from and from.name))
 	end
@@ -189,7 +199,7 @@ function Map:search(from, to)
 					for i = #reversed, 1, -1 do
 						table.insert(path, reversed[i])
 					end
-					return compress(path)
+					return compress(path, merge)
 				end
 				table.insert(queue, next)
 			end

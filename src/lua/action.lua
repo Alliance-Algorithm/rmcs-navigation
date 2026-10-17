@@ -391,18 +391,24 @@ end
 --- 沿地图边执行到目标点，逐条腿推进 bb.context.current
 --- @param map Map
 --- @param target MapPoint
---- @param check? fun(): boolean 每完成一条腿后调用；返回 true 表示提前结束（视为成功）
+--- @param opts? { merge?: boolean, check?: fun(): boolean }
+---   merge 传 false 时逐条边执行，默认合并连续普通边为一条腿
+---   check 每完成一条腿后调用；返回 true 表示提前结束（视为成功）
 --- @return boolean success
 --- @return boolean interrupted
-function action:follow_path(map, target, check)
-	for index, leg in ipairs(map:search(bb.context.current, target)) do
+function action:follow_path(map, target, opts)
+	if opts == nil then
+		opts = {}
+	end
+
+	for index, leg in ipairs(map:search(bb.context.current, target, opts.merge)) do
 		action:info("Execute path task: " .. index .. " " .. leg.begin_name .. " -> " .. leg.final_name)
 		if not leg.run() then
 			action:warn("路径任务失败，返回 " .. bb.context.current.name .. " 重试")
 			return false, false
 		end
 		bb.context.current = leg.final_point
-		if check ~= nil and check() then
+		if opts.check ~= nil and opts.check() then
 			return true, true
 		end
 	end

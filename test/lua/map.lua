@@ -141,6 +141,68 @@ do
 	local c = map:point("c", { x = 2, y = 0 })
 
 	local trace = {}
+	map:connect(a, b) {
+		trace_task(trace, "navigate-a-b"),
+		trace_task(trace, "navigate-b-a"),
+	}
+	map:connect_tunnel(b, c) {
+		trace_task(trace, "tunnel-b-c"),
+		trace_task(trace, "tunnel-c-b"),
+	}
+
+	local tasks = map:search(a, c)
+	assert_eq(#tasks, 2, "tunnel edge should split navigate runs")
+	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "b", "navigate leg should end at tunnel begin")
+	assert(tasks[2].begin_name == "b" and tasks[2].final_name == "c", "tunnel leg should span the tunnel edge")
+	for _, task in ipairs(tasks) do
+		task.run()
+	end
+	assert_table_eq(trace, { "a-b:navigate-a-b", "b-c:tunnel-b-c" }, "tunnel should stay isolated from navigate runs")
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 1, y = 0 })
+	local c = map:point("c", { x = 2, y = 0 })
+	local d = map:point("d", { x = 3, y = 0 })
+
+	local trace = {}
+	map:connect(a, b) {
+		trace_task(trace, "navigate-a-b"),
+		trace_task(trace, "navigate-b-a"),
+	}
+	map:connect(b, c) {
+		trace_task(trace, "navigate-b-c"),
+		trace_task(trace, "navigate-c-b"),
+	}
+	map:connect(c, d) {
+		trace_task(trace, "navigate-c-d"),
+		trace_task(trace, "navigate-d-c"),
+	}
+
+	local tasks = map:search(a, d, false)
+	assert_eq(#tasks, 3, "merge=false should keep each navigate edge separate")
+	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "b", "first edge task should span a -> b")
+	assert(tasks[2].begin_name == "b" and tasks[2].final_name == "c", "second edge task should span b -> c")
+	assert(tasks[3].begin_name == "c" and tasks[3].final_name == "d", "third edge task should span c -> d")
+	for _, task in ipairs(tasks) do
+		task.run()
+	end
+	assert_table_eq(
+		trace,
+		{ "a-b:navigate-a-b", "b-c:navigate-b-c", "c-d:navigate-c-d" },
+		"each edge should bind its own task endpoints"
+	)
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 1, y = 0 })
+	local c = map:point("c", { x = 2, y = 0 })
+
+	local trace = {}
 	map:connect_step(a, b) {
 		trace_task(trace, "step-a-b"),
 		trace_task(trace, "step-b-a"),
@@ -271,6 +333,14 @@ do
 	assert_error(function()
 		map:connect_step(a, b) { [2] = trace_task({}, "b-a") }
 	end, "connect_step missing forward should error")
+
+	assert_error(function()
+		map:connect_tunnel(a, b) { trace_task({}, "a-b") }
+	end, "connect_tunnel missing backward should error")
+
+	assert_error(function()
+		map:connect_tunnel(a, b) { [2] = trace_task({}, "b-a") }
+	end, "connect_tunnel missing forward should error")
 end
 
 do
