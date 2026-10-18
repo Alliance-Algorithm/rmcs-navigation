@@ -43,15 +43,21 @@ on_init = function()
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
-			local ok = action:toggle_record()
+			local was_recording = recording
+			local ok
+			if was_recording then
+				ok = action:finish_record()
+			else
+				ok = action:start_record()
+			end
 			if not ok then
-				action:warn("录制切换失败")
+				action:warn(was_recording and "结束录制失败" or "开始录制失败")
 				return
 			end
 
 			action:update_enable_control(true)
-			if recording then
-				action:info("关闭录制")
+			if was_recording then
+				action:info("关闭录制，建图任务已启动")
 				action:gimbal_nod(2)
 				recording = false
 

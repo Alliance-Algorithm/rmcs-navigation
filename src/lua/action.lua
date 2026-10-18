@@ -15,6 +15,8 @@ local kMaxDwellExtend = 5 -- 静止扫描被自瞄接管时，最多补时的周
 local kCruiseSlowScanSpeed = 3.2 -- 秒/弧度，赶路慢扫
 local kCruiseFastScanSpeed = 1.0 -- 秒/弧度，顶点快扫
 
+local kTunnelTargetTolerance = 0.1 -- 隧道穿越到达目标 xy 容差（米）
+
 local action = {
 	last_enable = false,
 	target = {
@@ -317,6 +319,11 @@ function action:start_record()
 	return api.start_record()
 end
 
+function action:finish_record()
+	action:info("[Action] 结束录制并开始建图...")
+	return api.finish_record()
+end
+
 function action:abort_record()
 	action:info("[Action] 中断录制...")
 	return api.abort_record()
@@ -341,22 +348,45 @@ function action:blocking_cross_step(world_yaw, is_climb)
 	end
 end
 
---- 折叠云台穿越隧道：前进恒定时间后自动展开云台，阻塞直到完成。
+--- 折叠云台穿越隧道：前进恒定时间后自动展开云台，阻塞直到完成；
+--- 到达目标 xy 容差内时提前结束驱动，仍等待云台展开完成。
 --- @param world_yaw number 隧道方向的 world yaw
+--- @param target { x: number, y: number } 隧道出口目标点
+--- @param mode "up" | "down" | "plain" 选择隧道参数组
 --- @return boolean success
-function action:blocking_cross_tunnel(world_yaw)
-	action:info("Cross tunnel toward world yaw " .. world_yaw)
+function action:blocking_cross_tunnel(world_yaw, target, mode)
+	if mode ~= "up" and mode ~= "down" and mode ~= "plain" then
+		error("invalid tunnel mode: " .. tostring(mode))
+	end
+
+	action:info("Cross tunnel toward world yaw " .. world_yaw .. ", mode " .. mode)
+	api.set_tunnel_mode(mode)
+	api.set_tunnel_finish(false)
 	api.set_tunnel_direction(world_yaw)
 	request:yield()
 
+	local finish_requested = false
 	while true do
 		local status = api.get_tunnel_status()
 		if status == 1.0 or status == -1.0 then
 			api.set_tunnel_direction(NaN)
+			api.set_tunnel_finish(false)
 			return status == 1.0
+		end
+
+		if not finish_requested and bb.condition.near(target, kTunnelTargetTolerance) then
+			action:info("Tunnel target reached, request finish")
+			api.set_tunnel_finish(true)
+			finish_requested = true
 		end
 		request:yield()
 	end
+end
+
+--- 获取当前机器人坐标
+--- @return { x: number, y: number }
+function action:current_position()
+	return { x = bb.user.x, y = bb.user.y }
 end
 
 --- @param position {x: number, y: number}

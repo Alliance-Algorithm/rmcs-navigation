@@ -4,6 +4,7 @@ find_program(LUA_EXECUTABLE NAMES lua lua5.4 REQUIRED)
 get_filename_component(RMCS_NAVIGATION_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
 set(RMCS_NAVIGATION_LUA_TESTS
+    action
     clock
     fsm
     map

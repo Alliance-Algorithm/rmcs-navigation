@@ -5,9 +5,9 @@ local bb = require("blackboard").singleton()
 
 local Points = {
 	kOrigin = Map:point("kOrigin", { x = 0.0, y = 0.0 }),
-	kHoleBegin = Map:point("kHoleBegin", { x = 3.0, y = -0.4 }),
-	kHoleEnd = Map:point("kHoleEnd", { x = 3.0, y = -2.1 }),
-	kEnd = Map:point("kEnd", { x = 2.4, y = -2.1 }),
+	kHoleBegin = Map:point("kHoleBegin", { x = 3.0, y = 0.18 }),
+	kHoleEnd = Map:point("kHoleEnd", { x = 3.0, y = -1.4 }),
+	kEnd = Map:point("kEnd", { x = 1.7, y = -1.8 }),
 }
 
 local function navigate(from, to)
@@ -27,13 +27,22 @@ local function navigate(from, to)
 end
 
 -- 穿越地洞任务：起终点连线方向即隧道方向的 world yaw
-local function cross_tunnel(from, to)
-	action:cancel_target()
-	return action:blocking_cross_tunnel(math.atan(to.y - from.y, to.x - from.x))
+local function cross_tunnel(mode)
+	return function(from, to)
+		action:cancel_target()
+		return action:blocking_cross_tunnel(
+			math.atan(to.y - from.y, to.x - from.x),
+			to,
+			mode
+		)
+	end
 end
 
 Map:connect(Points.kOrigin, Points.kHoleBegin) { navigate, navigate }
-Map:connect_tunnel(Points.kHoleBegin, Points.kHoleEnd) { cross_tunnel, cross_tunnel }
+Map:connect_tunnel(Points.kHoleBegin, Points.kHoleEnd) {
+	cross_tunnel("up"),
+	cross_tunnel("down"),
+}
 Map:connect(Points.kHoleEnd, Points.kEnd) { navigate, navigate }
 
 return {

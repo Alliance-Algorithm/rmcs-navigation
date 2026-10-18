@@ -21,6 +21,8 @@ local util = require("util.native")
 --- @field set_climb_switch fun(is_climb: boolean)
 --- @field get_climb_status fun(): number
 --- @field set_tunnel_direction fun(world_yaw: number) 
+--- @field set_tunnel_finish fun(enable: boolean)
+--- @field set_tunnel_mode fun(mode: "up" | "down" | "plain")
 --- @field get_tunnel_status fun(): number 0=空闲, 1=成功, -1=失败, (0,1)阶段小数
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "slope")
 --- @field update_under_attack fun(yes: boolean)
@@ -102,8 +104,15 @@ function api.start_record()
 		error(msg)
 	end
 
+	if util.run("tmux has-session -t map-build 2>/dev/null") then
+		return false, "map build in progress"
+	end
+
 	local template = [[
         source %q
+
+        mkdir -p /tmp/rmcs-navigation
+        rm -f /tmp/rmcs-navigation/last-record-bag
 
         tmux kill-session -t record-livox 2>/dev/null || true
 
@@ -117,9 +126,14 @@ function api.start_record()
             echo \"record parent not found\"
             exit 1
         fi
-        echo \"Bag will be saved to ${record_parent}\"
+        echo \"Bag will be saved to \${record_parent}\"
 
-        mapfile -t topics < <(ros2 topic list | rg \"^/livox/(lidar|imu)_[^/]+$\")
+        topics=()
+        for _ in \$(seq 1 10); do
+            mapfile -t topics < <(ros2 topic list --no-daemon --spin-time 2 | rg \"^/livox/(lidar|imu)_[^/]+$\")
+            [ \${#topics[@]} -gt 0 ] && break
+            sleep 1
+        done
         if [ \${#topics[@]} -eq 0 ]; then
             echo \"no /livox lidar/imu topics found\"
             exit 1
@@ -128,12 +142,37 @@ function api.start_record()
         record_root=\$record_parent/record-livox
         bag_dir=\$record_root/livox-$(TZ=Asia/Shanghai date +%%Y_%%m_%%d-%%H_%%M_%%S)
         mkdir -p \"\$record_root\"
+        printf \"%%s\n\" \"\$bag_dir\" > /tmp/rmcs-navigation/last-record-bag
 
         ros2 bag record -o \"\$bag_dir\" \"\${topics[@]}\"'"
     ]]
 	local command = string.format(template, filename, filename)
 
-	return util.run(string.format("(%s) >/dev/null 2>&1 &", command))
+	return util.run(string.format("(%s) >/tmp/record-start.log 2>&1 &", command))
+end
+
+function api.finish_record()
+	local filename, msg = util.search_setup_resource()
+	if not filename then
+		error(msg)
+	end
+
+	local template = [[
+        source %q
+
+        mkdir -p /tmp/rmcs-navigation
+        script_path="$(ros2 pkg prefix rmcs-navigation)/share/rmcs-navigation/scripts/record-map.sh"
+        if [ ! -f "$script_path" ]; then
+            echo "record-map script not found: $script_path"
+            exit 1
+        fi
+
+        tmux kill-session -t map-build 2>/dev/null || true
+        tmux new-session -d -s map-build -n "map" "bash \"$script_path\""
+    ]]
+	local command = string.format(template, filename)
+
+	return util.run(string.format("(%s) >/tmp/record-map-dispatch.log 2>&1 &", command))
 end
 
 function api.abort_record()

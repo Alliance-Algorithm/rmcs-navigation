@@ -10,6 +10,7 @@
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/rmcs_msgs.hpp>
 
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 
@@ -49,6 +50,8 @@ private:
         OutputInterface<double> climb_cross_direction;
         OutputInterface<bool> climb_is_climb;
         OutputInterface<double> tunnel_direction;
+        OutputInterface<bool> tunnel_finish;
+        OutputInterface<rmcs_msgs::TunnelMode> tunnel_mode;
         OutputInterface<bool> track_rune;
         OutputInterface<bool> automatic_resurrection;
         OutputInterface<SentryEventCounts> sentry_events;
@@ -69,6 +72,11 @@ private:
             component.register_output("/rmcs_navigation/request/is_climb", climb_is_climb, false);
             component.register_output(
                 "/rmcs_navigation/request/tunnel_direction", tunnel_direction, kNan);
+            component.register_output(
+                "/rmcs_navigation/request/tunnel_finish", tunnel_finish, false);
+            component.register_output(
+                "/rmcs_navigation/request/tunnel_mode", tunnel_mode,
+                rmcs_msgs::TunnelMode::UP);
             component.register_output("/rmcs_navigation/request/track_rune", track_rune, false);
             component.register_output(
                 "/rmcs_navigation/automatic_resurrection", automatic_resurrection, true);
@@ -161,11 +169,25 @@ public:
         lua.inject("get_climb_status", [this] { return *rmcs.climber_status; });
 
         lua.inject("set_tunnel_direction", [this](double world_yaw) {
+            *command.tunnel_finish = false;
             if (std::isfinite(world_yaw)) {
                 pending_tunnel_world_yaw = world_yaw;
             } else {
                 pending_tunnel_world_yaw = kNan;
                 *command.tunnel_direction = kNan;
+            }
+        });
+        lua.inject(
+            "set_tunnel_finish", [this](bool enable) { *command.tunnel_finish = enable; });
+        lua.inject("set_tunnel_mode", [this](const std::string& mode) {
+            if (mode == "up") {
+                *command.tunnel_mode = rmcs_msgs::TunnelMode::UP;
+            } else if (mode == "down") {
+                *command.tunnel_mode = rmcs_msgs::TunnelMode::DOWN;
+            } else if (mode == "plain") {
+                *command.tunnel_mode = rmcs_msgs::TunnelMode::PLAIN;
+            } else {
+                throw std::invalid_argument{"invalid tunnel mode: " + mode};
             }
         });
         lua.inject("get_tunnel_status", [this] { return *rmcs.tunnel_status; });

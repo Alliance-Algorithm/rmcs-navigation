@@ -43,10 +43,17 @@ on_init = function()
 
 	scheduler:append_task(task.robot_status)
 	scheduler:append_task(function()
+		while true do
+			local position = action:current_position()
+			action:info(string.format("当前坐标: x=%.3f, y=%.3f", position.x, position.y))
+			request:sleep(1)
+		end
+	end)
+	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 1)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
 			-- request:sleep(2.0);
-			local success = action:blocking_cross_tunnel(0)
+			-- local success = action:blocking_cross_tunnel(0, { x = 3.0, y = -2.1 }, "up")
 		end)
 
 		while true do

@@ -18,6 +18,10 @@ install(
     DIRECTORY src/lua/
     DESTINATION share/${PROJECT_NAME}/lua/
 )
+install(
+    DIRECTORY scripts/
+    DESTINATION share/${PROJECT_NAME}/scripts/
+)
 
 find_package(ament_cmake REQUIRED)
 ament_package()

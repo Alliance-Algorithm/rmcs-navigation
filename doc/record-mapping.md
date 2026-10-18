@@ -20,7 +20,43 @@
 
 建图核心是 `point_lio`（节点名 `laserMapping`）：订阅雷达+IMU 话题跑 SLAM，内部持续累积全局点云，收到 `save_pcd_map` 服务调用后把累积点云保存为 `.pcd` 文件。
 
-## 2. 完整操作步骤
+## 2. 自动化流程（推荐）
+
+录制模式（`record.lua`）下拨杆切回关闭录制后，会自动启动 `scripts/record-map.sh` 完成离线建图，不需要再逐条执行下面的手动步骤：
+
+1. 小电脑端：停止录包 → 校验 bag → 停止实时导航 → 回放 bag → 启动 `point_lio` → 保存 PCD → 复制到 `~/record-livox/maps/<bag 名>.pcd` → 重启导航。
+2. 主机端：`map-watch` 轮询小电脑，把新 PCD 自动拉到 `/workspaces/RMCS/`。
+
+主机启动后台监听（只需启动一次，会持续轮询）：
+
+```zsh
+map-watch --daemon   # 日志：/tmp/rmcs-map-watch.log
+map-watch --stop     # 停止监听
+```
+
+只拉取一次：
+
+```zsh
+map-watch --once
+```
+
+小电脑端的建图状态与日志：
+
+```zsh
+cat /tmp/rmcs-navigation/record-map.status
+tail -f /tmp/rmcs-navigation/record-map.log
+tail -f /tmp/rmcs-navigation/point-lio.log
+```
+
+如果 bag 记录在 `/root/record-livox` 而不是 `/home/ubuntu/record-livox`，给 `map-watch` 传入
+`--remote-dir /root/record-livox/maps`。
+
+注意：`point_lio` 内部点云采集上限为 20 分钟（`point-lio/src/collection.h` 的
+`set_time_limit(20min)`），超过 20 分钟的 bag 只会保存前 20 分钟的点云。
+
+下面的手动步骤保留用于调试，或需要跳过自动流程单独重跑建图时参考。
+
+## 3. 完整操作步骤
 
 ### 步骤 0：录包（实机）
 

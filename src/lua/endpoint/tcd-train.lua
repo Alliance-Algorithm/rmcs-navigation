@@ -49,7 +49,7 @@ on_init = function()
 					return
 				end
 
-				-- action:gimbal_scan(0, 0)
+				action:gimbal_scan(0, 0)
 				request:sleep(3)
 			end
 		end
@@ -86,8 +86,8 @@ on_init = function()
 			}
 
 			request:sleep(5)
-			-- action:relocalize()
-			-- request:sleep(2)
+			action:relocalize()
+			request:sleep(2)
 
 			action:update_enable_control(true)
 			action:switch_topic_forward(true)
@@ -101,6 +101,13 @@ on_init = function()
 	end
 
 	scheduler:append_task(kTasks.robot_status)
+	scheduler:append_task(function()
+		while true do
+			local position = action:current_position()
+			action:info(string.format("当前坐标: x=%.3f, y=%.3f", position.x, position.y))
+			request:sleep(1)
+		end
+	end)
 	scheduler:append_task(function()
 		local switch_order = order.new(blackboard.getter.rswitch, 1)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, toggle_train)
