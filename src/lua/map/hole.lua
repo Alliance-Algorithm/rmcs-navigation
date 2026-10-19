@@ -37,20 +37,20 @@ local function navigate(from, to, keepalive)
 	return not timeout
 end
 
--- 忽略局部地图跨越：折头后先原地对正到边方向，再让导航忽略 local_map，
+-- 忽略局部地图跨越：先原地对正到边方向，再折头，然后让导航忽略 local_map，
 -- 正常导航到目标点，最后恢复。超时会由 C++ 侧 watchdog 兜底恢复，避免状态残留。
 local function cross_ignore_local_map(from, to)
 	action:cancel_target()
-	action:blocking_set_gimbal_fold(true)
-	action:update_supercap_boost(true)
 
-	-- 折头后先原地对正，避免忽略局部地图后盲走时底盘朝向不确定。
+	-- 先原地对正，避免忽略局部地图后盲走时底盘朝向不确定。
 	local world_yaw = math.atan(to.y - from.y, to.x - from.x)
 	if not action:blocking_align_chassis(world_yaw) then
 		action:fuck("failed to align chassis, current x=" .. bb.user.x .. " y=" .. bb.user.y)
-		action:blocking_set_gimbal_fold(false)
 		return false
 	end
+
+	action:blocking_set_gimbal_fold(true)
+	action:update_supercap_boost(true)
 
 	if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout) then
 		action:fuck("failed to ignore local map, current x=" .. bb.user.x .. " y=" .. bb.user.y)
