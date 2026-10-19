@@ -16,6 +16,7 @@ local kCruiseSlowScanSpeed = 3.2 -- 秒/弧度，赶路慢扫
 local kCruiseFastScanSpeed = 1.0 -- 秒/弧度，顶点快扫
 
 local kTunnelTargetTolerance = 0.1 -- 隧道穿越到达目标 xy 容差（米）
+local kChassisAlignTimeout = 6.0 -- 秒，底盘对正看门狗超时（应大于 C++ 侧 align timeout）
 
 local kGimbalFoldStateUnfold = 0
 local kGimbalFoldStateFolded = 3
@@ -370,6 +371,29 @@ function action:blocking_set_gimbal_fold(folded)
 	while api.get_gimbal_fold_state() ~= target do
 		request:yield()
 	end
+end
+
+--- 原地将底盘对正到 world 系目标 yaw，阻塞直到完成或超时。
+--- @param world_yaw number world 系目标朝向（弧度）
+--- @return boolean success
+function action:blocking_align_chassis(world_yaw)
+	action:info("Align chassis toward world yaw " .. world_yaw)
+	api.set_chassis_align(world_yaw)
+	request:yield()
+
+	local timeout = request:wait_until {
+		monitor = function()
+			local status = api.get_chassis_align_status()
+			return status == 1.0 or status == -1.0
+		end,
+		timeout = kChassisAlignTimeout,
+	}
+
+	local status = api.get_chassis_align_status()
+	api.set_chassis_align(0 / 0)
+	-- 让 C++ 侧至少看到一次取消，确保下一次对正仍能重新触发。
+	request:yield()
+	return not timeout and status == 1.0
 end
 
 --- 折叠云台穿越隧道：前进恒定时间后自动展开云台，阻塞直到完成；

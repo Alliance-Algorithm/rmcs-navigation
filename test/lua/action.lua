@@ -15,6 +15,8 @@ local fake = {
 	ignore_timeout = nil,
 	fold_request = nil,
 	fold_state = 0,
+	align_direction = {},
+	align_status = 0,
 }
 
 package.loaded["api"] = {
@@ -43,6 +45,12 @@ package.loaded["api"] = {
 	end,
 	get_gimbal_fold_state = function()
 		return fake.fold_state
+	end,
+	set_chassis_align = function(world_yaw)
+		fake.align_direction[#fake.align_direction + 1] = world_yaw
+	end,
+	get_chassis_align_status = function()
+		return fake.align_status
 	end,
 }
 
@@ -89,6 +97,45 @@ do
 	assert_eq(result, true, "set_local_map_ignored should forward api result")
 	assert_eq(fake.ignore_local_map, true, "should forward ignored flag")
 	assert_eq(fake.ignore_timeout, 12.5, "should forward timeout")
+end
+
+do
+	fake.align_status = 0.3
+	fake.align_direction = {}
+
+	local result = nil
+	scheduler:append_task(function()
+		result = action:blocking_align_chassis(1.25)
+	end)
+
+	scheduler:spin_once()
+	assert_eq(fake.align_direction[#fake.align_direction], 1.25, "should request align direction")
+	assert_eq(result, nil, "should wait for align status")
+
+	scheduler:spin_once()
+	fake.align_status = 1.0
+	scheduler:spin_once()
+	scheduler:spin_once()
+	assert_eq(result, true, "should return success on align success")
+	assert_nan(fake.align_direction[#fake.align_direction], "should cancel align request on exit")
+end
+
+do
+	fake.align_status = 0.3
+	fake.align_direction = {}
+
+	local result = nil
+	scheduler:append_task(function()
+		result = action:blocking_align_chassis(-2.0)
+	end)
+
+	scheduler:spin_once()
+	scheduler:spin_once()
+	fake.align_status = -1.0
+	scheduler:spin_once()
+	scheduler:spin_once()
+	assert_eq(result, false, "should return failure on align failure")
+	assert_nan(fake.align_direction[#fake.align_direction], "should cancel align request on failure")
 end
 
 do

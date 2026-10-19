@@ -28,6 +28,7 @@ private:
     std::atomic<std::uint16_t> lua_tick_count = 0;
     double pending_climb_world_yaw = kNan;
     double pending_tunnel_world_yaw = kNan;
+    double pending_align_world_yaw = kNan;
 
     details::LuaContext lua{*this};
     details::Navigation nav{*this};
@@ -52,6 +53,7 @@ private:
         OutputInterface<double> tunnel_direction;
         OutputInterface<bool> tunnel_finish;
         OutputInterface<rmcs_msgs::TunnelMode> tunnel_mode;
+        OutputInterface<double> align_direction;
         OutputInterface<bool> gimbal_fold;
         OutputInterface<bool> track_rune;
         OutputInterface<bool> automatic_resurrection;
@@ -77,6 +79,8 @@ private:
                 "/rmcs_navigation/request/tunnel_finish", tunnel_finish, false);
             component.register_output(
                 "/rmcs_navigation/request/tunnel_mode", tunnel_mode, rmcs_msgs::TunnelMode::UP);
+            component.register_output(
+                "/rmcs_navigation/request/align_direction", align_direction, kNan);
             component.register_output("/rmcs_navigation/request/gimbal_fold", gimbal_fold, false);
             component.register_output("/rmcs_navigation/request/track_rune", track_rune, false);
             component.register_output(
@@ -196,6 +200,16 @@ public:
         });
         lua.inject("get_tunnel_status", [this] { return *rmcs.tunnel_status; });
 
+        lua.inject("set_chassis_align", [this](double world_yaw) {
+            if (std::isfinite(world_yaw)) {
+                pending_align_world_yaw = world_yaw;
+            } else {
+                pending_align_world_yaw = kNan;
+                *command.align_direction = kNan;
+            }
+        });
+        lua.inject("get_chassis_align_status", [this] { return *rmcs.align_status; });
+
         lua.inject("set_gimbal_fold", [this](bool fold) { *command.gimbal_fold = fold; });
         lua.inject("get_gimbal_fold_state", [this] { return *rmcs.gimbal_fold_state; });
 
@@ -268,6 +282,13 @@ public:
             if (std::isfinite(target)) {
                 *command.tunnel_direction = target;
                 pending_tunnel_world_yaw = kNan;
+            }
+        }
+        if (std::isfinite(pending_align_world_yaw)) {
+            const auto target = motion.world2gimbal_odom(pending_align_world_yaw);
+            if (std::isfinite(target)) {
+                *command.align_direction = target;
+                pending_align_world_yaw = kNan;
             }
         }
         if (*command.enable_control) {

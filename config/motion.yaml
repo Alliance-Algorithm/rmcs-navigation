@@ -99,15 +99,15 @@ controller_server:
       visualize: true
 
       # 速度与加速度限制
-      vx_max: +2.0
-      vx_min: -2.0
-      vy_max: +2.0
-      vy_min: -2.0
+      vx_max: +3.0
+      vx_min: -3.0
+      vy_max: +3.0
+      vy_min: -3.0
       wz_max: +0.001
-      ax_max: +20.0
-      ax_min: -20.0
-      ay_max: +20.0
-      ay_min: -20.0
+      ax_max: +40.0
+      ax_min: -40.0
+      ay_max: +40.0
+      ay_min: -40.0
       az_max: +0.001
 
       # 采样噪声，鼓励左右探索

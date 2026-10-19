@@ -92,7 +92,7 @@ struct MotionFsm::Impl {
         fsm.use<Status::NORMAL>(
             [this] { wrap.info("MotionFsm::Enter | NORMAL"); },
             [this] {
-                command.chassis_mode = ChassisMode::ALIGNMENT;
+                command.chassis_mode = ChassisMode::AUTO;
                 command.chassis_speed = context.target_chassis_speed;
                 command.gimbal_toward = update_gimbal_target();
                 return Status::NORMAL;

@@ -25,6 +25,8 @@ local util = require("util.native")
 --- @field set_tunnel_finish fun(enable: boolean)
 --- @field set_tunnel_mode fun(mode: "up" | "down" | "plain")
 --- @field get_tunnel_status fun(): number 0=空闲, 1=成功, -1=失败, (0,1)阶段小数
+--- @field set_chassis_align fun(world_yaw: number) 传 NaN 取消对正
+--- @field get_chassis_align_status fun(): number 0=空闲, 1=成功, -1=失败, (0,1)阶段小数
 --- @field set_gimbal_fold fun(fold: boolean) true 请求折叠云台，false 请求展开云台
 --- @field get_gimbal_fold_state fun(): integer 0=展开, 1=移动到折叠位, 2=折叠中, 3=已折叠, 4=展开中
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "slope")

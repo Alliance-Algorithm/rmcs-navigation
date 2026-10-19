@@ -66,6 +66,7 @@ struct RmcsContext::Impl {
         make_input("/referee/chassis/power_limit", context.chassis_power_limit_referee, 100.0);
         make_input("/chassis/climber/status", context.climber_status, 0.0);
         make_input("/chassis/tunnel/status", context.tunnel_status, 0.0);
+        make_input("/chassis/align/status", context.align_status, 0.0);
         make_input("/rmcs_navigation/gimbal_fold_state", context.gimbal_fold_state, 0);
         make_input("/referee/game/stage", context.game_stage, rmcs_msgs::GameStage::UNKNOWN);
         make_input("/referee/current_hp", context.robot_health, std::uint16_t{400});

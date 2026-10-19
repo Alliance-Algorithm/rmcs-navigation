@@ -32,6 +32,7 @@ public:
     InputInterface<double> chassis_power_limit_referee;
     InputInterface<double> climber_status;
     InputInterface<double> tunnel_status;
+    InputInterface<double> align_status;
     InputInterface<int> gimbal_fold_state;
     InputInterface<bool> auto_aim_should_control;
 
