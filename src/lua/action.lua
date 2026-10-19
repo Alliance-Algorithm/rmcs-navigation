@@ -17,6 +17,9 @@ local kCruiseFastScanSpeed = 1.0 -- 秒/弧度，顶点快扫
 
 local kTunnelTargetTolerance = 0.1 -- 隧道穿越到达目标 xy 容差（米）
 
+local kGimbalFoldStateUnfold = 0
+local kGimbalFoldStateFolded = 3
+
 local action = {
 	last_enable = false,
 	target = {
@@ -155,6 +158,14 @@ end
 
 function action:switch_topic_forward(enable)
 	api.switch_topic_forward(enable)
+end
+
+--- 临时让导航忽略 local_map。
+--- @param ignored boolean true 表示忽略，false 表示恢复
+--- @param timeout number ignored=true 时的自动恢复超时时间（秒），必须大于 0
+--- @return boolean success
+function action:set_local_map_ignored(ignored, timeout)
+	return api.set_local_map_ignored(ignored, timeout)
 end
 
 function action:info(message)
@@ -344,6 +355,19 @@ function action:blocking_cross_step(world_yaw, is_climb)
 			api.set_climb_direction(NaN)
 			return status == 1.0
 		end
+		request:yield()
+	end
+end
+
+--- 折叠或展开云台，阻塞直到到达目标姿态。
+--- @param folded boolean true 折叠，false 展开
+function action:blocking_set_gimbal_fold(folded)
+	action:info(folded and "Set gimbal to folded pose" or "Set gimbal to unfolded pose")
+	api.set_gimbal_fold(folded)
+
+	local target = folded and kGimbalFoldStateFolded or kGimbalFoldStateUnfold
+	request:yield()
+	while api.get_gimbal_fold_state() ~= target do
 		request:yield()
 	end
 end

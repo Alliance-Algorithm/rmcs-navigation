@@ -79,6 +79,18 @@ public:
     /// - navigation.switch_topic_forward(false);
     auto switch_topic_forward(bool enable) -> void;
 
+    /// 临时让局部代价地图忽略 /local_map。
+    ///
+    /// 行为说明：
+    /// - ignored=true 时发布锁存状态，局部代价地图在 timeout_seconds 后自动恢复；
+    /// - ignored=false 时立即恢复，并取消自动恢复计时；
+    /// - 若没有 costmap gate 层订阅该状态，返回 false。
+    ///
+    /// 用法示例：
+    /// - navigation.set_local_map_ignored(true, 30.0);
+    /// - navigation.set_local_map_ignored(false, 0.0);
+    auto set_local_map_ignored(bool ignored, double timeout_seconds) -> bool;
+
     /// 获取最近一次 cmd_vel 速度和时间戳。
     auto current_command() const -> Command;
 };

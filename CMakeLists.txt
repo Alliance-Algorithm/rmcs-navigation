@@ -29,6 +29,7 @@ find_package(rmcs_description REQUIRED)
 
 find_package(nav2_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(rmcs_msgs REQUIRED)
@@ -72,6 +73,7 @@ target_include_directories(
         ${rclcpp_action_INCLUDE_DIRS}
         ${nav2_msgs_INCLUDE_DIRS}
         ${sensor_msgs_INCLUDE_DIRS}
+        ${std_msgs_INCLUDE_DIRS}
         ${pcl_conversions_INCLUDE_DIRS}
         ${LUA_INCLUDE_DIR}
         ${PCL_INCLUDE_DIRS}
@@ -94,6 +96,7 @@ target_link_libraries(
         ${rclcpp_action_LIBRARIES}
         ${nav2_msgs_LIBRARIES}
         ${sensor_msgs_LIBRARIES}
+        ${std_msgs_LIBRARIES}
         ${pcl_conversions_LIBRARIES}
 )
 

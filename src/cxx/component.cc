@@ -52,6 +52,7 @@ private:
         OutputInterface<double> tunnel_direction;
         OutputInterface<bool> tunnel_finish;
         OutputInterface<rmcs_msgs::TunnelMode> tunnel_mode;
+        OutputInterface<bool> gimbal_fold;
         OutputInterface<bool> track_rune;
         OutputInterface<bool> automatic_resurrection;
         OutputInterface<SentryEventCounts> sentry_events;
@@ -75,8 +76,8 @@ private:
             component.register_output(
                 "/rmcs_navigation/request/tunnel_finish", tunnel_finish, false);
             component.register_output(
-                "/rmcs_navigation/request/tunnel_mode", tunnel_mode,
-                rmcs_msgs::TunnelMode::UP);
+                "/rmcs_navigation/request/tunnel_mode", tunnel_mode, rmcs_msgs::TunnelMode::UP);
+            component.register_output("/rmcs_navigation/request/gimbal_fold", gimbal_fold, false);
             component.register_output("/rmcs_navigation/request/track_rune", track_rune, false);
             component.register_output(
                 "/rmcs_navigation/automatic_resurrection", automatic_resurrection, true);
@@ -140,6 +141,9 @@ public:
         lua.inject("cancel_target", [this] { nav.cancel_target(); });
         lua.inject(
             "switch_topic_forward", [this](bool enable) { nav.switch_topic_forward(enable); });
+        lua.inject("set_local_map_ignored", [this](bool ignored, double timeout_seconds) {
+            return nav.set_local_map_ignored(ignored, timeout_seconds);
+        });
         lua.inject("update_gimbal_direction", [this](double yaw, double pitch) {
             motion.context.target_gimbal_toward = {yaw, pitch};
         });
@@ -191,6 +195,9 @@ public:
             }
         });
         lua.inject("get_tunnel_status", [this] { return *rmcs.tunnel_status; });
+
+        lua.inject("set_gimbal_fold", [this](bool fold) { *command.gimbal_fold = fold; });
+        lua.inject("get_gimbal_fold_state", [this] { return *rmcs.gimbal_fold_state; });
 
         lua.inject("relocalize", [this] { nav.relocalize(rmcs.robot_id->color()); });
 

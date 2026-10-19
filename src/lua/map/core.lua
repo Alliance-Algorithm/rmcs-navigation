@@ -12,8 +12,8 @@
 --- @field begin_name string 腿起点名称，用于日志
 --- @field final_name string 腿终点名称，用于日志
 
---- 普通边可被合并为一条腿；台阶边、隧道边是合并屏障，必须单独执行
---- @alias MapEdgeKind "navigate" | "step" | "tunnel"
+--- 普通边可被合并为一条腿；台阶边、隧道边、忽略局部地图边是合并屏障，必须单独执行
+--- @alias MapEdgeKind "navigate" | "step" | "tunnel" | "ignore_local_map"
 
 --- @class MapEdge
 --- @field task MapTask 方向已绑定的边任务，调用时再传入腿的起终点
@@ -114,9 +114,17 @@ function Map:connect_tunnel(a, b)
 	return self:_connect(a, b, "tunnel")
 end
 
+--- 连接两个相邻节点，声明为忽略局部地图边；该边是合并屏障，必须单独执行
+--- @param a MapPoint
+--- @param b MapPoint
+--- @return fun(tasks: { [1]: MapTask, [2]: MapTask })
+function Map:connect_ignore_local_map(a, b)
+	return self:_connect(a, b, "ignore_local_map")
+end
+
 --- 将有序边序列压缩为可依次执行的腿任务
 --- merge 为 false 时逐条边成腿；否则连续的普通边合并为一条腿，使用首条边的 Task 以整条腿的起终点调用；
---- 屏障边（台阶/隧道）单独成腿，使用自身 Task 以边的起终点调用
+--- 屏障边（台阶/隧道/忽略局部地图）单独成腿，使用自身 Task 以边的起终点调用
 --- @param path { from: MapPoint, to: MapPoint, edge: MapEdge }[]
 --- @param merge boolean?
 --- @return MapPathTask[]

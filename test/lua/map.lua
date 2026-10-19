@@ -165,6 +165,36 @@ do
 	local a = map:point("a", { x = 0, y = 0 })
 	local b = map:point("b", { x = 1, y = 0 })
 	local c = map:point("c", { x = 2, y = 0 })
+
+	local trace = {}
+	map:connect(a, b) {
+		trace_task(trace, "navigate-a-b"),
+		trace_task(trace, "navigate-b-a"),
+	}
+	map:connect_ignore_local_map(b, c) {
+		trace_task(trace, "ignore-b-c"),
+		trace_task(trace, "ignore-c-b"),
+	}
+
+	local tasks = map:search(a, c)
+	assert_eq(#tasks, 2, "ignore_local_map edge should split navigate runs")
+	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "b", "navigate leg should end at ignore edge begin")
+	assert(tasks[2].begin_name == "b" and tasks[2].final_name == "c", "ignore edge should span the ignore edge")
+	for _, task in ipairs(tasks) do
+		task.run()
+	end
+	assert_table_eq(
+		trace,
+		{ "a-b:navigate-a-b", "b-c:ignore-b-c" },
+		"ignore_local_map should stay isolated from navigate runs"
+	)
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 1, y = 0 })
+	local c = map:point("c", { x = 2, y = 0 })
 	local d = map:point("d", { x = 3, y = 0 })
 
 	local trace = {}
@@ -341,6 +371,14 @@ do
 	assert_error(function()
 		map:connect_tunnel(a, b) { [2] = trace_task({}, "b-a") }
 	end, "connect_tunnel missing forward should error")
+
+	assert_error(function()
+		map:connect_ignore_local_map(a, b) { trace_task({}, "a-b") }
+	end, "connect_ignore_local_map missing backward should error")
+
+	assert_error(function()
+		map:connect_ignore_local_map(a, b) { [2] = trace_task({}, "b-a") }
+	end, "connect_ignore_local_map missing forward should error")
 end
 
 do

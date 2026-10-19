@@ -36,9 +36,11 @@ on_init = function()
 
 		local kPoints = {
 			Points.kOrigin,
-			Points.kHoleBegin,
-			Points.kHoleEnd,
-			Points.kEnd,
+			Points.kHole1Begin,
+			Points.kHole1End,
+			-- Points.kHole2Begin,
+			-- Points.kHole2End,
+			-- Points.kEnd,
 		}
 		while true do
 			for _, point in ipairs(kPoints) do

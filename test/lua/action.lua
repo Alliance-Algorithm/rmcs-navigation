@@ -11,12 +11,21 @@ local fake = {
 	finish = {},
 	direction = {},
 	mode = nil,
+	ignore_local_map = nil,
+	ignore_timeout = nil,
+	fold_request = nil,
+	fold_state = 0,
 }
 
 package.loaded["api"] = {
 	info = function() end,
 	warn = function() end,
 	fuck = function() end,
+	set_local_map_ignored = function(ignored, timeout)
+		fake.ignore_local_map = ignored
+		fake.ignore_timeout = timeout
+		return true
+	end,
 	set_tunnel_mode = function(mode)
 		fake.mode = mode
 	end,
@@ -28,6 +37,12 @@ package.loaded["api"] = {
 	end,
 	get_tunnel_status = function()
 		return fake.status
+	end,
+	set_gimbal_fold = function(fold)
+		fake.fold_request = fold
+	end,
+	get_gimbal_fold_state = function()
+		return fake.fold_state
 	end,
 }
 
@@ -67,6 +82,45 @@ do
 	assert_eq(result, true, "should return success on tunnel success")
 	assert_eq(fake.finish[#fake.finish], false, "should clear finish request on exit")
 	assert_nan(fake.direction[#fake.direction], "should cancel tunnel direction on exit")
+end
+
+do
+	local result = action:set_local_map_ignored(true, 12.5)
+	assert_eq(result, true, "set_local_map_ignored should forward api result")
+	assert_eq(fake.ignore_local_map, true, "should forward ignored flag")
+	assert_eq(fake.ignore_timeout, 12.5, "should forward timeout")
+end
+
+do
+	fake.fold_state = 0
+	local done = false
+	scheduler:append_task(function()
+		action:blocking_set_gimbal_fold(true)
+		done = true
+	end)
+
+	scheduler:spin_once()
+	assert_eq(fake.fold_request, true, "should request folded pose")
+	assert_eq(done, false, "should wait for folded pose")
+
+	fake.fold_state = 3
+	scheduler:spin_once()
+	assert_eq(done, true, "should return after folded pose reached")
+
+	fake.fold_state = 3
+	done = false
+	scheduler:append_task(function()
+		action:blocking_set_gimbal_fold(false)
+		done = true
+	end)
+
+	scheduler:spin_once()
+	assert_eq(fake.fold_request, false, "should request unfolded pose")
+	assert_eq(done, false, "should wait for unfolded pose")
+
+	fake.fold_state = 0
+	scheduler:spin_once()
+	assert_eq(done, true, "should return after unfolded pose reached")
 end
 
 do

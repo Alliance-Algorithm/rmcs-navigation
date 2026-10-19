@@ -7,6 +7,7 @@ local util = require("util.native")
 --- @class Api
 ---
 --- @field switch_topic_forward fun(enable: boolean)
+--- @field set_local_map_ignored fun(ignored: boolean, timeout: number): boolean
 ---
 --- @field info fun(message: string)
 --- @field warn fun(message: string)
@@ -24,6 +25,8 @@ local util = require("util.native")
 --- @field set_tunnel_finish fun(enable: boolean)
 --- @field set_tunnel_mode fun(mode: "up" | "down" | "plain")
 --- @field get_tunnel_status fun(): number 0=空闲, 1=成功, -1=失败, (0,1)阶段小数
+--- @field set_gimbal_fold fun(fold: boolean) true 请求折叠云台，false 请求展开云台
+--- @field get_gimbal_fold_state fun(): integer 0=展开, 1=移动到折叠位, 2=折叠中, 3=已折叠, 4=展开中
 --- @field switch_motion_mode fun(mode: "normal" | "attack" | "slope")
 --- @field update_under_attack fun(yes: boolean)
 --- @field update_supercap_boost fun(on: boolean)
