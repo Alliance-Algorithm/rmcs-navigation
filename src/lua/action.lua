@@ -165,9 +165,10 @@ end
 --- 临时让导航忽略 local_map。
 --- @param ignored boolean true 表示忽略，false 表示恢复
 --- @param timeout number ignored=true 时的自动恢复超时时间（秒），必须大于 0
+--- @param speed_scale number 忽略期间的速度缩放，1.0 表示不变，范围 (0, 1.5]
 --- @return boolean success
-function action:set_local_map_ignored(ignored, timeout)
-	return api.set_local_map_ignored(ignored, timeout)
+function action:set_local_map_ignored(ignored, timeout, speed_scale)
+	return api.set_local_map_ignored(ignored, timeout, speed_scale)
 end
 
 function action:info(message)

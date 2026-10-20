@@ -83,15 +83,18 @@ public:
     ///
     /// 行为说明：
     /// - ignored=true 时发布锁存状态，局部代价地图在 timeout_seconds 后自动恢复；
-    /// - ignored=false 时立即恢复，并取消自动恢复计时；
+    /// - speed_scale 仅在该忽略状态期间生效，作用于发往底盘的 cmd_vel；
+    ///   speed_scale=1.0 表示不缩放，>1 表示加速，范围 (0, 1.5]；
+    /// - ignored=false 时立即恢复，并取消自动恢复计时、复位 speed_scale；
     /// - 若没有 costmap gate 层订阅该状态，返回 false。
     ///
     /// 用法示例：
-    /// - navigation.set_local_map_ignored(true, 30.0);
-    /// - navigation.set_local_map_ignored(false, 0.0);
-    auto set_local_map_ignored(bool ignored, double timeout_seconds) -> bool;
+    /// - navigation.set_local_map_ignored(true, 30.0, 1.3);
+    /// - navigation.set_local_map_ignored(false, 0.0, 1.0);
+    auto set_local_map_ignored(bool ignored, double timeout_seconds, double speed_scale) -> bool;
 
     /// 获取最近一次 cmd_vel 速度和时间戳。
+    /// local_map ignore 激活时，speed 已按 speed_scale 缩放。
     auto current_command() const -> Command;
 };
 

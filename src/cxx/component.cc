@@ -145,9 +145,11 @@ public:
         lua.inject("cancel_target", [this] { nav.cancel_target(); });
         lua.inject(
             "switch_topic_forward", [this](bool enable) { nav.switch_topic_forward(enable); });
-        lua.inject("set_local_map_ignored", [this](bool ignored, double timeout_seconds) {
-            return nav.set_local_map_ignored(ignored, timeout_seconds);
-        });
+        lua.inject(
+            "set_local_map_ignored",
+            [this](bool ignored, double timeout_seconds, double speed_scale) {
+                return nav.set_local_map_ignored(ignored, timeout_seconds, speed_scale);
+            });
         lua.inject("update_gimbal_direction", [this](double yaw, double pitch) {
             motion.context.target_gimbal_toward = {yaw, pitch};
         });

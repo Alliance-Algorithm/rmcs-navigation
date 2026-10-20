@@ -54,6 +54,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     static constexpr auto kRelocalizeTriggerFifo = "/tmp/rmcs-localization/relocalize/trigger";
     static constexpr auto kServerNotReadyWarnInterval = std::chrono::seconds{5};
     static constexpr auto kLocalMapIgnoreWatchInterval = std::chrono::milliseconds{100};
+    static constexpr auto kMaxSpeedScale = 1.5;
 
     struct Target final {
         double x = std::numeric_limits<double>::quiet_NaN();
@@ -111,6 +112,7 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     std::mutex local_map_ignore_mutex;
     std::optional<std::chrono::steady_clock::time_point> local_map_ignore_deadline;
     bool local_map_ignored = false;
+    std::atomic<double> local_map_ignore_speed_scale = 1.0;
 
     std::uint64_t latest_request_id = 0;
     std::chrono::steady_clock::time_point last_server_not_ready_warn_time{};
@@ -232,6 +234,7 @@ public:
                     && std::chrono::steady_clock::now() >= *local_map_ignore_deadline) {
                     local_map_ignore_deadline.reset();
                     local_map_ignored = false;
+                    local_map_ignore_speed_scale.store(1.0, std::memory_order::relaxed);
                     publish_local_map_ignored(false);
                     should_restore = true;
                 }
@@ -265,6 +268,7 @@ public:
         {
             std::lock_guard lock{local_map_ignore_mutex};
             local_map_ignore_deadline.reset();
+            local_map_ignore_speed_scale.store(1.0, std::memory_order::relaxed);
             if (local_map_ignored) {
                 local_map_ignored = false;
                 publish_local_map_ignored(false);
@@ -352,12 +356,13 @@ public:
         info("goal topic forwarding disabled");
     }
 
-    auto set_local_map_ignored(bool ignored, double timeout_seconds) -> bool {
+    auto set_local_map_ignored(bool ignored, double timeout_seconds, double speed_scale) -> bool {
         if (!ignored) {
             {
                 std::lock_guard lock{local_map_ignore_mutex};
                 local_map_ignore_deadline.reset();
                 local_map_ignored = false;
+                local_map_ignore_speed_scale.store(1.0, std::memory_order::relaxed);
                 publish_local_map_ignored(false);
             }
             info("local map ignore disabled");
@@ -369,6 +374,13 @@ public:
             return false;
         }
 
+        if (!std::isfinite(speed_scale) || !(speed_scale > 0.0 && speed_scale <= kMaxSpeedScale)) {
+            fuck(
+                "ignore local map requires speed scale in (0, {}], got {}", kMaxSpeedScale,
+                speed_scale);
+            return false;
+        }
+
         if (local_map_ignore_publisher->get_subscription_count() == 0) {
             fuck(
                 "ignore local map failed: no costmap layer subscribed to {}", kLocalMapIgnoreTopic);
@@ -377,6 +389,7 @@ public:
 
         {
             std::lock_guard lock{local_map_ignore_mutex};
+            local_map_ignore_speed_scale.store(speed_scale, std::memory_order::relaxed);
             const auto timeout = std::chrono::duration<double>{timeout_seconds};
             local_map_ignore_deadline =
                 std::chrono::steady_clock::now()
@@ -384,7 +397,8 @@ public:
             local_map_ignored = true;
             publish_local_map_ignored(true);
         }
-        info("local map ignored for {:.1f}s", timeout_seconds);
+        info(
+            "local map ignored for {:.1f}s, speed scale {:.2f}", timeout_seconds, speed_scale);
         return true;
     }
 
@@ -420,8 +434,9 @@ auto Navigation::relocalize(rmcs_msgs::RobotColor color) -> void { pimpl->reloca
 
 auto Navigation::switch_topic_forward(bool enable) -> void { pimpl->switch_topic_forward(enable); }
 
-auto Navigation::set_local_map_ignored(bool ignored, double timeout_seconds) -> bool {
-    return pimpl->set_local_map_ignored(ignored, timeout_seconds);
+auto Navigation::set_local_map_ignored(
+    bool ignored, double timeout_seconds, double speed_scale) -> bool {
+    return pimpl->set_local_map_ignored(ignored, timeout_seconds, speed_scale);
 }
 
 auto Navigation::check_position() const -> std::tuple<double, double, double> {
@@ -429,7 +444,11 @@ auto Navigation::check_position() const -> std::tuple<double, double, double> {
 }
 
 auto Navigation::current_command() const -> Command {
-    return {.speed = pimpl->latest_cmd_vel, .timestamp = pimpl->latest_cmd_vel_time};
+    return {
+        .speed = pimpl->latest_cmd_vel
+            * pimpl->local_map_ignore_speed_scale.load(std::memory_order::relaxed),
+        .timestamp = pimpl->latest_cmd_vel_time,
+    };
 }
 
 } // namespace rmcs::navigation::details

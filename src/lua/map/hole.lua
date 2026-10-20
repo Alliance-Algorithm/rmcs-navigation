@@ -6,6 +6,7 @@ local bb = require("blackboard").singleton()
 
 local kLocalMapIgnoreTimeout = 5 -- 秒，忽略 local_map 的看门狗超时
 local kLocalMapIgnoreRefresh = 2 -- 秒，跨越期间刷新看门狗超时的周期
+local kCrossSpeedScale = 1.3 -- 忽略局部地图穿越时的导航速度增益
 
 local Points = {
 	kOrigin = Map:point("kOrigin", { x = 0.0, y = 0.0 }),
@@ -53,7 +54,7 @@ local function cross_ignore_local_map(from, to)
 	action:blocking_set_gimbal_fold(true)
 	action:update_supercap_boost(true)
 
-	if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout) then
+	if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout, kCrossSpeedScale) then
 		action:fuck("failed to ignore local map, current x=" .. bb.user.x .. " y=" .. bb.user.y)
 		action:blocking_set_gimbal_fold(false)
 		action:update_supercap_boost(false)
@@ -64,11 +65,11 @@ local function cross_ignore_local_map(from, to)
 	request:sleep(0.2)
 
 	local success = navigate(from, to, function()
-		if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout) then
+		if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout, kCrossSpeedScale) then
 			action:fuck("lost local map ignore gate during crossing")
 		end
 	end)
-	action:set_local_map_ignored(false, 0)
+	action:set_local_map_ignored(false, 0, 1.0)
 	action:update_supercap_boost(false)
 	action:blocking_set_gimbal_fold(false)
 	return success

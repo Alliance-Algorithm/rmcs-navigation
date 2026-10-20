@@ -7,7 +7,7 @@ local util = require("util.native")
 --- @class Api
 ---
 --- @field switch_topic_forward fun(enable: boolean)
---- @field set_local_map_ignored fun(ignored: boolean, timeout: number): boolean
+--- @field set_local_map_ignored fun(ignored: boolean, timeout: number, speed_scale: number): boolean
 ---
 --- @field info fun(message: string)
 --- @field warn fun(message: string)

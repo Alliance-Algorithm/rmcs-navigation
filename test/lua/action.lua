@@ -13,6 +13,7 @@ local fake = {
 	mode = nil,
 	ignore_local_map = nil,
 	ignore_timeout = nil,
+	ignore_speed_scale = nil,
 	fold_request = nil,
 	fold_state = 0,
 	align_direction = {},
@@ -23,9 +24,10 @@ package.loaded["api"] = {
 	info = function() end,
 	warn = function() end,
 	fuck = function() end,
-	set_local_map_ignored = function(ignored, timeout)
+	set_local_map_ignored = function(ignored, timeout, speed_scale)
 		fake.ignore_local_map = ignored
 		fake.ignore_timeout = timeout
+		fake.ignore_speed_scale = speed_scale
 		return true
 	end,
 	set_tunnel_mode = function(mode)
@@ -98,10 +100,15 @@ do
 end
 
 do
-	local result = action:set_local_map_ignored(true, 12.5)
+	local result = action:set_local_map_ignored(true, 12.5, 1.3)
 	assert_eq(result, true, "set_local_map_ignored should forward api result")
 	assert_eq(fake.ignore_local_map, true, "should forward ignored flag")
 	assert_eq(fake.ignore_timeout, 12.5, "should forward timeout")
+	assert_eq(fake.ignore_speed_scale, 1.3, "should forward speed scale")
+
+	action:set_local_map_ignored(false, 0, 1.0)
+	assert_eq(fake.ignore_local_map, false, "should forward restore flag")
+	assert_eq(fake.ignore_speed_scale, 1.0, "should forward reset speed scale")
 end
 
 do
