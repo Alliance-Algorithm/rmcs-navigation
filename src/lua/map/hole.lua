@@ -9,8 +9,8 @@ local kLocalMapIgnoreRefresh = 2 -- 秒，跨越期间刷新看门狗超时的�
 
 local Points = {
 	kOrigin = Map:point("kOrigin", { x = 0.0, y = 0.0 }),
-	kHole1Begin = Map:point("kHole1Begin", { x = 3.5, y = -0.5 }),
-	kHole1End = Map:point("kHole1End", { x = 3.6, y = -2.0 }),
+	kHole1Begin = Map:point("kHole1Begin", { x = 3.5, y = -0.4 }),
+	kHole1End = Map:point("kHole1End", { x = 3.6, y = -2.3 }),
 	kHole2Begin = Map:point("kHole2Begin", { x = 7.5, y = -1.9 }),
 	kHole2End = Map:point("kHole2End", { x = 8.5, y = -1.9 }),
 	kEnd = Map:point("kEnd", { x = 9.1, y = -1.3 }),
@@ -43,6 +43,7 @@ local function cross_ignore_local_map(from, to)
 	action:cancel_target()
 
 	-- 先原地对正，避免忽略局部地图后盲走时底盘朝向不确定。
+	-- 底盘为正方形，blocking_align_chassis 会选择最近的 π/2 等价朝向。
 	local world_yaw = math.atan(to.y - from.y, to.x - from.x)
 	if not action:blocking_align_chassis(world_yaw) then
 		action:fuck("failed to align chassis, current x=" .. bb.user.x .. " y=" .. bb.user.y)
@@ -68,6 +69,7 @@ local function cross_ignore_local_map(from, to)
 		end
 	end)
 	action:set_local_map_ignored(false, 0)
+	action:update_supercap_boost(false)
 	action:blocking_set_gimbal_fold(false)
 	return success
 end

@@ -63,6 +63,11 @@ local function assert_nan(value, message)
 	assert_eq(value ~= value, true, message)
 end
 
+local function assert_near(actual, expected, message)
+	assert_eq(type(actual), "number", message .. " type")
+	assert_eq(math.abs(actual - expected) < 1e-9, true, message)
+end
+
 do
 	local target = { x = 1.0, y = 0.0 }
 	local result = nil
@@ -100,6 +105,7 @@ do
 end
 
 do
+	bb.user.yaw = 0.0
 	fake.align_status = 0.3
 	fake.align_direction = {}
 
@@ -109,7 +115,11 @@ do
 	end)
 
 	scheduler:spin_once()
-	assert_eq(fake.align_direction[#fake.align_direction], 1.25, "should request align direction")
+	assert_near(
+		fake.align_direction[#fake.align_direction],
+		1.25 - math.pi / 2,
+		"should request nearest face align direction"
+	)
 	assert_eq(result, nil, "should wait for align status")
 
 	scheduler:spin_once()
@@ -121,6 +131,7 @@ do
 end
 
 do
+	bb.user.yaw = 0.0
 	fake.align_status = 0.3
 	fake.align_direction = {}
 
@@ -131,11 +142,61 @@ do
 
 	scheduler:spin_once()
 	scheduler:spin_once()
+	assert_near(
+		fake.align_direction[#fake.align_direction],
+		-2.0 + math.pi / 2,
+		"should snap negative align direction to nearest face"
+	)
 	fake.align_status = -1.0
 	scheduler:spin_once()
 	scheduler:spin_once()
 	assert_eq(result, false, "should return failure on align failure")
 	assert_nan(fake.align_direction[#fake.align_direction], "should cancel align request on failure")
+end
+
+do
+	local cases = {
+		{ user_yaw = 0.0, request = math.pi, expected = 0.0 },
+		{ user_yaw = 0.0, request = 1.0, expected = 1.0 - math.pi / 2 },
+		{ user_yaw = 0.0, request = math.pi / 4, expected = math.pi / 4 },
+		{ user_yaw = -0.1, request = -math.pi / 4, expected = -math.pi / 4 },
+		{ user_yaw = 2.0, request = 0.1, expected = 0.1 + math.pi / 2 },
+	}
+
+	for _, case in ipairs(cases) do
+		bb.user.yaw = case.user_yaw
+		fake.align_status = 0.3
+		fake.align_direction = {}
+
+		local done = false
+		scheduler:append_task(function()
+			action:blocking_align_chassis(case.request)
+			done = true
+		end)
+
+		scheduler:spin_once()
+		assert_near(
+			fake.align_direction[1],
+			case.expected,
+			"should choose nearest of four chassis faces"
+		)
+
+		fake.align_status = 1.0
+		scheduler:spin_once()
+		scheduler:spin_once()
+		scheduler:spin_once()
+		assert_eq(done, true, "should finish snapped align")
+	end
+end
+
+do
+	bb.user.yaw = 0 / 0
+	fake.align_direction = {}
+
+	local result = action:blocking_align_chassis(1.0)
+	assert_eq(result, false, "should fail fast on invalid user yaw")
+	assert_eq(#fake.align_direction, 0, "should not request align with invalid user yaw")
+	bb.user.yaw = 0.0
 end
 
 do

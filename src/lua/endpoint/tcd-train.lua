@@ -45,6 +45,7 @@ on_init = function()
 		while true do
 			for _, point in ipairs(kPoints) do
 				action:gimbal_suspend()
+				-- action:cruise_slow_scan()
 
 				if not action:follow_path(Map, point, { merge = false }) then
 					action:fuck("Failed to follow path, return")
@@ -52,7 +53,7 @@ on_init = function()
 				end
 
 				action:gimbal_scan(0, 0)
-				request:sleep(3)
+				request:sleep(1)
 			end
 		end
 	end

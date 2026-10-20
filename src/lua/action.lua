@@ -17,6 +17,7 @@ local kCruiseFastScanSpeed = 1.0 -- 秒/弧度，顶点快扫
 
 local kTunnelTargetTolerance = 0.1 -- 隧道穿越到达目标 xy 容差（米）
 local kChassisAlignTimeout = 6.0 -- 秒，底盘对正看门狗超时（应大于 C++ 侧 align timeout）
+local kChassisFacePeriod = math.pi / 2 -- 正方形底盘允许任意面朝向目标
 
 local kGimbalFoldStateUnfold = 0
 local kGimbalFoldStateFolded = 3
@@ -374,11 +375,25 @@ function action:blocking_set_gimbal_fold(folded)
 end
 
 --- 原地将底盘对正到 world 系目标 yaw，阻塞直到完成或超时。
+--- 正方形底盘任意面朝向目标均可，自动选择最近的 π/2 等价朝向，最大旋转 π/4。
 --- @param world_yaw number world 系目标朝向（弧度）
 --- @return boolean success
 function action:blocking_align_chassis(world_yaw)
-	action:info("Align chassis toward world yaw " .. world_yaw)
-	api.set_chassis_align(world_yaw)
+	if util.check_nan(world_yaw, bb.user.yaw) then
+		action:warn(
+			"Invalid chassis align yaw, world_yaw="
+				.. tostring(world_yaw)
+				.. " user_yaw="
+				.. tostring(bb.user.yaw)
+		)
+		return false
+	end
+
+	local align_yaw = world_yaw
+		+ math.floor((bb.user.yaw - world_yaw) / kChassisFacePeriod + 0.5) * kChassisFacePeriod
+
+	action:info("Align chassis toward world yaw " .. align_yaw .. " (request " .. world_yaw .. ")")
+	api.set_chassis_align(align_yaw)
 	request:yield()
 
 	local timeout = request:wait_until {
