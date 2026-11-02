@@ -7,13 +7,14 @@ local bb = require("blackboard").singleton()
 local kLocalMapIgnoreTimeout = 5 -- 秒，忽略 local_map 的看门狗超时
 local kLocalMapIgnoreRefresh = 2 -- 秒，跨越期间刷新看门狗超时的周期
 local kCrossSpeedScale = 1.3 -- 忽略局部地图穿越时的导航速度增益
+local kNavigateTolerance = 0.15 -- 米，到达容差；洞口需精确停在全局地图的合法格内
 
 local Points = {
 	kOrigin = Map:point("kOrigin", { x = 0.0, y = 0.0 }),
-	kHole1Begin = Map:point("kHole1Begin", { x = 3.5, y = -0.4 }),
-	kHole1End = Map:point("kHole1End", { x = 3.6, y = -2.3 }),
-	kHole2Begin = Map:point("kHole2Begin", { x = 7.5, y = -1.9 }),
-	kHole2End = Map:point("kHole2End", { x = 8.5, y = -1.9 }),
+	kHole1Begin = Map:point("kHole1Begin", { x = 3.5, y = -0.15 }),
+	kHole1End = Map:point("kHole1End", { x = 3.5, y = -1.6 }),
+	kHole2Begin = Map:point("kHole2Begin", { x = 7.0, y = -1.6 }),
+	kHole2End = Map:point("kHole2End", { x = 9.0, y = -1.58 }),
 	kEnd = Map:point("kEnd", { x = 9.1, y = -1.3 }),
 }
 
@@ -28,12 +29,13 @@ local function navigate(from, to, keepalive)
 				keepalive()
 				last_keepalive = clock:now()
 			end
-			return bb.condition.near(to, 0.5)
+			return bb.condition.near(to, kNavigateTolerance)
 		end,
 		timeout = 20 + distance / 2,
 	}
 	if timeout then
 		action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+		action:cancel_target()
 	end
 	return not timeout
 end
@@ -88,7 +90,7 @@ local function cross_tunnel(mode)
 end
 
 Map:connect(Points.kOrigin, Points.kHole1Begin) { navigate, navigate }
-Map:connect_tunnel(Points.kHole1Begin, Points.kHole1End) {
+Map:connect_ignore_local_map(Points.kHole1Begin, Points.kHole1End) {
 	cross_ignore_local_map,
 	cross_ignore_local_map,
 }

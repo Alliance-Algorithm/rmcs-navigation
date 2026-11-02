@@ -38,8 +38,8 @@ on_init = function()
 			Points.kOrigin,
 			Points.kHole1Begin,
 			Points.kHole1End,
-			-- Points.kHole2Begin,
-			-- Points.kHole2End,
+			Points.kHole2Begin,
+			Points.kHole2End,
 			-- Points.kEnd,
 		}
 		while true do
