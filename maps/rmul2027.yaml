@@ -1,0 +1,9 @@
+image: rmul2027.png
+mode: trinary
+resolution: 0.1
+# world (0, 0) = 场内 (1.10 m, 7.60 m)，PNG 外框 0.3 m
+# origin = -(0.3 + 场内坐标)，即 -(1.40, 7.90)
+origin: [-1.40, -7.90, 0.0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196

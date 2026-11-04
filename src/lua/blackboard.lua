@@ -69,6 +69,8 @@ local function create_default_blackboard()
 		-- context
 		context = {
 			current = nil, -- 当前地图节点，由 Map 边 Task 成功后推进
+			crossing = false, -- 正在钻狗洞，期间不应取消当前意图
+			engage_on_route = false, -- 赶路途中识别到敌方时停车迎战
 			started_timestamp = 0,
 
 			powered_move = false,
