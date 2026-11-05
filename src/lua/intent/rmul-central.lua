@@ -34,7 +34,7 @@ end
 
 function intent:loop()
 	action:info("出击：钻狗洞，前往中央控制区 1 号点")
-	action:switch_motion_mode("normal")
+	action:switch_motion_mode("attack")
 
 	-- 如果从巡逻点重启，直接接着巡逻；否则从当前节点续跑出击路线
 	local patrol_start = patrol_index_for(bb.context.current)

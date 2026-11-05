@@ -26,6 +26,12 @@ local Points = {
 	kPatrol4 = Map:point("kPatrol4", { x = 3.800, y = -4.700 }),
 }
 
+-- 临时测试：坐标缩小
+-- for _, p in pairs(Points) do
+--  p.x = p.x * 0.5
+--  p.y = p.y * 0.5
+-- end
+
 local function navigate(from, to, keepalive)
 	action:navigate(to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)
@@ -47,8 +53,6 @@ local function navigate(from, to, keepalive)
 	return not timeout
 end
 
--- 普通赶路：bb.context.engage_on_route 为 true 时，途中自瞄接管即停车、开小陀螺迎战，
--- 目标丢失 kEngageRelease 秒后恢复赶路；停车时长不计入超时
 local function rough_navigate(from, to)
 	local distance = math.sqrt((to.x - from.x) ^ 2 + (to.y - from.y) ^ 2)
 	local deadline = clock:now() + 20 + distance / 2
@@ -86,7 +90,6 @@ local function rough_navigate(from, to)
 		}
 
 		action:info("目标丢失，继续前往 " .. to.name)
-		action:switch_motion_mode("normal")
 		deadline = deadline + clock:now() - engage_begin
 		action:navigate(to)
 	end
@@ -96,12 +99,18 @@ end
 -- 超时会由 C++ 侧 watchdog 兜底恢复 local_map，避免状态残留。
 -- 期间置 bb.context.crossing，endpoint 据此推迟意图切换，避免中途取消导致云台停在折叠位。
 local function cross_hole(from, to)
+	local function finish(success)
+		action:switch_motion_mode("attack")
+		bb.context.crossing = false
+		return success
+	end
+
 	bb.context.crossing = true
+	action:switch_motion_mode("normal")
 
 	if not action:navigate_until(from, kHoleTolerance, kHoleEntryTimeout) then
 		action:fuck("failed to reach hole entry, current x=" .. bb.user.x .. " y=" .. bb.user.y)
-		bb.context.crossing = false
-		return false
+		return finish(false)
 	end
 	action:cancel_target()
 
@@ -109,8 +118,7 @@ local function cross_hole(from, to)
 	local world_yaw = math.atan(to.y - from.y, to.x - from.x)
 	if not action:blocking_align_chassis(world_yaw) then
 		action:fuck("failed to align chassis, current x=" .. bb.user.x .. " y=" .. bb.user.y)
-		bb.context.crossing = false
-		return false
+		return finish(false)
 	end
 
 	action:blocking_set_gimbal_fold(true)
@@ -120,8 +128,7 @@ local function cross_hole(from, to)
 		action:fuck("failed to ignore local map, current x=" .. bb.user.x .. " y=" .. bb.user.y)
 		action:blocking_set_gimbal_fold(false)
 		action:update_supercap_boost(false)
-		bb.context.crossing = false
-		return false
+		return finish(false)
 	end
 
 	-- 等待一个局部代价地图更新周期，确保障碍已被清除
@@ -136,8 +143,7 @@ local function cross_hole(from, to)
 	action:update_supercap_boost(false)
 	action:blocking_set_gimbal_fold(false)
 
-	bb.context.crossing = false
-	return success
+	return finish(success)
 end
 
 -- ==================== rough_navigate ====================
