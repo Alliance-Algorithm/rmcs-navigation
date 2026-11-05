@@ -26,11 +26,11 @@ local Points = {
 	kPatrol4 = Map:point("kPatrol4", { x = 3.800, y = -4.700 }),
 }
 
--- 临时测试：坐标缩小
--- for _, p in pairs(Points) do
---  p.x = p.x * 0.5
---  p.y = p.y * 0.5
--- end
+-- 临时测试：坐标缩小。比赛前关掉。
+for _, p in pairs(Points) do
+	p.x = p.x * 0.5
+	p.y = p.y * 0.5
+end
 
 local function navigate(from, to, keepalive)
 	action:navigate(to)
@@ -62,11 +62,11 @@ local function rough_navigate(from, to)
 	while true do
 		request:wait_until {
 			monitor = function()
-				return bb.condition.near(to, 0.5) or (bb.context.engage_on_route and bb.autoaim.should_control)
+				return bb.condition.near(to, 0.25) or (bb.context.engage_on_route and bb.autoaim.should_control)
 			end,
 			timeout = math.max(deadline - clock:now(), 0),
 		}
-		if bb.condition.near(to, 0.5) then
+		if bb.condition.near(to, 0.25) then
 			return true
 		end
 		if clock:now() >= deadline then
@@ -121,7 +121,12 @@ local function cross_hole(from, to)
 		return finish(false)
 	end
 
-	action:blocking_set_gimbal_fold(true)
+	-- 云台没折到位就不进洞，否则会顶到洞顶
+	if not action:blocking_set_gimbal_fold(true) then
+		action:fuck("failed to fold gimbal, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+		action:blocking_set_gimbal_fold(false)
+		return finish(false)
+	end
 	action:update_supercap_boost(true)
 
 	if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout, kCrossSpeedScale) then
@@ -134,14 +139,42 @@ local function cross_hole(from, to)
 	-- 等待一个局部代价地图更新周期，确保障碍已被清除
 	request:sleep(0.2)
 
-	local success = navigate(from, to, function()
+	local function keepalive()
 		if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout, kCrossSpeedScale) then
 			action:fuck("lost local map ignore gate during crossing")
 		end
-	end)
-	action:set_local_map_ignored(false, 0, 1.0)
-	action:update_supercap_boost(false)
-	action:blocking_set_gimbal_fold(false)
+	end
+
+	local success = navigate(from, to, keepalive)
+	if not success then
+		-- 超时时车可能仍在洞内：保持折叠并继续忽略 local_map，先回到较近的一端再展开
+		local from_distance = (from.x - bb.user.x) ^ 2 + (from.y - bb.user.y) ^ 2
+		local to_distance = (to.x - bb.user.x) ^ 2 + (to.y - bb.user.y) ^ 2
+		local nearest = to_distance < from_distance and to or from
+		action:warn("cross hole timeout, recover to " .. nearest.name)
+
+		keepalive()
+		local recovered = navigate(action:current_position(), nearest, keepalive)
+		action:set_local_map_ignored(false, 0, 1.0)
+		action:update_supercap_boost(false)
+		if not recovered then
+			-- 仍可能卡在洞内：不展开云台，保持折叠交给调用方重试，下次 cross_hole 折叠会立即完成
+			action:fuck(
+				"failed to recover from hole, keep gimbal folded, current x=" .. bb.user.x .. " y=" .. bb.user.y
+			)
+			return finish(false)
+		end
+		-- 回到出口视为穿越成功；回到入口返回失败，由调用方重新对准洞口再钻
+		success = nearest == to
+	else
+		action:set_local_map_ignored(false, 0, 1.0)
+		action:update_supercap_boost(false)
+	end
+
+	-- 已确认在洞外；展开超时不影响穿越结果，请求保持为展开，云台会继续尝试
+	if not action:blocking_set_gimbal_fold(false) then
+		action:fuck("failed to unfold gimbal after crossing, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+	end
 
 	return finish(success)
 end

@@ -21,6 +21,7 @@ local kChassisFacePeriod = math.pi / 2 -- 正方形底盘允许任意面朝向�
 
 local kGimbalFoldStateUnfold = 0
 local kGimbalFoldStateFolded = 3
+local kGimbalFoldTimeout = 5.0 -- 秒，云台折叠/展开超时
 
 local action = {
 	last_enable = false,
@@ -362,17 +363,29 @@ function action:blocking_cross_step(world_yaw, is_climb)
 	end
 end
 
---- 折叠或展开云台，阻塞直到到达目标姿态。
+--- 折叠或展开云台，阻塞直到到达目标姿态或超时。
+--- 超时后不撤回请求，云台仍会继续尝试到达目标姿态。
 --- @param folded boolean true 折叠，false 展开
+--- @return boolean success 是否在超时前到达目标姿态
 function action:blocking_set_gimbal_fold(folded)
 	action:info(folded and "Set gimbal to folded pose" or "Set gimbal to unfolded pose")
 	api.set_gimbal_fold(folded)
 
 	local target = folded and kGimbalFoldStateFolded or kGimbalFoldStateUnfold
 	request:yield()
-	while api.get_gimbal_fold_state() ~= target do
-		request:yield()
+	request:wait_until {
+		monitor = function()
+			return api.get_gimbal_fold_state() == target
+		end,
+		timeout = kGimbalFoldTimeout,
+	}
+	-- 直接以状态判定结果，不依赖 wait_until 的超时返回值
+	local state = api.get_gimbal_fold_state()
+	if state ~= target then
+		action:warn("Gimbal fold timeout, folded=" .. tostring(folded) .. " state=" .. tostring(state))
+		return false
 	end
+	return true
 end
 
 --- 原地将底盘对正到 world 系目标 yaw，阻塞直到完成或超时。
