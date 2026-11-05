@@ -58,7 +58,7 @@ function intent:loop()
 				index = index + 1
 			elseif target ~= Points.kHoleEnd then
 				-- 兜底：返回上一个确认点重试；狗洞边失败时由 cross_hole 自行重新对准洞口
-				action:navigate_until(bb.context.current, 0.5, 10)
+				action:navigate_until(bb.context.current, 0.25, 10)
 			end
 		end
 		patrol_start = 1 -- 刚到达 1 号点
@@ -75,7 +75,7 @@ function intent:loop()
 		action:cruise_slow_scan()
 		while not action:follow_path(Map, target, { merge = false }) do
 			action:cruise_slow_scan()
-			action:navigate_until(bb.context.current, 0.5, 10)
+			action:navigate_until(bb.context.current, 0.25, 10)
 		end
 
 		action:cruise_fast_scan()

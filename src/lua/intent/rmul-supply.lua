@@ -27,7 +27,7 @@ local function reach(target)
 		if ok then
 			return true
 		end
-		action:navigate_until(bb.context.current, 0.5, 10)
+		action:navigate_until(bb.context.current, 0.25, 10)
 	end
 end
 
@@ -41,7 +41,7 @@ function intent:loop()
 	action:cruise_slow_scan()
 
 	-- 阵亡复活后已在补给区，但 current 仍停在阵亡前的节点
-	if bb.condition.near(Points.kBorn, 1.0) then
+	if bb.condition.near(Points.kBorn, 0.5) then
 		bb.context.current = Points.kBorn
 	end
 
@@ -73,6 +73,8 @@ function intent:loop()
 	if supplied_on_route then
 		action:info("途中补给完成，直接返回")
 	else
+		-- current 已是 kBorn 时 follow_path 不下发目标，导航可能仍指向上一个意图的点
+		action:navigate(Points.kBorn)
 		-- 到达补给区：等待补给完成或到达时限
 		local timeout = request:wait_until {
 			monitor = is_supplied,
