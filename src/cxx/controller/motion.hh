@@ -25,6 +25,7 @@ public:
         Eigen::Vector2d target_gimbal_toward = kVecNan;
 
         double current_gimbal_yaw = kNan;
+        double current_chassis_yaw = kNan;
         double current_world_yaw = kNan;
         std::uint64_t yaw_sample = 0;
 
@@ -42,6 +43,7 @@ public:
     explicit MotionFsm(rclcpp::Node& node) noexcept;
     auto switch_mode(const std::string& mode) -> void;
     auto world2gimbal_odom(double yaw) -> double;
+    auto world2chassis_odom(double yaw) -> double;
     auto spin_once() noexcept -> Command;
 };
 
