@@ -498,8 +498,9 @@ end
 --- 沿地图边执行到目标点，逐条腿推进 bb.context.current
 --- @param map Map
 --- @param target MapPoint
---- @param opts? { merge?: boolean, check?: fun(): boolean }
+--- @param opts? { merge?: boolean, metric?: "hop" | "distance", check?: fun(): boolean }
 ---   merge 传 false 时逐条边执行，默认合并连续普通边为一条腿
+---   metric 传 "distance" 时按边直线距离之和最短选路，默认 "hop" 按边数最少选路
 ---   check 每完成一条腿后调用；返回 true 表示提前结束（视为成功）
 --- @return boolean success
 --- @return boolean interrupted
@@ -508,7 +509,7 @@ function action:follow_path(map, target, opts)
 		opts = {}
 	end
 
-	for index, leg in ipairs(map:search(bb.context.current, target, opts.merge)) do
+	for index, leg in ipairs(map:search(bb.context.current, target, { merge = opts.merge, metric = opts.metric })) do
 		action:info("Execute path task: " .. index .. " " .. leg.begin_name .. " -> " .. leg.final_name)
 		if not leg.run() then
 			action:warn("路径任务失败，返回 " .. bb.context.current.name .. " 重试")
