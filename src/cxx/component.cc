@@ -254,6 +254,14 @@ public:
         motion.context.current_gimbal_yaw =
             std::atan2(gimbal_direction->y(), gimbal_direction->x());
 
+        const auto chassis_direction =
+            fast_tf::cast<rmcs_description::tunnel_sentry::OdomGimbalImu>(
+                rmcs_description::tunnel_sentry::BaseLink::DirectionVector{
+                    Eigen::Vector3d::UnitX()},
+                *rmcs.tf);
+        motion.context.current_chassis_yaw =
+            std::atan2(chassis_direction->y(), chassis_direction->x());
+
         if (lua_tick_count++ == 10) [[unlikely]] {
             lua_tick_count = 0;
             sync_blackboard();
@@ -273,21 +281,21 @@ public:
 
         const auto cmd = motion.spin_once();
         if (std::isfinite(pending_climb_world_yaw)) {
-            const auto target = motion.world2gimbal_odom(pending_climb_world_yaw);
+            const auto target = motion.world2chassis_odom(pending_climb_world_yaw);
             if (std::isfinite(target)) {
                 *command.climb_cross_direction = target;
                 pending_climb_world_yaw = kNan;
             }
         }
         if (std::isfinite(pending_tunnel_world_yaw)) {
-            const auto target = motion.world2gimbal_odom(pending_tunnel_world_yaw);
+            const auto target = motion.world2chassis_odom(pending_tunnel_world_yaw);
             if (std::isfinite(target)) {
                 *command.tunnel_direction = target;
                 pending_tunnel_world_yaw = kNan;
             }
         }
         if (std::isfinite(pending_align_world_yaw)) {
-            const auto target = motion.world2gimbal_odom(pending_align_world_yaw);
+            const auto target = motion.world2chassis_odom(pending_align_world_yaw);
             if (std::isfinite(target)) {
                 *command.align_direction = target;
                 pending_align_world_yaw = kNan;
