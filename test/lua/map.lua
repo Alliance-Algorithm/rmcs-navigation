@@ -211,7 +211,7 @@ do
 		trace_task(trace, "navigate-d-c"),
 	}
 
-	local tasks = map:search(a, d, false)
+	local tasks = map:search(a, d, { merge = false })
 	assert_eq(#tasks, 3, "merge=false should keep each navigate edge separate")
 	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "b", "first edge task should span a -> b")
 	assert(tasks[2].begin_name == "b" and tasks[2].final_name == "c", "second edge task should span b -> c")
@@ -328,11 +328,86 @@ end
 do
 	local map = Map.new()
 	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 0, y = 10 })
+	local c = map:point("c", { x = 10, y = 0 })
+	local d = map:point("d", { x = 5, y = 0 })
+	local e = map:point("e", { x = 9, y = 0 })
+
+	local trace = {}
+	map:connect(a, b) {
+		trace_task(trace, "ab"),
+		trace_task(trace, "ba"),
+	}
+	map:connect(b, c) {
+		trace_task(trace, "bc"),
+		trace_task(trace, "cb"),
+	}
+	map:connect(a, d) {
+		trace_task(trace, "ad"),
+		trace_task(trace, "da"),
+	}
+	map:connect(d, e) {
+		trace_task(trace, "de"),
+		trace_task(trace, "ed"),
+	}
+	map:connect(e, c) {
+		trace_task(trace, "ec"),
+		trace_task(trace, "ce"),
+	}
+
+	local hop_tasks = map:search(a, c, { merge = false })
+	assert_eq(#hop_tasks, 2, "hop metric should use the two-edge route")
+	for _, task in ipairs(hop_tasks) do
+		task.run()
+	end
+	assert_table_eq(trace, { "a-b:ab", "b-c:bc" }, "hop metric should prefer fewer edges")
+
+	for i = #trace, 1, -1 do
+		trace[i] = nil
+	end
+
+	local distance_tasks = map:search(a, c, { merge = false, metric = "distance" })
+	assert_eq(#distance_tasks, 3, "distance metric should use the shorter three-edge route")
+	for _, task in ipairs(distance_tasks) do
+		task.run()
+	end
+	assert_table_eq(trace, { "a-d:ad", "d-e:de", "e-c:ec" }, "distance metric should prefer shorter geometry")
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
+	local b = map:point("b", { x = 1, y = 0 })
+	local c = map:point("c", { x = 2, y = 0 })
+
+	local noop = function(_, _)
+		return true
+	end
+	map:connect(a, b) { noop, noop }
+	map:connect_step(b, c) { noop, noop }
+
+	local tasks = map:search(a, c, { metric = "distance" })
+	assert_eq(#tasks, 2, "distance metric should keep step edge separate")
+	assert(tasks[1].begin_name == "a" and tasks[1].final_name == "b", "distance metric navigate leg")
+	assert(tasks[2].begin_name == "b" and tasks[2].final_name == "c", "distance metric step leg")
+end
+
+do
+	local map = Map.new()
+	local a = map:point("a", { x = 0, y = 0 })
 	local b = map:point("b", { x = 1, y = 0 })
 
 	assert_error(function()
 		map:search(a, b)
 	end, "unreachable search should error")
+
+	assert_error(function()
+		map:search(a, b, { metric = "distance" })
+	end, "unreachable distance search should error")
+
+	assert_error(function()
+		map:search(a, b, { metric = "unknown" })
+	end, "unknown metric should error")
 end
 
 do

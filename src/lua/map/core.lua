@@ -164,9 +164,11 @@ end
 --- 搜索从 from 到 to 的路径，返回依次执行即可到达的有序腿任务列表
 --- @param from MapPoint
 --- @param to MapPoint
---- @param merge boolean? 是否合并连续普通边为一条腿，传 false 时逐条边执行，默认 true
+--- @param opts? { merge?: boolean, metric?: "hop" | "distance" }
+---   merge 是否合并连续普通边为一条腿，传 false 时逐条边执行，默认 true
+---   metric 为 "distance" 时按边直线距离之和最短搜索，默认 "hop" 按边数最少搜索
 --- @return MapPathTask[]
-function Map:search(from, to, merge)
+function Map:search(from, to, opts)
 	if not self._registered[from] then
 		error("路径搜索起点未注册: " .. tostring(from and from.name))
 	end
@@ -177,41 +179,97 @@ function Map:search(from, to, merge)
 		return {}
 	end
 
-	local visited = { [from] = true }
+	local merge = nil
+	local metric = "hop"
+	if opts ~= nil then
+		merge = opts.merge
+		metric = opts.metric or "hop"
+	end
+
 	local previous = {}
-	local queue = { from }
-	local head = 1
 
-	while head <= #queue do
-		local node = queue[head]
-		head = head + 1
+	local function reconstruct()
+		local reversed = {}
+		local cursor = to
+		while cursor ~= from do
+			local parent = previous[cursor]
+			table.insert(reversed, {
+				from = parent,
+				to = cursor,
+				edge = self._edges[parent][cursor],
+			})
+			cursor = parent
+		end
 
-		for _, next in ipairs(self._neighbors[node] or {}) do
-			if not visited[next] then
-				visited[next] = true
-				previous[next] = node
-				if next == to then
-					local reversed = {}
-					local cursor = to
-					while cursor ~= from do
-						local parent = previous[cursor]
-						table.insert(reversed, {
-							from = parent,
-							to = cursor,
-							edge = self._edges[parent][cursor],
-						})
-						cursor = parent
+		local path = {}
+		for i = #reversed, 1, -1 do
+			table.insert(path, reversed[i])
+		end
+		return compress(path, merge)
+	end
+
+	if metric == "hop" then
+		local visited = { [from] = true }
+		local queue = { from }
+		local head = 1
+
+		while head <= #queue do
+			local node = queue[head]
+			head = head + 1
+
+			for _, next in ipairs(self._neighbors[node] or {}) do
+				if not visited[next] then
+					visited[next] = true
+					previous[next] = node
+					if next == to then
+						return reconstruct()
 					end
-
-					local path = {}
-					for i = #reversed, 1, -1 do
-						table.insert(path, reversed[i])
-					end
-					return compress(path, merge)
+					table.insert(queue, next)
 				end
-				table.insert(queue, next)
 			end
 		end
+	elseif metric == "distance" then
+		local distance = { [from] = 0 }
+		local settled = {}
+		local open = { from }
+
+		while true do
+			local node = nil
+			local node_distance = nil
+			for _, candidate in ipairs(open) do
+				local candidate_distance = distance[candidate]
+				if not settled[candidate] and (node_distance == nil or candidate_distance < node_distance) then
+					node = candidate
+					node_distance = candidate_distance
+				end
+			end
+
+			if node == nil then
+				break
+			end
+			if node == to then
+				return reconstruct()
+			end
+			settled[node] = true
+
+			for _, next in ipairs(self._neighbors[node] or {}) do
+				if not settled[next] then
+					local dx = next.x - node.x
+					local dy = next.y - node.y
+					local candidate_distance = node_distance + math.sqrt(dx * dx + dy * dy)
+					if distance[next] == nil then
+						distance[next] = candidate_distance
+						previous[next] = node
+						table.insert(open, next)
+					elseif candidate_distance < distance[next] then
+						distance[next] = candidate_distance
+						previous[next] = node
+					end
+				end
+			end
+		end
+	else
+		error("未知路径搜索度量: " .. tostring(metric))
 	end
 
 	error("路径不可达: " .. from.name .. " -> " .. to.name)
