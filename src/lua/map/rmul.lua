@@ -10,7 +10,6 @@ local kCrossSpeedScale = 1.3 -- 忽略局部地图穿越时的导航速度增益
 
 local kHoleTolerance = 0.15 -- 米，狗洞两端到点容差：入口要对准，出口要确实出洞后才展开云台
 local kHoleEntryTimeout = 5 -- 秒，精确到达狗洞入口的时限
-local kEngageRelease = 2 -- 秒，自瞄丢失目标持续该时长后结束停车迎战
 
 local Points = {
 	-- 出发点：装配区（工作台）右侧，设为 world 原点 (0, 0)
@@ -55,44 +54,19 @@ end
 
 local function rough_navigate(from, to)
 	local distance = math.sqrt((to.x - from.x) ^ 2 + (to.y - from.y) ^ 2)
-	local deadline = clock:now() + 20 + distance / 2
 
 	action:navigate(to)
 	action:info("navigate to " .. to.x .. ", " .. to.y)
-	while true do
-		request:wait_until {
-			monitor = function()
-				return bb.condition.near(to, 0.25) or (bb.context.engage_on_route and bb.autoaim.should_control)
-			end,
-			timeout = math.max(deadline - clock:now(), 0),
-		}
-		if bb.condition.near(to, 0.25) then
-			return true
-		end
-		if clock:now() >= deadline then
-			action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
-			return false
-		end
-
-		action:info("途中识别到敌方装甲板，停车迎战")
-		local engage_begin = clock:now()
-		action:cancel_target()
-		action:switch_motion_mode("attack")
-
-		local last_seen = clock:now()
-		request:wait_until {
-			monitor = function()
-				if bb.autoaim.should_control then
-					last_seen = clock:now()
-				end
-				return clock:now() - last_seen >= kEngageRelease
-			end,
-		}
-
-		action:info("目标丢失，继续前往 " .. to.name)
-		deadline = deadline + clock:now() - engage_begin
-		action:navigate(to)
+	local timeout = request:wait_until {
+		monitor = function()
+			return bb.condition.near(to, 0.25)
+		end,
+		timeout = 20 + distance / 2,
+	}
+	if timeout then
+		action:fuck("navigate timeout, current x=" .. bb.user.x .. " y=" .. bb.user.y)
 	end
+	return not timeout
 end
 
 -- 钻狗洞：精确到达洞口 -> 原地对正 -> 折叠云台 -> 忽略 local_map 导航到出口 -> 恢复。

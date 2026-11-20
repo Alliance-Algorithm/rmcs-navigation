@@ -50,9 +50,6 @@ function intent:loop()
 		while index <= #kRoute do
 			local target = kRoute[index]
 
-			-- 钻洞前不迎战，尽快拿到 1.5 倍热量增益；出洞后途中识别到敌方即停车迎战
-			bb.context.engage_on_route = target == Points.kPatrol1
-
 			action:cruise_slow_scan()
 			if action:follow_path(Map, target, { merge = false }) then
 				index = index + 1
@@ -65,7 +62,6 @@ function intent:loop()
 	end
 
 	-- 巡逻模式：1 -> 2 -> 3 -> 4 -> 1，顺时针；到点短暂停车扫描
-	bb.context.engage_on_route = true
 	action:switch_motion_mode("attack")
 	action:info("开始顺时针巡逻：1 -> 2 -> 3 -> 4")
 

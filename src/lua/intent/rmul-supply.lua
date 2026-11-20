@@ -15,12 +15,16 @@ local function is_supplied()
 	return bb.user.health >= kHealthReady and bb.user.bullet >= kBulletReady
 end
 
---- 沿地图逐条边前往 target，失败则返回上一个确认点重试。
+--- 沿地图按最短距离直接前往 target，失败则返回上一个确认点重试。
 --- 返回 false 表示途中已经补满，调用方应结束补给。
 --- 不合并普通边：狗洞在全局地图上是空地，合并后直接导航到远处目标，全局规划可能穿洞
 local function reach(target)
 	while true do
-		local ok, interrupted = action:follow_path(Map, target, { merge = false, check = is_supplied })
+		local ok, interrupted = action:follow_path(Map, target, {
+			merge = false,
+			metric = "distance",
+			check = is_supplied,
+		})
 		if interrupted then
 			return false
 		end
@@ -36,7 +40,6 @@ function intent:loop()
 	action:info("health: " .. bb.user.health)
 	action:info("bullet: " .. bb.user.bullet)
 
-	bb.context.engage_on_route = false
 	action:switch_motion_mode("attack")
 	action:cruise_slow_scan()
 
@@ -45,30 +48,8 @@ function intent:loop()
 		bb.context.current = Points.kBorn
 	end
 
-	-- kHoleBegin、kHoleEnd、kPatrol1 被击杀：沿狗洞折返。其余巡逻点绕 kEscape
-	local current = bb.context.current
-
-	local supplied_on_route = false
-	if current == Points.kPatrol1 then
-		supplied_on_route = not reach(Points.kHoleEnd)
-		current = bb.context.current
-	end
-	if not supplied_on_route and current == Points.kHoleEnd then
-		supplied_on_route = not reach(Points.kHoleBegin)
-		current = bb.context.current
-	end
-
-	if
-		not supplied_on_route
-		and current ~= Points.kBegin
-		and current ~= Points.kHoleBegin
-		and current ~= Points.kBorn
-	then
-		supplied_on_route = not reach(Points.kEscape)
-	end
-	if not supplied_on_route then
-		supplied_on_route = not reach(Points.kBorn)
-	end
+	-- 按地图最短距离直接回 kBorn，途中补满可提前结束
+	local supplied_on_route = not reach(Points.kBorn)
 
 	if supplied_on_route then
 		action:info("途中补给完成，直接返回")

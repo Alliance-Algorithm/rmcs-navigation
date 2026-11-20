@@ -17,7 +17,6 @@ local task = {
 }
 
 local kHealthLimit = 150 -- 低于该血量回家补给
-local kBulletLimit = 20 -- 低于该弹量回家补给
 
 local function remote_controller()
 	while true do
@@ -75,10 +74,10 @@ local function intent_maintainer()
 
 		-- 比赛阶段才执行的意图切换检测
 		if stage == GameStage.STARTED then
-			local health, bullet = blackboard.user.health, blackboard.user.bullet
-			if (health < kHealthLimit or bullet < kBulletLimit) and runing_intent ~= Intent.kSupply then
+			local health = blackboard.user.health
+			if health < kHealthLimit and runing_intent ~= Intent.kSupply then
 				if select_intent ~= Intent.kSupply then
-					action:info(string.format("[Intent] Supply, health: %d, bullet: %d", health, bullet))
+					action:info(string.format("[Intent] Supply, health: %d", health))
 				end
 				select_intent = Intent.kSupply
 				blackboard.context.unhealth = true
