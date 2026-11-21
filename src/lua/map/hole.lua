@@ -13,6 +13,8 @@ local Points = {
 	kOrigin = Map:point("kOrigin", { x = 0.0, y = 0.0 }),
 	kHole1Begin = Map:point("kHole1Begin", { x = 3.5, y = -0.15 }),
 	kHole1End = Map:point("kHole1End", { x = 3.5, y = -1.6 }),
+	kPatrol1 = Map:point("kPatrol1", { x = 4.1, y = -1.6 }),
+	kPatrol2 = Map:point("kPatrol2", { x = 4.9, y = -1.6 }),
 	kHole2Begin = Map:point("kHole2Begin", { x = 7.0, y = -1.6 }),
 	kHole2End = Map:point("kHole2End", { x = 9.0, y = -1.58 }),
 	kEnd = Map:point("kEnd", { x = 9.1, y = -1.3 }),
@@ -40,17 +42,28 @@ local function navigate(from, to, keepalive)
 	return not timeout
 end
 
--- 忽略局部地图跨越：先原地对正到边方向，再折头，然后让导航忽略 local_map，
--- 正常导航到目标点，最后恢复。超时会由 C++ 侧 watchdog 兜底恢复，避免状态残留。
-local function cross_ignore_local_map(from, to)
+-- 忽略局部地图跨越：上坡先停小陀螺并原地对正，再折云台直上；下坡保持小陀螺开启，
+-- 无需对正。让导航忽略 local_map 走完跨越，最后恢复。超时会由 C++ 侧 watchdog 兜底恢复，
+-- 避免状态残留。比赛中小陀螺由 attack 逻辑控制且全程开启，所以上坡需要临时切到 normal 停转，
+-- 跨越结束后再切回 attack。
+local function cross_ignore_local_map_impl(from, to, uphill)
 	action:cancel_target()
 
-	-- 先原地对正，避免忽略局部地图后盲走时底盘朝向不确定。
-	-- 底盘为正方形，blocking_align_chassis 会选择最近的 π/2 等价朝向。
-	local world_yaw = math.atan(to.y - from.y, to.x - from.x)
-	if not action:blocking_align_chassis(world_yaw) then
-		action:fuck("failed to align chassis, current x=" .. bb.user.x .. " y=" .. bb.user.y)
-		return false
+	if uphill then
+		-- 停小陀螺，避免一边转一边爬坡；对正后再直上。
+		action:switch_motion_mode("normal")
+
+		-- 先原地对正，避免忽略局部地图后盲走时底盘朝向不确定。
+		-- 底盘为正方形，blocking_align_chassis 会选择最近的 π/2 等价朝向。
+		local world_yaw = math.atan(to.y - from.y, to.x - from.x)
+		if not action:blocking_align_chassis(world_yaw) then
+			action:fuck("failed to align chassis, current x=" .. bb.user.x .. " y=" .. bb.user.y)
+			action:switch_motion_mode("attack")
+			return false
+		end
+	else
+		-- 下坡保持小陀螺开启，直接下坡。
+		action:switch_motion_mode("attack")
 	end
 
 	action:blocking_set_gimbal_fold(true)
@@ -60,6 +73,7 @@ local function cross_ignore_local_map(from, to)
 		action:fuck("failed to ignore local map, current x=" .. bb.user.x .. " y=" .. bb.user.y)
 		action:blocking_set_gimbal_fold(false)
 		action:update_supercap_boost(false)
+		action:switch_motion_mode("attack")
 		return false
 	end
 
@@ -74,7 +88,19 @@ local function cross_ignore_local_map(from, to)
 	action:set_local_map_ignored(false, 0, 1.0)
 	action:update_supercap_boost(false)
 	action:blocking_set_gimbal_fold(false)
+	-- 比赛中保持小陀螺全程开启。
+	action:switch_motion_mode("attack")
 	return success
+end
+
+-- 上坡：不转小陀螺，对正后直上。
+local function cross_ignore_local_map(from, to)
+	return cross_ignore_local_map_impl(from, to, true)
+end
+
+-- 下坡：开启小陀螺，无需对正。
+local function cross_ignore_local_map_spin(from, to)
+	return cross_ignore_local_map_impl(from, to, false)
 end
 
 -- 穿越地洞任务：起终点连线方向即隧道方向的 world yaw
@@ -90,13 +116,17 @@ local function cross_tunnel(mode)
 end
 
 Map:connect(Points.kOrigin, Points.kHole1Begin) { navigate, navigate }
+-- 一号洞：正向为上坡，反向为下坡
 Map:connect_ignore_local_map(Points.kHole1Begin, Points.kHole1End) {
 	cross_ignore_local_map,
-	cross_ignore_local_map,
+	cross_ignore_local_map_spin,
 }
+Map:connect(Points.kHole1End, Points.kPatrol1) { navigate, navigate }
+Map:connect(Points.kPatrol1, Points.kPatrol2) { navigate, navigate }
 Map:connect(Points.kHole1End, Points.kHole2Begin) { navigate, navigate }
+-- 二号洞：正向为下坡，反向为上坡
 Map:connect_ignore_local_map(Points.kHole2Begin, Points.kHole2End) {
-	cross_ignore_local_map,
+	cross_ignore_local_map_spin,
 	cross_ignore_local_map,
 }
 Map:connect(Points.kHole2End, Points.kEnd) { navigate, navigate }
@@ -105,4 +135,5 @@ return {
 	map = Map,
 	points = Points,
 	cross_ignore_local_map = cross_ignore_local_map,
+	cross_ignore_local_map_spin = cross_ignore_local_map_spin,
 }
