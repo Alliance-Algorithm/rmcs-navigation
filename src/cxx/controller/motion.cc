@@ -25,8 +25,6 @@ struct MotionFsm::Impl {
 
     bool gimbal_yaw_bias_initialized = false;
     double gimbal_yaw_bias = kNan;
-    bool chassis_yaw_bias_initialized = false;
-    double chassis_yaw_bias = kNan;
     std::uint64_t last_yaw_sample = 0;
 
     static auto normalize_yaw(double yaw) -> double {
@@ -55,21 +53,14 @@ struct MotionFsm::Impl {
             return;
 
         last_yaw_sample = context.yaw_sample;
-        update_yaw_bias(context.current_gimbal_yaw, gimbal_yaw_bias_initialized, gimbal_yaw_bias);
         update_yaw_bias(
-            context.current_chassis_yaw, chassis_yaw_bias_initialized, chassis_yaw_bias);
+            context.current_gimbal_yaw, gimbal_yaw_bias_initialized, gimbal_yaw_bias);
     }
 
     auto world2gimbal_odom(double world_yaw) const -> double {
         if (!std::isfinite(world_yaw) || !gimbal_yaw_bias_initialized)
             return kNan;
         return normalize_yaw(world_yaw - gimbal_yaw_bias);
-    }
-
-    auto world2chassis_odom(double world_yaw) const -> double {
-        if (!std::isfinite(world_yaw) || !chassis_yaw_bias_initialized)
-            return kNan;
-        return normalize_yaw(world_yaw - chassis_yaw_bias);
     }
 
     auto update_gimbal_target() -> Eigen::Vector2d {
@@ -160,8 +151,6 @@ MotionFsm::~MotionFsm() noexcept = default;
 auto MotionFsm::switch_mode(const std::string& mode) -> void { pimpl->switch_mode(mode); }
 
 auto MotionFsm::world2gimbal_odom(double yaw) -> double { return pimpl->world2gimbal_odom(yaw); }
-
-auto MotionFsm::world2chassis_odom(double yaw) -> double { return pimpl->world2chassis_odom(yaw); }
 
 auto MotionFsm::spin_once() noexcept -> Command { return pimpl->spin_once(); }
 
