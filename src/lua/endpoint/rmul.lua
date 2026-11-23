@@ -50,6 +50,7 @@ local function intent_maintainer()
 
 			blackboard.context.runing_intent = Intent.kNothing
 			blackboard.context.current = Points.kBegin
+			blackboard.context.crossing = false
 			blackboard.context.unhealth = false
 
 			action:set_automatic_resurrection(true)
@@ -58,7 +59,7 @@ local function intent_maintainer()
 		if last_stage == GameStage.PREPARATION and stage ~= GameStage.PREPARATION then
 			action:info("[Intent] 退出 PREPARATION 阶段")
 			action:restart_navigation {
-				global_map = "rmul2027",
+				global_map = "rmul_test",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,

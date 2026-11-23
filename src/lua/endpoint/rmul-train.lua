@@ -15,8 +15,6 @@ local kTasks = {
 }
 
 local kHealthLimit = 150
-local kBulletLimit = 20
-local kFakeBullet = 300
 
 local Intent = {
 	kCentral = "rmul-central",
@@ -51,7 +49,6 @@ on_init = function()
 		select_intent = nil
 		blackboard.context.runing_intent = "nothing"
 		blackboard.context.crossing = false
-		blackboard.context.engage_on_route = false
 		blackboard.context.unhealth = false
 	end
 
@@ -93,7 +90,6 @@ on_init = function()
 
 			blackboard.context.current = Points.kBegin
 			blackboard.context.crossing = false
-			blackboard.context.engage_on_route = false
 			blackboard.context.unhealth = false
 			select_intent = Intent.kCentral
 			train_started = true
@@ -104,14 +100,12 @@ on_init = function()
 		while true do
 			if train_started then
 				local health = blackboard.user.health
-				local bullet = kFakeBullet
-				if (health < kHealthLimit or bullet < kBulletLimit) and running_intent ~= Intent.kSupply then
+				if health < kHealthLimit and running_intent ~= Intent.kSupply then
 					if select_intent ~= Intent.kSupply then
-						action:info(string.format("[Intent] Supply, health: %d, bullet: %d", health, bullet))
+						action:info(string.format("[Intent] Supply, health: %d", health))
 					end
 					select_intent = Intent.kSupply
 					blackboard.context.unhealth = true
-					action:switch_motion_mode("normal")
 				elseif running_intent == Intent.kSupply and not blackboard.context.unhealth then
 					select_intent = Intent.kCentral
 				end

@@ -101,7 +101,7 @@ local function cross_hole(from, to)
 		action:blocking_set_gimbal_fold(false)
 		return finish(false)
 	end
-	action:update_supercap_boost(true)
+	action:update_supercap_boost(false)
 
 	if not action:set_local_map_ignored(true, kLocalMapIgnoreTimeout, kCrossSpeedScale) then
 		action:fuck("failed to ignore local map, current x=" .. bb.user.x .. " y=" .. bb.user.y)
@@ -166,7 +166,7 @@ Map:connect(Points.kPatrol2, Points.kPatrol3) { rough_navigate, rough_navigate }
 Map:connect(Points.kPatrol3, Points.kPatrol4) { rough_navigate, rough_navigate }
 Map:connect(Points.kPatrol4, Points.kPatrol1) { rough_navigate, rough_navigate }
 
--- 返回：任意巡逻点 -> 4 号点 -> kEscape -> kBorn，不走狗洞
+-- 南侧撤退通道：4 号点 -> kEscape -> kBorn（补给按最短距离选路，近狗洞时走洞，南侧时走此路）
 -- 4 号点在中央控制区南侧，接 kEscape 不穿高地；狗洞在全局地图是空地，kHoleEnd 不能直连 kEscape
 Map:connect(Points.kPatrol4, Points.kEscape) { rough_navigate, rough_navigate }
 Map:connect(Points.kEscape, Points.kBorn) { rough_navigate, rough_navigate }

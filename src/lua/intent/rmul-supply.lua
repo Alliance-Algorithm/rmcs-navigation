@@ -6,13 +6,12 @@ local MapRmul = require("map.rmul")
 local Map, Points = MapRmul.map, MapRmul.points
 
 local kHealthReady = 400
-local kBulletReady = 80
 local kSupplyInterval = 60 -- 秒，到达补给区后最多停留时长
 
 local intent = {}
 
 local function is_supplied()
-	return bb.user.health >= kHealthReady and bb.user.bullet >= kBulletReady
+	return bb.user.health >= kHealthReady
 end
 
 --- 沿地图按最短距离直接前往 target，失败则返回上一个确认点重试。
@@ -38,7 +37,6 @@ end
 function intent:loop()
 	action:info("需要补给，回家")
 	action:info("health: " .. bb.user.health)
-	action:info("bullet: " .. bb.user.bullet)
 
 	action:switch_motion_mode("attack")
 	action:cruise_slow_scan()
