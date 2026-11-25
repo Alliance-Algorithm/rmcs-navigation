@@ -2,6 +2,7 @@
 #include "cxx/util/node_mixin.hh"
 #include "cxx/util/service.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -55,6 +56,9 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
     static constexpr auto kServerNotReadyWarnInterval = std::chrono::seconds{5};
     static constexpr auto kLocalMapIgnoreWatchInterval = std::chrono::milliseconds{100};
     static constexpr auto kMaxSpeedScale = 1.5;
+    static constexpr auto kDefaultCmdVelLatencySec = 0.025;
+    static constexpr auto kMaxCmdVelLatencySec = 0.2;
+    static constexpr auto kMaxTfAgeSec = 0.25;
 
     struct Target final {
         double x = std::numeric_limits<double>::quiet_NaN();
@@ -103,8 +107,12 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
 
     // cmd_vel Subscription
     std::shared_ptr<rclcpp::Subscription<Twist>> cmd_vel_subscription;
+    mutable std::mutex cmd_vel_mutex;
+    double cmd_vel_latency_sec = kDefaultCmdVelLatencySec;
     Eigen::Vector2d latest_cmd_vel = Eigen::Vector2d::Zero();
-    std::chrono::steady_clock::time_point latest_cmd_vel_time;
+    std::chrono::steady_clock::time_point latest_cmd_vel_time{};
+    std::uint64_t latest_cmd_vel_seq = 0;
+    double latest_cmd_vel_world_yaw = std::numeric_limits<double>::quiet_NaN();
 
     // Local Map Ignore Gate
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr local_map_ignore_publisher;
@@ -213,11 +221,23 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
 public:
     explicit Impl(rclcpp::Node& node)
         : node{node} {
+        cmd_vel_latency_sec = std::clamp(
+            node.get_parameter_or<double>("cmd_vel_latency", kDefaultCmdVelLatencySec), 0.0,
+            kMaxCmdVelLatencySec);
+
         auto cmd_vel_topic = node.get_parameter_or<std::string>("command_vel_name", "/cmd_vel");
         cmd_vel_subscription = node.create_subscription<Twist>(
             cmd_vel_topic, 10, [this](const std::unique_ptr<Twist>& msg) {
+                const auto recv_time = std::chrono::steady_clock::now();
+                const auto plan_time =
+                    this->node.now() - rclcpp::Duration::from_seconds(cmd_vel_latency_sec);
+                const auto world_yaw = lookup_world_yaw(plan_time);
+
+                std::lock_guard lock{cmd_vel_mutex};
                 latest_cmd_vel = {msg->linear.x, msg->linear.y};
-                latest_cmd_vel_time = std::chrono::steady_clock::now();
+                latest_cmd_vel_time = recv_time;
+                latest_cmd_vel_world_yaw = world_yaw;
+                ++latest_cmd_vel_seq;
             });
 
         const auto local_map_ignore_qos =
@@ -402,22 +422,59 @@ public:
         return true;
     }
 
-    auto check_position() const -> std::tuple<double, double, double> {
-        try {
-            auto transform =
-                tf_buffer->lookupTransform(kWorldFrame, kBaseFrame, tf2::TimePointZero);
-            auto& translation = transform.transform.translation;
-            auto& rotation = transform.transform.rotation;
+    static auto extract_yaw(const geometry_msgs::msg::Quaternion& rotation) noexcept -> double {
+        const auto sin_yaw = 2.0 * ((rotation.w * rotation.z) + (rotation.x * rotation.y));
+        const auto cos_yaw = 1.0 - (2.0 * ((rotation.y * rotation.y) + (rotation.z * rotation.z)));
+        return std::atan2(sin_yaw, cos_yaw);
+    }
 
-            auto sin_yaw = 2.0 * ((rotation.w * rotation.z) + (rotation.x * rotation.y));
-            auto cos_yaw = 1.0 - (2.0 * ((rotation.y * rotation.y) + (rotation.z * rotation.z)));
-            auto yaw = std::atan2(sin_yaw, cos_yaw);
-
-            return {translation.x, translation.y, yaw};
-        } catch (const tf2::TransformException& exception) {
-            constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
-            return {kNan, kNan, kNan};
+    auto lookup_world_yaw(const rclcpp::Time& query_time) const -> double {
+        constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
+        if (query_time.nanoseconds() > 0) {
+            try {
+                const auto transform =
+                    tf_buffer->lookupTransform(kWorldFrame, kBaseFrame, query_time);
+                return extract_yaw(transform.transform.rotation);
+            } catch (const tf2::TransformException&) {
+            }
         }
+        try {
+            const auto transform =
+                tf_buffer->lookupTransform(kWorldFrame, kBaseFrame, tf2::TimePointZero);
+            return extract_yaw(transform.transform.rotation);
+        } catch (const tf2::TransformException&) {
+            return kNan;
+        }
+    }
+
+    auto check_position_with_age() const -> PositionSample {
+        try {
+            const auto transform =
+                tf_buffer->lookupTransform(kWorldFrame, kBaseFrame, tf2::TimePointZero);
+            const auto& translation = transform.transform.translation;
+            const auto yaw = extract_yaw(transform.transform.rotation);
+
+            auto age_sec = 0.0;
+            const auto& stamp = transform.header.stamp;
+            if (stamp.sec != 0 || stamp.nanosec != 0) {
+                const auto tf_time = rclcpp::Time{stamp, node.get_clock()->get_clock_type()};
+                age_sec = std::clamp((node.now() - tf_time).seconds(), 0.0, kMaxTfAgeSec);
+            }
+
+            return {
+                .x = translation.x,
+                .y = translation.y,
+                .yaw = yaw,
+                .age_sec = age_sec,
+            };
+        } catch (const tf2::TransformException&) {
+            return {};
+        }
+    }
+
+    auto check_position() const -> std::tuple<double, double, double> {
+        const auto sample = check_position_with_age();
+        return {sample.x, sample.y, sample.yaw};
     }
 };
 
@@ -443,11 +500,18 @@ auto Navigation::check_position() const -> std::tuple<double, double, double> {
     return pimpl->check_position();
 }
 
+auto Navigation::check_position_with_age() const -> PositionSample {
+    return pimpl->check_position_with_age();
+}
+
 auto Navigation::current_command() const -> Command {
+    std::lock_guard lock{pimpl->cmd_vel_mutex};
     return {
         .speed = pimpl->latest_cmd_vel
             * pimpl->local_map_ignore_speed_scale.load(std::memory_order::relaxed),
         .timestamp = pimpl->latest_cmd_vel_time,
+        .seq = pimpl->latest_cmd_vel_seq,
+        .world_yaw = pimpl->latest_cmd_vel_world_yaw,
     };
 }
 

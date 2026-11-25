@@ -3,6 +3,9 @@
 #include <rclcpp/node.hpp>
 #include <rmcs_msgs/robot_color.hpp>
 
+#include <chrono>
+#include <cstdint>
+#include <limits>
 #include <Eigen/Geometry>
 
 namespace rmcs::navigation::details {
@@ -13,6 +16,15 @@ public:
     struct Command {
         Eigen::Vector2d speed;
         std::chrono::steady_clock::time_point timestamp;
+        std::uint64_t seq = 0;
+        double world_yaw = std::numeric_limits<double>::quiet_NaN();
+    };
+
+    struct PositionSample {
+        double x = std::numeric_limits<double>::quiet_NaN();
+        double y = std::numeric_limits<double>::quiet_NaN();
+        double yaw = std::numeric_limits<double>::quiet_NaN();
+        double age_sec = 0.0;
     };
 
     explicit Navigation(rclcpp::Node& node) noexcept;
@@ -66,6 +78,9 @@ public:
     /// 用法示例：
     /// - auto [x, y, yaw] = navigation.check_position();
     auto check_position() const -> std::tuple<double, double, double>;
+
+    /// 查询当前位姿（world -> base_link）及该 TF 的年龄（秒）。
+    auto check_position_with_age() const -> PositionSample;
 
     /// 开关 goal topic 转发功能（可选）。
     ///

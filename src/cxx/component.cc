@@ -10,6 +10,10 @@
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/rmcs_msgs.hpp>
 
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -22,13 +26,28 @@ class Navigation final
     , public rmcs::navigation::NodeMixin {
 private:
     static constexpr auto kCmdVelTimeout = std::chrono::milliseconds{500};
+    static constexpr auto kMaxCmdVelLatencySec = 0.2;
+    //缓冲池存256ms的历史IMU角，用于cmd_vel的延迟补偿
+    static constexpr auto kYawHistorySize = std::size_t{256};
     static constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
     static inline auto kVecNaN = Eigen::Vector2d{kNan, kNan};
+
+    struct YawSample {
+        std::chrono::steady_clock::time_point timestamp{};
+        double yaw = kNan;
+    };
 
     std::atomic<std::uint16_t> lua_tick_count = 0;
     double pending_climb_world_yaw = kNan;
     double pending_tunnel_world_yaw = kNan;
     double pending_align_world_yaw = kNan;
+
+    std::chrono::steady_clock::duration cmd_vel_latency{0};
+    std::array<YawSample, kYawHistorySize> yaw_history{};
+    std::size_t yaw_history_head = 0;
+    std::size_t yaw_history_count = 0;
+    std::uint64_t last_cmd_vel_seq = 0;
+    double cmd_vel_anchor_yaw = kNan;
 
     details::LuaContext lua{*this};
     details::Navigation nav{*this};
@@ -90,11 +109,65 @@ private:
         }
     } command{*this};
 
-    auto sync_blackboard() {
-        auto [x, y, yaw] = nav.check_position();
+    auto record_gimbal_yaw(std::chrono::steady_clock::time_point now, double yaw) -> void {
+        if (!std::isfinite(yaw))
+            return;
+
+        yaw_history[yaw_history_head] = {.timestamp = now, .yaw = yaw};
+        yaw_history_head = (yaw_history_head + 1) % kYawHistorySize;
+        if (yaw_history_count < kYawHistorySize)
+            ++yaw_history_count;
+    }
+
+    auto lookup_gimbal_yaw(
+        std::chrono::steady_clock::time_point target, double fallback) const -> double {
+        if (yaw_history_count == 0)
+            return fallback;
+
+        const auto sample_at = [this](std::size_t age) -> const YawSample& {
+            return yaw_history[(yaw_history_head + kYawHistorySize - 1 - age) % kYawHistorySize];
+        };
+
+        const auto& newest = sample_at(0);
+        if (target >= newest.timestamp)
+            return newest.yaw;
+
+        const auto& oldest = sample_at(yaw_history_count - 1);
+        if (target <= oldest.timestamp)
+            return oldest.yaw;
+
+        for (std::size_t age = 1; age < yaw_history_count; ++age) {
+            const auto& older = sample_at(age);
+            if (older.timestamp <= target) {
+                const auto& newer = sample_at(age - 1);
+                const auto span =
+                    std::chrono::duration<double>(newer.timestamp - older.timestamp).count();
+                if (span <= 0.0)
+                    return newer.yaw;
+
+                const auto alpha =
+                    std::chrono::duration<double>(target - older.timestamp).count() / span;
+                const auto diff =
+                    std::atan2(std::sin(newer.yaw - older.yaw), std::cos(newer.yaw - older.yaw));
+                return older.yaw + alpha * diff;
+            }
+        }
+        return oldest.yaw;
+    }
+
+    auto sync_blackboard(std::chrono::steady_clock::time_point now) {
+        const auto pos = nav.check_position_with_age();
+        const auto x = pos.x;
+        const auto y = pos.y;
+        const auto yaw = pos.yaw;
+        const auto tf_time = now
+                           - std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                 std::chrono::duration<double>{pos.age_sec});
 
         // 高频查询 TF 是不对的，所以应该先缓存一份
         motion.context.current_world_yaw = yaw;
+        motion.context.current_gimbal_yaw_at_tf =
+            lookup_gimbal_yaw(tf_time, motion.context.current_gimbal_yaw);
         ++motion.context.yaw_sample;
         motion.context.x = x;
         motion.context.y = y;
@@ -136,6 +209,13 @@ private:
 public:
     explicit Navigation()
         : rclcpp::Node{get_component_name(), node::option()} {
+        
+        //读取并限制通信延迟参数
+        const auto latency_sec = std::clamp(
+            this->get_parameter_or<double>("cmd_vel_latency", 0.025), 0.0, kMaxCmdVelLatencySec);
+        cmd_vel_latency =
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::duration<double>{latency_sec});
 
         rmcs.init();
 
@@ -247,16 +327,18 @@ public:
     auto before_updating() -> void override { rmcs.ensure_defaults(); }
 
     auto update() -> void override {
+        const auto now = std::chrono::steady_clock::now();
         const auto gimbal_direction = fast_tf::cast<rmcs_description::tunnel_sentry::OdomGimbalImu>(
             rmcs_description::tunnel_sentry::BottomYawLink::DirectionVector{
                 Eigen::Vector3d::UnitX()},
             *rmcs.tf);
-        motion.context.current_gimbal_yaw =
-            std::atan2(gimbal_direction->y(), gimbal_direction->x());
+        const auto current_gimbal_yaw = std::atan2(gimbal_direction->y(), gimbal_direction->x());
+        motion.context.current_gimbal_yaw = current_gimbal_yaw;
+        record_gimbal_yaw(now, current_gimbal_yaw);
 
         if (lua_tick_count++ == 10) [[unlikely]] {
             lua_tick_count = 0;
-            sync_blackboard();
+            sync_blackboard(now);
             lua.tick();
         }
 
@@ -267,9 +349,26 @@ public:
         }
 
         const auto nav_cmd = nav.current_command();
-        const auto elapsed = std::chrono::steady_clock::now() - nav_cmd.timestamp;
-        motion.context.target_chassis_speed =
-            (elapsed > kCmdVelTimeout) ? Eigen::Vector2d::Zero() : nav_cmd.speed;
+        if (nav_cmd.seq != last_cmd_vel_seq) {
+            last_cmd_vel_seq = nav_cmd.seq;
+            cmd_vel_anchor_yaw =
+                lookup_gimbal_yaw(nav_cmd.timestamp - cmd_vel_latency, current_gimbal_yaw);
+        }
+
+        const auto elapsed = now - nav_cmd.timestamp;
+        if (elapsed > kCmdVelTimeout) {
+            motion.context.target_chassis_speed = Eigen::Vector2d::Zero();
+        } else if (
+            const auto current_world_yaw = motion.gimbal_odom2world(current_gimbal_yaw);
+            std::isfinite(nav_cmd.world_yaw) && std::isfinite(current_world_yaw)) {
+            const auto delta_yaw = nav_cmd.world_yaw - current_world_yaw;
+            motion.context.target_chassis_speed = Eigen::Rotation2Dd{delta_yaw} * nav_cmd.speed;
+        } else if (std::isfinite(cmd_vel_anchor_yaw) && std::isfinite(current_gimbal_yaw)) {
+            const auto delta_yaw = cmd_vel_anchor_yaw - current_gimbal_yaw;
+            motion.context.target_chassis_speed = Eigen::Rotation2Dd{delta_yaw} * nav_cmd.speed;
+        } else {
+            motion.context.target_chassis_speed = nav_cmd.speed;
+        }
 
         const auto cmd = motion.spin_once();
         if (std::isfinite(pending_climb_world_yaw)) {
