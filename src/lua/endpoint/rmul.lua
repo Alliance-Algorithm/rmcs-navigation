@@ -27,6 +27,8 @@ local function remote_controller()
 	end
 end
 
+local auto_record = require("task.auto_record")
+
 local function intent_maintainer()
 	local Intent = {
 		kNothing = "nothing",
@@ -126,6 +128,7 @@ on_init = function()
 	scheduler:append_task(remote_controller)
 	scheduler:append_task(intent_maintainer)
 	scheduler:append_task(task.robot_status)
+	scheduler:append_task(auto_record)
 
 	action:bind(scheduler)
 	clock:reset(blackboard.meta.timestamp)

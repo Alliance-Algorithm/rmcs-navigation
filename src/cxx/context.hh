@@ -26,6 +26,7 @@ public:
 
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
+    InputInterface<rmcs_msgs::Switch> rotary_knob_switch;
     InputInterface<Eigen::Vector2d> rjoystick;
     InputInterface<Eigen::Vector2d> ljoystick;
 

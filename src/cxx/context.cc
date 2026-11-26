@@ -83,6 +83,7 @@ struct RmcsContext::Impl {
 
         make_input("/remote/switch/right", context.switch_right, rmcs_msgs::Switch::UNKNOWN);
         make_input("/remote/switch/left", context.switch_left, rmcs_msgs::Switch::UNKNOWN);
+        make_input("/remote/rotary_knob_switch", context.rotary_knob_switch, rmcs_msgs::Switch::UNKNOWN);
         make_input("/remote/joystick/right", context.rjoystick, Eigen::Vector2d{0.0, 0.0});
         make_input("/remote/joystick/left", context.ljoystick, Eigen::Vector2d{0.0, 0.0});
 

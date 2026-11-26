@@ -1,4 +1,5 @@
 local clock = require("util.clock")
+local blackboard = require("blackboard").singleton()
 
 ---@class OrderEntry
 ---@field sequence any[]
@@ -101,6 +102,9 @@ function Order:on(sequence, callback)
 end
 
 function Order:spin()
+	if self._input_epoch ~= blackboard.context.input_epoch then
+		self:reset()
+	end
 	local value = self._getter()
 	local now = clock:now()
 	local value_changed = value ~= self._last_value
@@ -157,6 +161,7 @@ function Order:spin()
 end
 
 function Order:reset()
+	self._input_epoch = blackboard.context.input_epoch
 	self._last_value = self._getter()
 	for _, entry in ipairs(self._entries) do
 		entry.pending_at = nil
@@ -174,6 +179,7 @@ return {
 			_interval = interval,
 			_entries = {},
 			_last_value = getter(),
+			_input_epoch = blackboard.context.input_epoch,
 		}, Order)
 	end,
 }

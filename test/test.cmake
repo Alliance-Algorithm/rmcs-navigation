@@ -11,6 +11,7 @@ set(RMCS_NAVIGATION_LUA_TESTS
     order
     scheduler
     toggle_record
+    record
 )
 
 foreach(test_name IN LISTS RMCS_NAVIGATION_LUA_TESTS)
@@ -20,6 +21,28 @@ foreach(test_name IN LISTS RMCS_NAVIGATION_LUA_TESTS)
         WORKING_DIRECTORY ${RMCS_NAVIGATION_ROOT}
     )
 endforeach()
+
+find_package(Threads REQUIRED)
+add_executable(record_session_test
+    ${RMCS_NAVIGATION_ROOT}/test/cxx/record_session.cc
+    ${RMCS_NAVIGATION_ROOT}/src/cxx/record_session.cc
+)
+target_compile_features(record_session_test PRIVATE cxx_std_20)
+target_include_directories(record_session_test PRIVATE ${RMCS_NAVIGATION_ROOT}/src)
+target_link_libraries(record_session_test PRIVATE Threads::Threads)
+add_test(NAME rmcs-navigation.record_session COMMAND record_session_test)
+set_tests_properties(rmcs-navigation.record_session PROPERTIES TIMEOUT 25)
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME rmcs-navigation.record_control
+    COMMAND ${Python3_EXECUTABLE} ${RMCS_NAVIGATION_ROOT}/test/scripts/record_control.py
+)
+set_tests_properties(rmcs-navigation.record_control PROPERTIES TIMEOUT 25 SKIP_RETURN_CODE 77)
+
+add_test(NAME rmcs-navigation.record_shutdown
+    COMMAND ${Python3_EXECUTABLE} ${RMCS_NAVIGATION_ROOT}/test/scripts/record_session.py
+)
+set_tests_properties(rmcs-navigation.record_shutdown PROPERTIES TIMEOUT 40)
 
 # scanning 依赖 ROS/sol2，仅在主包 BUILD_TESTING 路径编译；
 # CI 的 `cmake -S test`（project: rmcs-navigation-test）不进入此分支。

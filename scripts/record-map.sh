@@ -2,7 +2,7 @@
 
 set -o pipefail
 
-state_dir=/tmp/rmcs-navigation
+state_dir=${RMCS_RECORD_STATE_DIR:-/tmp/rmcs-navigation}
 bag_state="$state_dir/last-record-bag"
 status_file="$state_dir/record-map.status"
 log_file="$state_dir/record-map.log"
@@ -11,7 +11,8 @@ marker=""
 
 lio_pid=""
 play_pid=""
-stack_stopped=0
+map_result=1
+map_path=""
 
 mkdir -p "$state_dir"
 exec >>"$log_file" 2>&1
@@ -24,7 +25,9 @@ set_status() {
     printf '%s\n' "$*" >"$status_file"
 }
 
-if [ -f "$HOME/env_setup.bash" ]; then
+if [ -n "${RMCS_RECORD_ENV_FILE:-}" ]; then
+    env_file=$RMCS_RECORD_ENV_FILE
+elif [ -f "$HOME/env_setup.bash" ]; then
     env_file="$HOME/env_setup.bash"
 elif [ -f /root/env_setup.bash ]; then
     env_file=/root/env_setup.bash
@@ -37,51 +40,7 @@ fi
 source "$env_file"
 export RCUTILS_COLORIZED_OUTPUT=0
 
-restart_navigation() {
-    local configs="launch_livox:=true launch_odin1:=false global_map:=empty use_sim_time:=false"
-    log "restarting navigation stack"
-    tmux kill-session -t navigation 2>/dev/null || true
-    tmux new-session -d -s navigation -n motion \
-        "bash -lc 'source \"$env_file\" && ros2 launch rmcs-navigation motion.launch.yaml $configs'"
-    tmux new-window -t navigation -n sensor \
-        "bash -lc 'source \"$env_file\" && ros2 launch rmcs-navigation sensor.launch.yaml $configs'"
-}
-
-stop_ros_stack() {
-    log "stopping live navigation stack"
-    tmux kill-session -t record-livox 2>/dev/null || true
-    tmux kill-session -t navigation 2>/dev/null || true
-
-    local patterns=(
-        'bin/ros2 launch rmcs-navigation'
-        '/livox_ros_driver2/livox_ros_driver2_node'
-        '/point_lio/pointlio_mapping'
-        '/rmcs_local_map/local_map'
-        '/rmcs_localization/rmcs_localization'
-    )
-    local i pattern alive
-    for i in $(seq 1 10); do
-        alive=0
-        for pattern in "${patterns[@]}"; do
-            if pgrep -f "$pattern" >/dev/null 2>&1; then
-                alive=1
-                break
-            fi
-        done
-        if [ "$alive" -eq 0 ]; then
-            return 0
-        fi
-        sleep 1
-    done
-
-    for pattern in "${patterns[@]}"; do
-        pkill -TERM -f "$pattern" 2>/dev/null || true
-    done
-    sleep 2
-    for pattern in "${patterns[@]}"; do
-        pkill -KILL -f "$pattern" 2>/dev/null || true
-    done
-}
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 cleanup() {
     if [ -n "$play_pid" ] && kill -0 "$play_pid" 2>/dev/null; then
@@ -94,20 +53,27 @@ cleanup() {
             sleep 1
         done
         kill -KILL "$lio_pid" 2>/dev/null || true
+        wait "$lio_pid" 2>/dev/null || true
     fi
     if [ -n "$marker" ]; then
         rm -f "$marker"
     fi
-    if [ "$stack_stopped" -eq 1 ]; then
-        restart_navigation
+    if ! bash "$script_dir/stop-navigation.sh"; then
+        set_status "failed: navigation shutdown failed (saved map: ${map_path:-none})"
+        exit 1
+    fi
+    if [ "$map_result" -eq 0 ]; then
+        set_status "success $map_path"
     fi
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 set_status "running"
 log "record-map started"
 
-bag_dir="$(cat "$bag_state" 2>/dev/null || true)"
+bag_dir="${RMCS_RECORD_BAG:-$(cat "$bag_state" 2>/dev/null || true)}"
 if [ -z "$bag_dir" ] && tmux has-session -t record-livox 2>/dev/null; then
     for _ in $(seq 1 10); do
         sleep 1
@@ -161,11 +127,22 @@ if [ -z "$lid_topic" ] || [ -z "$imu_topic" ]; then
     set_status "failed: livox topics not found"
     exit 1
 fi
+for topic in "$lid_topic" "$imu_topic"; do
+    if ! awk -v topic="$topic" '
+        /Topic:/ && index($0, "Topic: " topic " |") {
+            for (i = 1; i <= NF; i++)
+                if ($i == "Count:" && $(i + 1) + 0 > 0) found = 1
+        }
+        END {exit !found}
+    ' <<<"$bag_info"; then
+        set_status "failed: no messages on $topic"
+        exit 1
+    fi
+done
 
 log "bag=$bag_dir messages=$message_count lidar=$lid_topic imu=$imu_topic"
 
-stop_ros_stack
-stack_stopped=1
+bash "$script_dir/stop-navigation.sh"
 
 pcd_dir=/tmp/point-lio
 mkdir -p "$pcd_dir"
@@ -227,7 +204,7 @@ fi
 sleep 5
 
 log "requesting pcd save"
-ros2 service call "$mapper_ns/save_pcd_map" std_srvs/srv/Trigger "{}" || true
+timeout 30 ros2 service call "$mapper_ns/save_pcd_map" std_srvs/srv/Trigger "{}" || true
 
 saved_pcd=""
 for _ in $(seq 1 300); do
@@ -243,12 +220,19 @@ done
 
 if [ -n "$saved_pcd" ] && [ -f "$saved_pcd" ] && [ -s "$saved_pcd" ]; then
     maps_dir="$(dirname "$bag_dir")/maps"
-    mkdir -p "$maps_dir"
+    if ! mkdir -p "$maps_dir"; then
+        set_status "failed: cannot create maps directory"
+        exit 1
+    fi
     dest="$maps_dir/$bag_name.pcd"
-    cp -f "$saved_pcd" "$dest.tmp.$$"
-    mv -f "$dest.tmp.$$" "$dest"
+    if ! cp -f "$saved_pcd" "$dest.tmp.$$" || ! mv -f "$dest.tmp.$$" "$dest"; then
+        set_status "failed: cannot copy map to $dest"
+        exit 1
+    fi
     log "map saved: $dest"
-    set_status "success $dest"
+    map_path=$dest
+    map_result=0
+    set_status "saved $dest"
 else
     log "no valid pcd produced (reported: ${saved_pcd:-none})"
     set_status "failed: no valid pcd produced"

@@ -2,9 +2,11 @@
 #include "cxx/controller/motion.hh"
 #include "cxx/lua_context.hh"
 #include "cxx/navigation.hh"
+#include "cxx/record_session.hh"
 #include "cxx/util/node_mixin.hh"
 
 #include <Eigen/Geometry>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <rclcpp/node.hpp>
 #include <rmcs_description/tunnel_sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
@@ -14,6 +16,8 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -52,6 +56,14 @@ private:
     details::LuaContext lua{*this};
     details::Navigation nav{*this};
     details::RmcsContext rmcs{*this};
+
+    details::RecordSession record{
+        std::filesystem::path{ament_index_cpp::get_package_share_directory("rmcs-navigation")}
+            / "scripts/record-control.sh",
+        std::filesystem::path{std::getenv("HOME") ? std::getenv("HOME") : "/root"}
+            / "env_setup.bash",
+        std::getenv("RMCS_RECORD_STATE_DIR") ? std::getenv("RMCS_RECORD_STATE_DIR")
+                                           : "/tmp/rmcs-navigation"};
 
     MotionFsm motion{*this};
 
@@ -190,6 +202,7 @@ private:
         auto play = blackboard["play"].get<sol::table>();
         play["rswitch"] = rmcs_msgs::to_string(*rmcs.switch_right);
         play["lswitch"] = rmcs_msgs::to_string(*rmcs.switch_left);
+        play["rotary_knob"] = rmcs_msgs::to_string(*rmcs.rotary_knob_switch);
 
         auto autoaim = blackboard["autoaim"].get<sol::table>();
         autoaim["should_control"] = *rmcs.auto_aim_should_control;
@@ -218,6 +231,13 @@ public:
                 std::chrono::duration<double>{latency_sec});
 
         rmcs.init();
+
+        lua.inject("record_ready", [this] { return record.snapshot().ready; });
+        lua.inject("record_active", [this] { return record.snapshot().active; });
+        lua.inject("record_status", [this] { return record.snapshot().status; });
+        lua.inject("start_record", [this] { return record.start(); });
+        lua.inject("finish_record", [this] { return record.finish(); });
+        lua.inject("abort_record", [this] { return record.abort(); });
 
         lua.inject(
             "update_enable_control", [this](bool enable) { *command.enable_control = enable; });

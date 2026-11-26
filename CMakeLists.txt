@@ -58,6 +58,7 @@ target_sources(
         src/cxx/context.cc
         src/cxx/controller/motion.cc
         src/cxx/lua_context.cc
+        src/cxx/record_session.cc
         src/cxx/component.cc
 )
 target_include_directories(

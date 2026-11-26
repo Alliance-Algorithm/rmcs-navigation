@@ -7,9 +7,11 @@ local clock = require("util.clock")
 
 --- @class SchedulerDetails
 --- @field tasks SchedulerTask[]
+--- @field exclusive? SchedulerTask
 
 --- @class SchedulerRequestArgs
 --- @field resume_request function
+--- @field exclusive? boolean
 
 --- @class Scheduler
 --- @field details SchedulerDetails
@@ -46,6 +48,9 @@ end
 function scheduler:spin_once()
 	--- @type SchedulerDetails
 	local details = self.details
+	-- A task that held exclusivity at the start of this spin is the only runnable
+	-- task until the next spin, even when it releases or is cancelled below.
+	local exclusive = details.exclusive
 
 	--- @type SchedulerTask[]
 	local saved_tasks = {}
@@ -54,10 +59,21 @@ function scheduler:spin_once()
 		local status = coroutine.status(task.thread)
 		local cancel = task.cancel_request()
 		if status == "dead" or cancel then
+			if details.exclusive == task then
+				details.exclusive = nil
+			end
+			if cancel then
+				local ok, message = coroutine.close(task.thread)
+				if not ok then
+					error(message, 0)
+				end
+			end
 			goto continue
 		end
 
-		if task.resume_request() then
+		local allowed = (exclusive == nil or exclusive == task)
+			and (details.exclusive == nil or details.exclusive == task)
+		if allowed and task.resume_request() then
 			local result, request = coroutine.resume(task.thread)
 			if result ~= true then
 				error(debug.traceback(task.thread, tostring(request)), 0)
@@ -66,6 +82,11 @@ function scheduler:spin_once()
 			--- @cast request SchedulerRequestArgs
 			if request ~= nil then
 				task.resume_request = request.resume_request
+			end
+			if request and request.exclusive then
+				details.exclusive = task
+			elseif details.exclusive == task then
+				details.exclusive = nil
 			end
 		end
 		table.insert(saved_tasks, task)
@@ -84,6 +105,17 @@ function scheduler_request:yield()
 		resume_request = function()
 			return true
 		end,
+	}
+end
+
+--- Yield until the next spin, temporarily pausing peer tasks in this scheduler.
+--- A subsequent ordinary yield releases exclusivity.
+function scheduler_request:exclusive()
+	coroutine.yield {
+		resume_request = function()
+			return true
+		end,
+		exclusive = true,
 	}
 end
 

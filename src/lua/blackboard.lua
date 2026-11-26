@@ -41,6 +41,7 @@ local function create_default_blackboard()
 		play = {
 			rswitch = "UNKNOWN",
 			lswitch = "UNKNOWN",
+			rotary_knob = "UNKNOWN",
 		},
 		autoaim = {
 			should_control = false,
@@ -68,6 +69,7 @@ local function create_default_blackboard()
 
 		-- context
 		context = {
+			input_epoch = 0,
 			current = nil, -- 当前地图节点，由 Map 边 Task 成功后推进
 			crossing = false, -- 正在钻狗洞，期间不应取消当前意图
 			started_timestamp = 0,
