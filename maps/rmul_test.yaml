@@ -2,7 +2,7 @@ image: rmul_test.png
 mode: trinary
 # rmul2027 按 0.5 倍缩放：分辨率减半、origin 减半，图像保持原像素以保留精度
 resolution: 0.05
-origin: [-0.70, -3.95, 0.0]
+origin: [-0.15, -3.8, 0.0]
 negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196

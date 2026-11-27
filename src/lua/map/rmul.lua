@@ -14,22 +14,21 @@ local kHoleEntryTimeout = 5 -- 秒，精确到达狗洞入口的时限
 local Points = {
 	-- 出发点：装配区（工作台）右侧，设为 world 原点 (0, 0)
 	kBegin = Map:point("kBegin", { x = 0.000, y = 0.000 }),
-	kBorn = Map:point("kBorn", { x = 0.150, y = -0.600 }),
-	kHoleBegin = Map:point("kHoleBegin", { x = 1.100, y = -0.070 }),
-	kHoleEnd = Map:point("kHoleEnd", { x = 3.700, y = -0.070 }),
-	kEscape = Map:point("kEscape", { x = 1.000, y = -5.000 }),
-	-- 中央控制区四角，向内缩 0.4 m（车体半径 0.26 m），顺时针 1 -> 2 -> 3 -> 4
-	kPatrol1 = Map:point("kPatrol1", { x = 3.800, y = -2.500 }),
-	kPatrol2 = Map:point("kPatrol2", { x = 6.000, y = -2.500 }),
-	kPatrol3 = Map:point("kPatrol3", { x = 6.000, y = -4.700 }),
-	kPatrol4 = Map:point("kPatrol4", { x = 3.800, y = -4.700 }),
+	kHoleBegin = Map:point("kHoleBegin", { x = 1.8, y = -0.1 }),
+	kHoleEnd = Map:point("kHoleEnd", { x = 4.5, y = -0.1 }),
+	kEscape1 = Map:point("kEscape1", { x = 4.7, y = -5.6 }),
+	kEscape2 = Map:point("kEscape2", { x = 1.5, y = -5.6 }),
+	-- 中央控制区四角
+	kPatrol1 = Map:point("kPatrol1", { x = 4.6, y = -3.1 }),
+	kPatrol2 = Map:point("kPatrol2", { x = 6.5, y = -3.1 }),
+	kPatrol3 = Map:point("kPatrol3", { x = 6.5, y = -4.1 }),
+	kPatrol4 = Map:point("kPatrol4", { x = 4.6, y = -4.1 }),
 }
 
--- 临时测试：坐标缩小。比赛前关掉。
-for _, p in pairs(Points) do
-	p.x = p.x * 0.5
-	p.y = p.y * 0.5
-end
+-- for _, p in pairs(Points) do
+-- 	p.x = p.x * 0.5
+-- 	p.y = p.y * 0.5
+-- end
 
 local function navigate(from, to, keepalive)
 	action:navigate(to)
@@ -167,15 +166,9 @@ Map:connect(Points.kPatrol3, Points.kPatrol4) { rough_navigate, rough_navigate }
 Map:connect(Points.kPatrol4, Points.kPatrol1) { rough_navigate, rough_navigate }
 
 -- 南侧撤退通道：4 号点 -> kEscape -> kBorn（补给按最短距离选路，近狗洞时走洞，南侧时走此路）
--- 4 号点在中央控制区南侧，接 kEscape 不穿高地；狗洞在全局地图是空地，kHoleEnd 不能直连 kEscape
-Map:connect(Points.kPatrol4, Points.kEscape) { rough_navigate, rough_navigate }
-Map:connect(Points.kEscape, Points.kBorn) { rough_navigate, rough_navigate }
-
--- 出发点与补给点之间的短接（kBegin 在装配区右侧，kBorn 在启动区中心）
-Map:connect(Points.kBegin, Points.kBorn) { rough_navigate, rough_navigate }
-
--- 补给后再次出击：kBorn -> kHoleBegin
-Map:connect(Points.kBorn, Points.kHoleBegin) { rough_navigate, rough_navigate }
+Map:connect(Points.kPatrol4, Points.kEscape1) { rough_navigate, rough_navigate }
+Map:connect(Points.kEscape1, Points.kEscape2) { rough_navigate, rough_navigate }
+Map:connect(Points.kEscape2, Points.kBegin) { rough_navigate, rough_navigate }
 
 bb.context.current = Points.kBegin
 
